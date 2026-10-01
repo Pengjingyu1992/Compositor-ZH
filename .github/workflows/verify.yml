@@ -1,0 +1,63 @@
+name: Verify
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: verify-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  clt:
+    name: CLT build and localization
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - run: ./scripts/check-localization.zsh
+      - run: ./scripts/build-clt.zsh
+
+  unit:
+    name: Xcode unit tests
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Build for testing
+        id: build
+        run: >-
+          xcodebuild build-for-testing
+          -project Compositor.xcodeproj -scheme Compositor
+          -destination 'platform=macOS,arch=arm64' -configuration Debug
+          -derivedDataPath DerivedData CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
+      - name: Run unit tests in parallel
+        run: >-
+          xcodebuild test-without-building
+          -project Compositor.xcodeproj -scheme Compositor
+          -destination 'platform=macOS,arch=arm64' -derivedDataPath DerivedData
+          -testLanguage zh-Hans -testRegion CN
+          -resultBundlePath ParallelResults.xcresult -parallel-testing-enabled YES
+          -skip-testing:CompositorTests/FloatingPanelTests
+          -skip-testing:CompositorTests/SliderSnapTests
+      - name: Run window tests serially
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: >-
+          xcodebuild test-without-building
+          -project Compositor.xcodeproj -scheme Compositor
+          -destination 'platform=macOS,arch=arm64' -derivedDataPath DerivedData
+          -testLanguage zh-Hans -testRegion CN
+          -resultBundlePath SerialResults.xcresult -parallel-testing-enabled NO
+          -only-testing:CompositorTests/FloatingPanelTests
+          -only-testing:CompositorTests/SliderSnapTests
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: unit-test-results
+          path: '*.xcresult'
+          retention-days: 7
+          if-no-files-found: ignore

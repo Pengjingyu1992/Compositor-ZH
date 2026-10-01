@@ -9,7 +9,9 @@ SDK_PATH=${COMPOSITOR_SDK_PATH:-$(xcrun --sdk macosx --show-sdk-path)}
 if [[ -z ${COMPOSITOR_SDK_PATH:-} && -d "${SDK_PATH:h}/MacOSX26.sdk" ]]; then
     SDK_PATH="${SDK_PATH:h}/MacOSX26.sdk"
 fi
-APP_PATH="$BUILD_ROOT/Compositor.app"
+WORK_ROOT=$(mktemp -d /private/tmp/compositor-build.XXXXXX)
+trap 'rm -rf "$WORK_ROOT"' EXIT
+APP_PATH="$WORK_ROOT/Compositor.app"
 mkdir -p "$BUILD_ROOT/obj" "$APP_PATH/Contents/MacOS" "$APP_PATH/Contents/Resources"
 
 for file in "$PROJECT_ROOT"/Compositor/**/*.c; do
@@ -31,4 +33,5 @@ python3 "$PROJECT_ROOT/scripts/prepare-resources.py" "$APP_PATH"
 xattr -cr "$APP_PATH"
 codesign --force --sign - --entitlements "$PROJECT_ROOT/Config/Compositor.entitlements" "$APP_PATH"
 codesign --verify --deep --strict "$APP_PATH"
-print -r -- "Built $APP_PATH"
+ditto --norsrc --noextattr "$APP_PATH" "$BUILD_ROOT/Compositor.app"
+print -r -- "Built $BUILD_ROOT/Compositor.app"

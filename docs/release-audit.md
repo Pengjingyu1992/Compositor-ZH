@@ -1,6 +1,6 @@
 # 发布审查 / Release review
 
-Date: **2026-10-02**. Version: **1.4.5**, build **40.9**, release **v1.4.5-zh.1**.
+Date: **2026-10-02**. Version: **1.4.5**, build **40.10**, release **v1.4.5-zh.2**.
 
 ## 隐私与密钥 / Privacy and credentials
 
@@ -25,6 +25,10 @@ The review covered release source, comments, documentation, configuration, image
 - 包内版本、应用 ID、两种语言名称、图标与两份许可证核对通过。 / Version, bundle identifier, both localized names, icon, and both licenses were verified.
 - ZIP 与构建应用逐文件一致；解压后严格签名验证通过。 / ZIP contents match the built app file for file; strict signature verification passed after extraction.
 - 发布附件提供 SHA-256；上传后重新下载并比较。 / Release assets include SHA-256 checksums and are downloaded again for comparison after upload.
+
+## Xcode compatibility fixes
+
+The initial CI run exposed string-symbol generation errors for runtime localization keys and a SwiftUI expression that exceeded the Xcode 26.6 type-checker budget. Symbol generation is disabled because localization uses stable source keys; the view chain is split into smaller opaque views without changing the UI.
 
 ## 验证边界 / Verification limits
 

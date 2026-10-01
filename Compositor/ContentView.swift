@@ -206,7 +206,7 @@ struct ContentView: View {
         }
     }
 
-    var body: some View {
+    private var editorPanels: some View {
         editorChrome
         .onChange(of: session.levels == nil) { _, closed in
             if closed { levelsPanel.close() }
@@ -262,6 +262,10 @@ struct ContentView: View {
         .onChange(of: session.document == nil) { _, empty in
             if !empty { session.canvasFocusRequest += 1 }
         }
+    }
+
+    private var editorImport: some View {
+        editorPanels
         .fileImporter(isPresented: $session.showsImporter,
                       allowedContentTypes: UTType.importableImages, allowsMultipleSelection: true) { result in
             switch result {
@@ -270,20 +274,24 @@ struct ContentView: View {
                 if (error as NSError).code != NSUserCancelledError { session.importError = error.localizedDescription }
             }
         }
-        .alert("Import couldn’t finish", isPresented: Binding(
+    }
+
+    var body: some View {
+        editorImport
+        .alert("Import couldn’t finish", isPresented: Binding<Bool>(
             get: { session.importError != nil }, set: { if !$0 { session.importError = nil } })) {
                 // No cancel role: an alert with only a cancel button gets a second OK of its own.
                 Button("OK") { session.importError = nil }
             } message: { Text(session.importError ?? "") }
-        .alert("Couldn’t paint", isPresented: Binding(get: { session.brushError != nil },
+        .alert("Couldn’t paint", isPresented: Binding<Bool>(get: { session.brushError != nil },
             set: { if !$0 { session.brushError = nil } })) {
                 Button("OK") { session.brushError = nil }
             } message: { Text(session.brushError ?? "") }
-        .alert("Couldn’t arrange layers", isPresented: Binding(get: { session.arrangeError != nil },
+        .alert("Couldn’t arrange layers", isPresented: Binding<Bool>(get: { session.arrangeError != nil },
             set: { if !$0 { session.arrangeError = nil } })) {
                 Button("OK") { session.arrangeError = nil }
             } message: { Text(session.arrangeError ?? "") }
-        .alert("Couldn’t crop", isPresented: Binding(get: { session.cropError != nil },
+        .alert("Couldn’t crop", isPresented: Binding<Bool>(get: { session.cropError != nil },
             set: { if !$0 { session.cropError = nil } })) {
                 Button("OK") { session.cropError = nil }
             } message: { Text(session.cropError ?? "") }

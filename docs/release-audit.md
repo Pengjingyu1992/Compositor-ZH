@@ -28,7 +28,7 @@ The review covered release source, comments, documentation, configuration, image
 
 ## Xcode compatibility fixes
 
-The initial CI run exposed string-symbol generation errors for runtime localization keys and a SwiftUI expression that exceeded the Xcode 26.6 type-checker budget. Symbol generation is disabled because localization uses stable source keys; the view chain is split into smaller opaque views without changing the UI.
+The initial CI run exposed string-symbol generation errors for runtime localization keys and a SwiftUI expression that exceeded the Xcode 26.6 type-checker budget. Symbol generation is disabled because localization uses stable source keys; the view chain is split into smaller opaque views without changing the UI. Nested `#require` expressions in three existing test cases are split into intermediate values for Swift Testing compatibility, preserving the same assertions. Signing is staged outside synchronized folders to keep filesystem metadata from invalidating ad hoc signatures.
 
 ## 验证边界 / Verification limits
 

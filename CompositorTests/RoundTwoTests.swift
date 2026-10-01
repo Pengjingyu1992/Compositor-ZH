@@ -236,7 +236,8 @@ struct RoundTwoTests {
     @Test func oldBucketCallbackCannotWriteIntoAReplacementDocument() async throws {
         let s = try pixels()
         let gate = BucketGate()
-        let clip = try #require(MagicWand.coverage(in: try #require(s.activeLayer?.asset?.image), at: CGPoint(x: 1, y: 2), settings: s.bucketSettings))
+        let sourceImage = try #require(s.activeLayer?.asset?.image)
+        let clip = try #require(MagicWand.coverage(in: sourceImage, at: CGPoint(x: 1, y: 2), settings: s.bucketSettings))
         let work = Task { await s.paintBucket(at: CGPoint(x: 1, y: 2), match: { _ in try await gate.hold() }) }
         await gate.waitForStart()
         #expect(s.isProjectBusy)

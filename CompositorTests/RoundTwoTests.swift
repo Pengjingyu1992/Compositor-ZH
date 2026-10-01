@@ -237,7 +237,8 @@ struct RoundTwoTests {
         let s = try pixels()
         let gate = BucketGate()
         let sourceImage = try #require(s.activeLayer?.asset?.image)
-        let clip = try #require(MagicWand.coverage(in: sourceImage, at: CGPoint(x: 1, y: 2), settings: s.bucketSettings))
+        let matchingCoverage = try MagicWand.coverage(in: sourceImage, at: CGPoint(x: 1, y: 2), settings: s.bucketSettings)
+        let clip = try #require(matchingCoverage)
         let work = Task { await s.paintBucket(at: CGPoint(x: 1, y: 2), match: { _ in try await gate.hold() }) }
         await gate.waitForStart()
         #expect(s.isProjectBusy)

@@ -214,7 +214,8 @@ struct RoundTwoStressTests {
         for iteration in 0..<60 {
             let s = try raster()
             let sourceImage = try #require(s.activeLayer?.asset?.image)
-            let clip = try #require(MagicWand.coverage(in: sourceImage, at: CGPoint(x: 4, y: 4), settings: s.bucketSettings))
+            let matchingCoverage = try MagicWand.coverage(in: sourceImage, at: CGPoint(x: 4, y: 4), settings: s.bucketSettings)
+            let clip = try #require(matchingCoverage)
             let gate = PressureGate()
             let work = Task { await s.paintBucket(at: CGPoint(x: 4, y: 4), match: { _ in try await gate.hold() }) }
             await gate.waitForStart()
@@ -249,7 +250,8 @@ struct RoundTwoStressTests {
             let s = try raster()
             let before = s.document
             let sourceImage = try #require(s.activeLayer?.asset?.image)
-            let clip = try #require(MagicWand.coverage(in: sourceImage, at: CGPoint(x: 4, y: 4), settings: s.bucketSettings))
+            let matchingCoverage = try MagicWand.coverage(in: sourceImage, at: CGPoint(x: 4, y: 4), settings: s.bucketSettings)
+            let clip = try #require(matchingCoverage)
             let gate = PressureGate()
             let work = Task { await s.paintBucket(at: CGPoint(x: 4, y: 4), match: { _ in try await gate.hold() }) }
             await gate.waitForStart()

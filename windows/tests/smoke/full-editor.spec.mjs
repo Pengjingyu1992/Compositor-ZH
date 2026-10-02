@@ -6,7 +6,7 @@ import {fileURLToPath} from 'node:url';
 const root=fileURLToPath(new URL('../../',import.meta.url));let instance,page,temp;
 test.beforeEach(async()=>{
  temp=await mkdtemp(path.join(os.tmpdir(),'comp-full-editor-'));
- instance=await _electron.launch({timeout:30000,executablePath:path.join(root,'release/win-unpacked/Compositor.exe'),args:['--use-angle=swiftshader','--enable-unsafe-swiftshader'],env:{...process.env,APPDATA:temp}});page=await instance.firstWindow();
+ instance=await _electron.launch({timeout:30000,executablePath:path.join(root,'release/win-unpacked/Compositor.exe'),args:['--use-angle=swiftshader','--enable-unsafe-swiftshader'],env:{...process.env,APPDATA:temp}});page=await instance.firstWindow();await instance.evaluate(({dialog})=>{dialog.showMessageBox=async()=>({response:1});});
  page.on('pageerror',error=>console.error('Full editor:',error.message));
  await page.getByTestId('language').selectOption('zh-Hans');await page.getByTestId('new-canvas').click();const dialog=page.getByRole('dialog');await dialog.locator('.new-dimensions input').nth(0).fill('320');await dialog.locator('.new-dimensions input').nth(1).fill('240');await dialog.getByRole('button',{name:'创建',exact:true}).click();await expect(page.getByTestId('rendered-canvas')).toBeVisible();await page.getByTestId('add-pixels').click();await ready();
 });
@@ -29,7 +29,7 @@ test('crop cancel/apply and canvas/image resizing persist dimensions',async()=>{
 });
 test('Chinese text and parametric shape remain editable after save and reopen',async()=>{
  await draw('形状');await command('text');await expect(page.getByTestId('text-content')).toBeVisible();await page.getByTestId('text-content').fill('叠绘 中文😀\nCompositor');await page.getByTestId('update-preview').click();await expect(page.getByTestId('apply-editor')).toBeEnabled();await page.getByTestId('apply-editor').click();await ready();const file=await save();let m=JSON.parse(await readFile(path.join(file,'manifest.json')));expect(m.layers.some(l=>l.shape?.kind==='Rectangle')).toBe(true);expect(m.layers.some(l=>l.text?.content.includes('中文😀'))).toBe(true);
- await instance.evaluate(({dialog},file)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[file]});},file);await page.getByTestId('open-project').click();await expect(page.locator('.layer-row')).toHaveCount(3);await page.locator('.layer-select').filter({hasText:'叠绘 中文😀'}).click();await command('text');await expect(page.getByTestId('text-content')).toContainText('中文😀');await page.keyboard.press('Escape');
+ await instance.evaluate(({dialog},file)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[file]});},file);await page.getByTestId('open-project').click();await expect(page.locator('.layer-row')).toHaveCount(3);await page.locator('.layer-select').filter({hasText:'叠绘 中文😀'}).click();await command('text');await expect(page.getByTestId('text-content')).toHaveValue(/中文😀/);await page.keyboard.press('Escape');
  await page.screenshot({path:path.join(root,'test-results/text-shape-preview.png')});
 });
 test('gradient, symmetric painting, clone, healing, smear and filter cancel/apply',async()=>{

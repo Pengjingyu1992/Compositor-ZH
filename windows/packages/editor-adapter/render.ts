@@ -14,12 +14,12 @@ export async function placedImage(url: string, p: Placement, w: number, h: numbe
   try {
     const canvas = makeCanvas(w,h), ctx = context(canvas), [x,y] = p.origin, [pw,ph] = p.size;
     ctx.imageSmoothingEnabled = p.sampling !== 'Nearest'; ctx.imageSmoothingQuality = 'high';
-    ctx.translate(x+pw/2,y+ph/2); ctx.rotate(p.rotation*Math.PI/180); ctx.scale(p.flipX?-1:1,p.flipY?-1:1); ctx.drawImage(bitmap,-pw/2,-ph/2,pw,ph);
+    ctx.translate(x+pw/2,y+ph/2); ctx.rotate((p.rotation%360)*Math.PI/180); ctx.scale(p.flipX?-1:1,p.flipY?-1:1); ctx.drawImage(bitmap,-pw/2,-ph/2,pw,ph);
     return canvas;
   } finally { bitmap.close(); }
 }
 export async function exportPlaced(url:string,p:Placement){
-  const [w,h]=p.size,[x,y]=p.origin,angle=p.rotation*Math.PI/180,c=Math.abs(Math.cos(angle)),s=Math.abs(Math.sin(angle)),bw=w*c+h*s,bh=w*s+h*c;
+  const [w,h]=p.size,[x,y]=p.origin,angle=(p.rotation%360)*Math.PI/180,c=Math.abs(Math.cos(angle)),s=Math.abs(Math.sin(angle)),bw=w*c+h*s,bh=w*s+h*c;
   const left=Math.floor(x+w/2-bw/2),top=Math.floor(y+h/2-bh/2),right=Math.ceil(x+w/2+bw/2),bottom=Math.ceil(y+h/2+bh/2);
   if(right-left>30000||bottom-top>30000||(right-left)*(bottom-top)>16_000_000)throw new Error('limit');
   const surface=await placedImage(url,{...p,origin:[x-left,y-top]},right-left,bottom-top);
@@ -62,7 +62,7 @@ export function createPreviewRenderer() {
       const backdrop=makeCanvas(width,height), masks=new Map<string,Uint8ClampedArray>();
       const maskFor=async(l:LayerRow)=>{
         if(!l.maskFile)return undefined;
-        if(!masks.has(l.id)){const c=await placedImage(project.urls[`images/${l.maskFile}`],l.maskLinked===false&&l.maskPlacement?l.maskPlacement:l.transform,width,height);const p=pixels(c);for(let i=0;i<p.data.length;i+=4)p.data[i]=Math.round(p.data[i]*p.data[i+3]/255);masks.set(l.id,p.data);release(c);}return masks.get(l.id);
+        if(!masks.has(l.id)){const c=await placedImage(project.urls[`images/${l.maskFile}`],l.maskPlacement??l.transform,width,height);const p=pixels(c);for(let i=0;i<p.data.length;i+=4)p.data[i]=Math.round(p.data[i]*p.data[i+3]/255);masks.set(l.id,p.data);release(c);}return masks.get(l.id);
       };
       const cover=async(c:HTMLCanvasElement,l:LayerRow,folders:boolean,opacity=1)=>{
         const p=pixels(c), own=l.maskEnabled===false?undefined:await maskFor(l), parents:Uint8ClampedArray[]=[];

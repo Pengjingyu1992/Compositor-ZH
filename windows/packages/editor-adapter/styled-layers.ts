@@ -15,8 +15,8 @@ export async function renderText(style:Record<string,any>) {
   const [w,h]=style.boxSize.map((v:number)=>Math.ceil(v));if(w*h>16_000_000||w>30000||h>30000)throw new Error('limit');
   const c=makeCanvas(w,h),ctx=c.getContext('2d')!,size=style.fontSize,leading=style.leading||size*1.2,tracking=style.tracking||0,padding=12;
   const Segmenter=(Intl as any).Segmenter,segments: {segment:string;index:number}[]=Segmenter?[...new Segmenter(undefined,{granularity:'grapheme'}).segment(style.content)]:Array.from(style.content).map((segment,index)=>({segment,index}));
-  type Glyph={text:string;index:number;width:number;color:string;font:string};const lines:Glyph[][]=[[]];let width=0;
-  for(const seg of segments){if(seg.segment==='\n'){lines.push([]);width=0;continue;}const run=(style.fontRuns??[]).find((r:any)=>seg.index>=r.location&&seg.index<r.location+r.length),col=(style.colorRuns??[]).find((r:any)=>seg.index>=r.location&&seg.index<r.location+r.length);
+  type Glyph={text:string;index:number;width:number;color:string;font:string};const lines:Glyph[][]=[[]];let width=0,fi=0,ci=0;const fonts=[...(style.fontRuns??[])].sort((a,b)=>a.location-b.location),colors=[...(style.colorRuns??[])].sort((a,b)=>a.location-b.location);
+  for(const seg of segments){if(seg.segment==='\n'){lines.push([]);width=0;continue;}while(fi<fonts.length&&seg.index>=fonts[fi].location+fonts[fi].length)fi++;while(ci<colors.length&&seg.index>=colors[ci].location+colors[ci].length)ci++;const run=fonts[fi]?.location<=seg.index?fonts[fi]:undefined,col=colors[ci]?.location<=seg.index?colors[ci]:undefined;
     const font=size+'px "'+family(run?.fontName??style.fontName).replace(/["\\]/g,'')+'", sans-serif';ctx.font=font;const advance=ctx.measureText(seg.segment).width+tracking;
     if(width+advance>w-padding*2&&lines.at(-1)!.length){lines.push([]);width=0;}lines.at(-1)!.push({text:seg.segment,index:seg.index,width:advance,color:rgb(col??style),font});width+=advance;
   }

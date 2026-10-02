@@ -60,9 +60,10 @@ export class ProjectSession {
     if(!this.current||this.current.id!==id||this.revision!==revision)return {error:'stale'};
     this.pending=true;const own=this.generation,current=this.current,before=current.data;
     try {const after=await build(before,op);if(own!==this.generation||this.current!==current||this.revision!==revision)return {error:'stale'};
-      after.sourceBytes=Buffer.from(after.sourceBytes);for(const r of after.resources.values())r.bytes=Buffer.from(r.bytes);
+      after.sourceBytes=Buffer.from(after.sourceBytes);for(const [key,r] of after.resources){r.bytes=Buffer.from(r.bytes);const old=before.resources.get(key);if(old?.bytes.equals(r.bytes))after.resources.set(key,old);}
+      if(op.kind!=='selection'&&!['canvas','imageSize'].includes(op.kind))after.selection=before.selection;after.locks=before.locks;
       const sameContent=before.sourceBytes.equals(after.sourceBytes)&&fingerprint(before)===fingerprint(after);
-      if(sameContent){after.contentSnapshot=before.contentSnapshot??before;after.locks=before.locks;if(!after.selection&&!before.selection)return this.view();}
+      if(sameContent){after.contentSnapshot=before.contentSnapshot??before;after.manifest=before.manifest;after.sourceBytes=before.sourceBytes;after.resources=before.resources;after.analysis=before.analysis;if(!after.selection&&!before.selection)return this.view();}
       return this.commit(before,after);
     }catch(e){return {error:e.code??'invalid'};}finally{this.pending=false;}
   }

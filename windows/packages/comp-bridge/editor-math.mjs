@@ -2,7 +2,7 @@
 // contracts. Geometry stays independent of UI, history and resource ownership.
 export const limit = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 export function bounds(p) {
-  const [x,y]=p.origin,[w,h]=p.size,a=p.rotation*Math.PI/180,c=Math.abs(Math.cos(a)),s=Math.abs(Math.sin(a));
+  const [x,y]=p.origin,[w,h]=p.size,a=(p.rotation%360)*Math.PI/180,c=Math.abs(Math.cos(a)),s=Math.abs(Math.sin(a));
   const bw=w*c+h*s,bh=w*s+h*c;
   return {x:x+w/2-bw/2,y:y+h/2-bh/2,w:bw,h:bh};
 }
@@ -28,11 +28,11 @@ export function arrange(rects,op,reference) {
   return delta;
 }
 export function toLocal(p,t,w,h) {
-  const [x,y]=t.origin,[tw,th]=t.size,a=-t.rotation*Math.PI/180,dx=p[0]-x-tw/2,dy=p[1]-y-th/2;
+  const [x,y]=t.origin,[tw,th]=t.size,a=-(t.rotation%360)*Math.PI/180,dx=p[0]-x-tw/2,dy=p[1]-y-th/2;
   return [((Math.cos(a)*dx-Math.sin(a)*dy)*(t.flipX?-1:1)+tw/2)*w/tw,((Math.sin(a)*dx+Math.cos(a)*dy)*(t.flipY?-1:1)+th/2)*h/th];
 }
 export function toDocument(p,t,w,h) {
-  const [tw,th]=t.size,a=t.rotation*Math.PI/180,dx=(p[0]*tw/w-tw/2)*(t.flipX?-1:1),dy=(p[1]*th/h-th/2)*(t.flipY?-1:1);
+  const [tw,th]=t.size,a=(t.rotation%360)*Math.PI/180,dx=(p[0]*tw/w-tw/2)*(t.flipX?-1:1),dy=(p[1]*th/h-th/2)*(t.flipY?-1:1);
   return [t.origin[0]+tw/2+Math.cos(a)*dx-Math.sin(a)*dy,t.origin[1]+th/2+Math.sin(a)*dx+Math.cos(a)*dy];
 }
 export function symmetryPoints(p,mode,cx,cy,sectors=6) {
@@ -104,4 +104,11 @@ export function selectionCoverage(selection,point) {
   if(!selection)return 1;
   const x=Math.floor(point[0]),y=Math.floor(point[1]);
   return x<0||y<0||x>=selection.width||y>=selection.height?0:selection.data[y*selection.width+x]/255;
+}
+// Compositor's rectangle decomposition preserves flips and drops shear, which
+// its persistent transform model cannot represent.
+export function following(t,old,next) {
+  const map=p=>toDocument(toLocal(toDocument(p,t,1,1),old,1,1),next,1,1),a=map([0,0]),x=map([1,0]),y=map([0,1]);
+  const ax=x[0]-a[0],ay=x[1]-a[1],bx=y[0]-a[0],by=y[1]-a[1],sign=t.flipX?-1:1,angle=Math.atan2(ay*sign,ax*sign),along=-bx*Math.sin(angle)+by*Math.cos(angle),w=Math.hypot(ax,ay),h=Math.abs(along),degree=angle*180/Math.PI;
+  return {...t,origin:[a[0]+(ax+bx)/2-w/2,a[1]+(ay+by)/2-h/2],size:[Math.max(1,w),Math.max(1,h)],rotation:degree+Math.round((t.rotation-degree)/360)*360,flipY:along<0};
 }

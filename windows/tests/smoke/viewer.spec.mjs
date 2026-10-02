@@ -28,7 +28,7 @@ test('opens, renders sRGB normal + mask, changes language, restarts, and never e
     const sample = await page.getByTestId('rendered-canvas').evaluate(c => Array.from(c.getContext('2d').getImageData(32, 24, 1, 1).data));
     // Mint at 0.5 opacity with a 128/255 grayscale mask above opaque coral.
     const expected = [210, 175, 153, 255]; expected.forEach((n, i) => expect(Math.abs(sample[i] - n)).toBeLessThanOrEqual(3));
-    await page.getByTestId('language').selectOption('en'); await expect(page.locator('.badge')).toContainText('editor preview');
+    await page.getByTestId('language').selectOption('en'); await expect(page.locator('.badge')).toContainText('editor prerelease');
     await page.screenshot({ path: path.join(root, 'test-results/layer-preview.png') });
     await page.keyboard.press('Control+z');
     expect(await page.evaluate(() => typeof window.viewer.save)).toBe('undefined');
@@ -37,7 +37,7 @@ test('opens, renders sRGB normal + mask, changes language, restarts, and never e
     await instance.close();
     ({ instance, page } = await launch());
     await expect(page.getByTestId('language')).toHaveValue('en');
-    await expect(page.locator('.badge')).toContainText('editor preview');
+    await expect(page.locator('.badge')).toContainText('editor prerelease');
   } finally { await instance.close(); }
 });
 test('unsupported composition without QuickLook never shows a partial render', async () => {

@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {newProject,editProject} from '../packages/comp-bridge/edit.mjs';
 import * as codecs from '../packages/comp-bridge/codecs.mjs';
-import {arrange,bounds,toLocal,toDocument,shapeMask,combineMasks,modifyMask,floodMask,symmetryPoints} from '../packages/comp-bridge/editor-math.mjs';
+import {arrange,bounds,following,toLocal,toDocument,shapeMask,combineMasks,modifyMask,floodMask,symmetryPoints} from '../packages/comp-bridge/editor-math.mjs';
 import {fillPixels,strokePixels,resizePixels,filterPixels,FILTERS} from '../packages/comp-bridge/raster-tools.mjs';
 import {ProjectSession} from '../packages/platform/project-session.mjs';
 const change=(data,op)=>editProject(data,op,codecs);
@@ -58,4 +58,18 @@ test('style creation validates UTF-16 runs and saves only current schema fields'
 });
 test('asynchronous old owner cannot publish into a replacement document',async()=>{
   const {data,id}=setup(),s=new ProjectSession(undefined,{codecs});s.install(data,null,true);let done;const pending=s.editAsync(s.current.id,s.revision,{kind:'fill',id},()=>new Promise(resolve=>{done=resolve;}));assert.equal(s.create(2,2).error,'busy');s.install(newProject(2,2));done(data);assert.equal((await pending).error,'stale');assert.equal(s.current.data.manifest.width,2);
+});
+test('worker snapshots preserve clean selection state and share unchanged resource buffers',async()=>{
+ const {data,id}=setup(),s=new ProjectSession(undefined,{codecs});s.install(data,null,true);const original=s.current.data.resources.get(`images/${id}.png`);
+ const result=await s.editAsync(s.current.id,s.revision,{kind:'selection',action:'all'},before=>Promise.resolve(structuredClone(change(before,{kind:'selection',action:'all'}))));assert.equal(result.project.dirty,false);assert.equal(s.current.data.resources.get(`images/${id}.png`),original);assert.equal(s.current.data.selection.data.length,768);
+});
+test('alpha locks inherit from groups and independent mask transform survives validation',()=>{
+ const {data,id}=setup();let a=change(data,{kind:'group',ids:[id],name:'Group'});const group=a.manifest.activeLayerID;a=change(a,{kind:'lock',id:group,field:'alpha',value:true});a=change(a,{kind:'fill',id,settings:{color:[255,0,0]}});assert.ok(codecs.decodePNG(a.resources.get(`images/${id}.png`)).data.every((v,i)=>i%4!==3||v===0));
+ a=change(a,{kind:'mask',id,action:'add'});a=change(a,{kind:'transformMask',id,field:'origin',value:[3,4]});const layer=a.manifest.layers.find(l=>l.id===id);assert.equal(layer.maskLinked,false);assert.deepEqual(layer.maskPlacement.origin,[3,4]);
+});
+test('group rotation/resize and linked/unlinked masks follow the rectangle model',()=>{
+ const {data,id}=setup();let a=change(data,{kind:'mask',id,action:'add'});a=change(a,{kind:'transformMask',id,field:'origin',value:[3,4]});a=change(a,{kind:'group',ids:[id],name:'Group'});const group=a.manifest.activeLayerID;
+ a=change(a,{kind:'transformLayers',ids:[group],field:'rotation',value:90});let l=a.manifest.layers.find(l=>l.id===id);assert.ok(Math.abs(l.transform.rotation-90)<1e-8);assert.deepEqual(l.maskPlacement.origin,[3,4]);
+ a=change(a,{kind:'canvas',x:2,y:1,width:30,height:23});l=a.manifest.layers.find(l=>l.id===id);assert.deepEqual(l.maskPlacement.origin,[1,3]);
+ const t=following(placement,{...placement,size:[8,8]},{...placement,size:[16,16]});assert.deepEqual(t.size,[16,16]);assert.deepEqual(t.origin,[0,0]);
 });

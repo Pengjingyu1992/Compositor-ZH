@@ -1,3 +1,4 @@
+import { following } from './editor-math.mjs';
 import { randomUUID } from 'node:crypto';
 import { GLOBAL_OPS, selectionEdit, editorOperation, checkPermission } from './editor-ops.mjs';
 import { parseManifest, analyze, LIMITS, ProjectError } from './project.mjs';
@@ -87,9 +88,9 @@ export function editProject(data, op, codecs) {
         const moving = descendants(target.id);
         for (const l of m.layers) if (moving.has(l.id.toUpperCase())) {
           l.transform.origin = l.transform.origin.map((v, i) => v + (i === 0 ? dx : dy));
-          if (l.maskPlacement && l.maskLinked === false) l.maskPlacement.origin = l.maskPlacement.origin.map((v, i) => v + (i === 0 ? dx : dy));
+          if (l.maskPlacement && l.maskLinked !== false) l.maskPlacement.origin = l.maskPlacement.origin.map((v, i) => v + (i === 0 ? dx : dy));
         }
-      } else target.transform[op.field] = clone(op.value);
+      } else {const before=clone(target.transform);target.transform[op.field]=clone(op.value);if(target.maskPlacement&&target.maskLinked!==false)target.maskPlacement=following(target.maskPlacement,before,target.transform);}
       break;
     }
     case 'delete': {

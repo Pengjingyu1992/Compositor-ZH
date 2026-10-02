@@ -30,13 +30,7 @@ function showEffects() { if(selected.value?.imageFile)inspectorTab.value='effect
 function showDetails() { detailsDialog.value=true; }
 function toggleSearch() { searchOpen.value=!searchOpen.value; if(!searchOpen.value)query.value=''; }
 let returnFocus: HTMLElement | null = null;
-watch(() => newDialog.value || psdDialog.value || detailsDialog.value || full.modal, async visible => {
-  if (visible) {
-    returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    await nextTick();
-    if (newDialog.value || psdDialog.value || detailsDialog.value || full.modal) document.querySelector<HTMLElement>('.modal-shade:last-of-type input, .modal-shade:last-of-type button')?.focus();
-  } else if (returnFocus?.isConnected) returnFocus.focus();
-});
+
 function tabKey(event: KeyboardEvent) {
   if (!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
   event.preventDefault();
@@ -110,7 +104,7 @@ async function closeProject() {
   project.value = undefined; selected.value = undefined; source.value = 'none'; error.value = ''; extraIssues.value = [];
   query.value = ''; collapsed.value = new Set(); reportState.value = 'idle';
 }
-function edit(op:Record<string,unknown>){const p=project.value;if(!p||busy.value)return;return request(()=>window.editor.edit(p.id,p.revision,{id:selected.value?.id,...op}));}
+function edit(op:Record<string,unknown>){const p=project.value;if(!p||busy.value)return;if(op.kind==='transform'&&(full.ids.length>1||selected.value?.isGroup))op={...op,kind:'transformLayers',ids:full.ids};return request(()=>window.editor.edit(p.id,p.revision,{id:selected.value?.id,...op}));}
 function history(direction:string){const p=project.value;if(p)return request(()=>window.editor.history(p.id,p.revision,direction));}
 function save(as=false){const p=project.value;if(p)return request(()=>window.editor.save(p.id,p.revision,as));}
 function importImage(): Promise<void> | undefined {const p=project.value;if(p)return request(()=>window.editor.importImage(p.id,p.revision));}
@@ -118,7 +112,7 @@ function importPSD(){return request(()=>window.editor.importPSD());}
 function recover(){return request(()=>window.editor.recover());}
 function add(type:string,adjustment?:string){return edit({kind:'add',type,adjustment,name:type==='group'?t.value.editor.group:type==='adjustment'?t.value.adjustments[ADJUSTMENTS.indexOf(adjustment!)]:t.value.raster,parentID:selected.value?.isGroup?selected.value.id:selected.value?.parentID});}
 function numberEvent(e:Event){return Number((e.target as HTMLInputElement).value);}
-function transformPair(field:'origin'|'size',index:number,e:Event){if(!selected.value)return;const value=[...selected.value.transform[field]];value[index]=numberEvent(e);return edit({kind:'transform',field,value});}
+function transformPair(field:'origin'|'size',index:number,e:Event){if(!selected.value)return;const value=[...(full.selectionTransform??selected.value.transform)[field]];value[index]=numberEvent(e);return edit({kind:'transform',field,value});}
 async function create(){newDialog.value=false;await request(()=>window.editor.create(newWidth.value,newHeight.value));}
 async function exportImage(type:string,flatten=false){
   const p=project.value,c=canvas.value;if(!p||!c||source.value!=='engine')return;psdDialog.value=false;
@@ -128,7 +122,7 @@ async function exportImage(type:string,flatten=false){
       if(p.manifest.layers.filter(l=>l.imageFile).length*p.manifest.width*p.manifest.height*8>512*1024**2)return {error:'limit'};
       for(const l of p.manifest.layers){
         if(l.imageFile)layers.push({id:l.id,...await exportPlaced(p.urls[`images/${l.imageFile}`],l.transform)});
-        if(l.maskFile)masks.push({id:l.id,...await exportPlaced(p.urls[`images/${l.maskFile}`],l.maskLinked===false&&l.maskPlacement?l.maskPlacement:l.transform)});
+        if(l.maskFile)masks.push({id:l.id,...await exportPlaced(p.urls[`images/${l.maskFile}`],l.maskPlacement??l.transform)});
       }
     }
     return window.editor.export(p.id,p.revision,type,{composite,layers,masks,flatten});
@@ -185,7 +179,14 @@ function onKey(event: KeyboardEvent) {
 }
 function wheel(event: WheelEvent) { if (event.ctrlKey) { event.preventDefault(); scale(event.deltaY < 0 ? 1.1 : 1 / 1.1); } }
 let drag: { x: number; y: number; left: number; top: number } | undefined;
-const full=reactive(useCompleteEditor({project,selected,tool,color,brushSize,brushOpacity,paintTarget,painting,editable,language,canvas,overlay,artboard,stage,zoom,error,execute:(op,p=project.value)=>{if(p)return request(()=>window.editor.edit(p.id,p.revision,{id:selected.value?.id,...op}));},receive:result=>request(()=>Promise.resolve(result)),history,scale}));
+const full=reactive(useCompleteEditor({project,selected,tool,color,brushSize,brushOpacity,paintTarget,painting,editable,language,canvas,overlay,artboard,stage,zoom,error,execute:(op,p=project.value)=>{if((source.value!=='engine'||issues.value.length)&&!['rename','lock','selection'].includes(String(op.kind))){error.value='unsupported';return;}if(p)return request(()=>window.editor.edit(p.id,p.revision,{id:selected.value?.id,...op}));},receive:result=>request(()=>Promise.resolve(result)),history,scale}));
+watch(() => newDialog.value || psdDialog.value || detailsDialog.value || full.modal, async visible => {
+  if (visible) {
+    returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    await nextTick();
+    if (newDialog.value || psdDialog.value || detailsDialog.value || full.modal) document.querySelector<HTMLElement>('.modal-shade:last-of-type input, .modal-shade:last-of-type button')?.focus();
+  } else if (returnFocus?.isConnected) returnFocus.focus();
+});
 function cancelStroke(){full.cancel();drag=undefined;}
 function panStart(event:PointerEvent){if(full.start(event))return;if(!stage.value||event.button!==0||!project.value)return;drag={x:event.clientX,y:event.clientY,left:stage.value.scrollLeft,top:stage.value.scrollTop};stage.value.setPointerCapture(event.pointerId);}
 function panMove(event:PointerEvent){if(full.move(event))return;if(!stage.value||!drag)return;stage.value.scrollLeft=drag.left+drag.x-event.clientX;stage.value.scrollTop=drag.top+drag.y-event.clientY;}
@@ -231,13 +232,13 @@ onUnmounted(() => { operation++; epoch++; cancelStroke();renderer?.dispose(); fu
     </header>
     <div v-if="error || settingError" class="error" role="alert">{{ settingError ? t.settingsError : t.errorTitle + ' · ' + labelError(error) }}<button class="icon-button" :aria-label="t.editor.cancel" @click="error='';settingError=false"><Icon name="close"/></button></div>
     <div class="optionsbar" data-testid="tool-options">
-      <span class="tool-heading"><Icon :name="tool"/>{{ t.editor[tool as keyof typeof t.editor] }}</span>
+      <span class="tool-heading"><Icon :name="tool"/>{{ toolLabel(tool) }}</span>
       <template v-if="tool==='move' && selected">
-        <label v-for="(key,i) in ['X','Y']" :key="key">{{ key }}<input type="number" :value="selected.transform.origin[i]" :disabled="!editable" @change="transformPair('origin',i,$event)"></label>
-        <label v-for="(key,i) in [t.editor.width,t.editor.height]" :key="key">{{ key }}<input type="number" min="1" max="300000" :value="selected.transform.size[i]" :disabled="!editable || selected.isGroup" @change="transformPair('size',i,$event)"></label>
-        <label>{{ t.editor.rotation }}<span class="unit-field"><input type="number" :value="selected.transform.rotation" :disabled="!editable || selected.isGroup" @change="edit({kind:'transform',field:'rotation',value:numberEvent($event)})"><span>°</span></span></label>
-        <button class="icon-button" :disabled="!editable || selected.isGroup" :title="t.editor.flipH" :aria-label="t.editor.flipH" @click="edit({kind:'transform',field:'flipX',value:!selected.transform.flipX})"><Icon name="flipH"/></button>
-        <button class="icon-button" :disabled="!editable || selected.isGroup" :title="t.editor.flipV" :aria-label="t.editor.flipV" @click="edit({kind:'transform',field:'flipY',value:!selected.transform.flipY})"><Icon name="flipV"/></button>
+        <label v-for="(key,i) in ['X','Y']" :key="key">{{ key }}<input type="number" :value="(full.selectionTransform??selected.transform).origin[i]" :disabled="!editable" @change="transformPair('origin',i,$event)"></label>
+        <label v-for="(key,i) in [t.editor.width,t.editor.height]" :key="key">{{ key }}<input type="number" min="1" max="300000" :value="(full.selectionTransform??selected.transform).size[i]" :disabled="!editable" @change="transformPair('size',i,$event)"></label>
+        <label>{{ t.editor.rotation }}<span class="unit-field"><input type="number" :value="(full.selectionTransform??selected.transform).rotation" :disabled="!editable" @change="edit({kind:'transform',field:'rotation',value:numberEvent($event)})"><span>°</span></span></label>
+        <button class="icon-button" :disabled="!editable" :title="t.editor.flipH" :aria-label="t.editor.flipH" @click="edit({kind:'transform',field:'flipX',value:!(full.selectionTransform??selected.transform).flipX})"><Icon name="flipH"/></button>
+        <button class="icon-button" :disabled="!editable" :title="t.editor.flipV" :aria-label="t.editor.flipV" @click="edit({kind:'transform',field:'flipY',value:!(full.selectionTransform??selected.transform).flipY})"><Icon name="flipV"/></button>
       </template>
       <CompleteControls :e="full" mode="options" :tool="tool" :disabled="busy || painting" :selected="selected" :color="color" :size="brushSize" :opacity="brushOpacity" :target="paintTarget" @size="brushSize=$event" @opacity="brushOpacity=$event" @target="paintTarget=$event"/>
       <span v-if="tool==='pan'" class="tool-hint">{{ tool==='pan' ? ui.panHint : ui.moveHint }}</span>
@@ -269,10 +270,10 @@ onUnmounted(() => { operation++; epoch++; cancelStroke();renderer?.dispose(); fu
               <div v-if="source==='engine' && full.options.grid" class="grid-overlay" :style="{backgroundSize:10*zoom+'px '+10*zoom+'px'}"></div>
               <svg v-if="source==='engine'" class="geometry-overlay" :viewBox="'0 0 '+project.manifest.width+' '+project.manifest.height" :style="{width:'100%',height:'100%'}">
                 <line v-for="g in project.manifest.guides??[]" :key="g.id" :x1="g.axis==='vertical'?g.position:0" :x2="g.axis==='vertical'?g.position:project.manifest.width" :y1="g.axis==='horizontal'?g.position:0" :y2="g.axis==='horizontal'?g.position:project.manifest.height" stroke="#71dfed" :stroke-width="1/zoom"/>
-                <g v-if="tool==='move' && selected && !selected.isGroup" :transform="'translate('+(selected.transform.origin[0]+selected.transform.size[0]/2)+','+(selected.transform.origin[1]+selected.transform.size[1]/2)+') rotate('+selected.transform.rotation+') translate('+(-selected.transform.size[0]/2)+','+(-selected.transform.size[1]/2)+')'">
-                  <rect x="0" y="0" :width="selected.transform.size[0]" :height="selected.transform.size[1]" fill="none" stroke="#99d7ed" :stroke-width="1/zoom"/>
-                  <rect data-handle="resize" :x="selected.transform.size[0]-5/zoom" :y="selected.transform.size[1]-5/zoom" :width="10/zoom" :height="10/zoom" class="transform-handle" :aria-label="full.labels.resize"/>
-                  <circle data-handle="rotate" :cx="selected.transform.size[0]/2" :cy="-20/zoom" :r="5/zoom" class="transform-handle" :aria-label="full.labels.rotate"/>
+                <g v-if="tool==='move' && selected && full.selectionTransform" :transform="'translate('+((full.selectionTransform??selected.transform).origin[0]+(full.selectionTransform??selected.transform).size[0]/2)+','+((full.selectionTransform??selected.transform).origin[1]+(full.selectionTransform??selected.transform).size[1]/2)+') rotate('+(full.selectionTransform??selected.transform).rotation+') translate('+(-(full.selectionTransform??selected.transform).size[0]/2)+','+(-(full.selectionTransform??selected.transform).size[1]/2)+')'">
+                  <rect x="0" y="0" :width="(full.selectionTransform??selected.transform).size[0]" :height="(full.selectionTransform??selected.transform).size[1]" fill="none" stroke="#99d7ed" :stroke-width="1/zoom"/>
+                  <rect data-handle="resize" :x="(full.selectionTransform??selected.transform).size[0]-5/zoom" :y="(full.selectionTransform??selected.transform).size[1]-5/zoom" :width="10/zoom" :height="10/zoom" class="transform-handle" :aria-label="full.labels.resize"/>
+                  <circle data-handle="rotate" :cx="(full.selectionTransform??selected.transform).size[0]/2" :cy="-20/zoom" :r="5/zoom" class="transform-handle" :aria-label="full.labels.rotate"/>
                 </g>
               </svg>
               <img v-else :key="project.id" :src="previewURL" :alt="t.saved" draggable="false" data-testid="saved-preview" @error="savedPreviewFailed">
@@ -319,10 +320,10 @@ onUnmounted(() => { operation++; epoch++; cancelStroke();renderer?.dispose(); fu
               <div class="parameter-form">
                 <label>{{ t.editor.rename }}<input :value="selected.name" maxlength="256" :disabled="busy || painting" data-testid="layer-name" @change="edit({kind:'rename',name:($event.target as HTMLInputElement).value})"></label>
                 <details class="property-section" open><summary>{{ ui.transform }}</summary><div class="transform-grid">
-                  <label v-for="(key,i) in ['X','Y']" :key="key">{{ key }}<input type="number" :value="selected.transform.origin[i]" :disabled="!editable" @change="transformPair('origin',i,$event)"></label>
-                  <label v-for="(key,i) in [t.editor.width,t.editor.height]" :key="key">{{ key }}<input type="number" min="1" max="300000" :value="selected.transform.size[i]" :disabled="!editable || selected.isGroup" @change="transformPair('size',i,$event)"></label>
-                  <label>{{ t.editor.rotation }}<input type="number" :value="selected.transform.rotation" :disabled="!editable || selected.isGroup" @change="edit({kind:'transform',field:'rotation',value:numberEvent($event)})"></label>
-                  <div class="button-row"><button class="icon-button" :disabled="!editable || selected.isGroup" :title="t.editor.flipH" :aria-label="t.editor.flipH" @click="edit({kind:'transform',field:'flipX',value:!selected.transform.flipX})"><Icon name="flipH"/></button><button class="icon-button" :disabled="!editable || selected.isGroup" :title="t.editor.flipV" :aria-label="t.editor.flipV" @click="edit({kind:'transform',field:'flipY',value:!selected.transform.flipY})"><Icon name="flipV"/></button></div>
+                  <label v-for="(key,i) in ['X','Y']" :key="key">{{ key }}<input type="number" :value="(full.selectionTransform??selected.transform).origin[i]" :disabled="!editable" @change="transformPair('origin',i,$event)"></label>
+                  <label v-for="(key,i) in [t.editor.width,t.editor.height]" :key="key">{{ key }}<input type="number" min="1" max="300000" :value="(full.selectionTransform??selected.transform).size[i]" :disabled="!editable" @change="transformPair('size',i,$event)"></label>
+                  <label>{{ t.editor.rotation }}<input type="number" :value="(full.selectionTransform??selected.transform).rotation" :disabled="!editable" @change="edit({kind:'transform',field:'rotation',value:numberEvent($event)})"></label>
+                  <div class="button-row"><button class="icon-button" :disabled="!editable" :title="t.editor.flipH" :aria-label="t.editor.flipH" @click="edit({kind:'transform',field:'flipX',value:!(full.selectionTransform??selected.transform).flipX})"><Icon name="flipH"/></button><button class="icon-button" :disabled="!editable" :title="t.editor.flipV" :aria-label="t.editor.flipV" @click="edit({kind:'transform',field:'flipY',value:!(full.selectionTransform??selected.transform).flipY})"><Icon name="flipV"/></button></div>
                 </div></details>
                 <details class="property-section"><summary>{{ ui.structure }}</summary>
                   <label>{{ t.editor.parent }}<select :disabled="!editable" :value="selected.parentID ?? ''" @change="edit({kind:'parent',parentID:($event.target as HTMLSelectElement).value})"><option value="">{{ t.editor.root }}</option><option v-for="g in project?.analysis.rows.filter(l=>l.isGroup && l.id!==selected?.id)" :key="g.id" :value="g.id">{{ g.name }}</option></select></label>

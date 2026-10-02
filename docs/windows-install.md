@@ -2,8 +2,8 @@
 
 ## 下载和安装
 
-1. 打开 [Windows 预览版发行页](https://github.com/Pengjingyu1992/Compositor-ZH/releases/tag/windows-v0.1.0-alpha.1)。不要使用仓库的 `releases/latest`，那个入口保留给 macOS。
-2. **Windows 10 22H2 或 Windows 11，64 位 Intel/AMD（x64）**：下载 `Compositor-Windows-0.1.0-alpha.1-x64.exe`，运行后按安装向导选择目录。不需要 Node.js、npm、Xcode 或 API Key。当前不提供 Windows ARM64/32 位原生包。
+1. 打开 [Windows 预览版发行页](https://github.com/Pengjingyu1992/Compositor-ZH/releases/tag/windows-v0.1.0-alpha.2)。不要使用仓库的 `releases/latest`，那个入口保留给 macOS。
+2. **Windows 10 22H2 或 Windows 11，64 位 Intel/AMD（x64）**：下载 `Compositor-Windows-0.1.0-alpha.2-x64.exe`，运行后按安装向导选择目录。不需要 Node.js、npm、Xcode 或 API Key。当前不提供 Windows ARM64/32 位原生包。
 3. 或下载同名 `.zip`，**完整解压**到一个目录，运行其中的 `Compositor.exe`。不要只复制 EXE；`resources`、DLL、语言资源和许可证必须一起保留。
 4. 当前为未签名社区预览版，Windows 可能显示发布者未知。先核对下载来源和下方校验和，仅在确认来源后按系统提供的选项打开；不要关闭 Defender。
 5. 第一次启动默认简体中文。右上角选择 **English / 简体中文** 即时切换，关闭后重新打开仍保留。
@@ -17,9 +17,18 @@
 1. 在 macOS 版保存项目后，把**整个 `作品.comp` 文件夹**复制到 Windows。必要时先在 Mac 上压缩整个项目，再在 Windows 解压。
 2. 项目内应包含 `manifest.json`、`images/` 及所有图层 PNG；`QuickLook/Preview.jpg` 是可选的已保存预览。
 3. 点击“打开项目”或 `Ctrl+O`，在文件夹选择器中直接选中 `.comp` 文件夹，然后确认“打开项目”。不要只选择 manifest，也不要选择快捷方式或目录链接。
-4. “适合窗口” / `Ctrl+0` 适合显示，`Ctrl+1` 显示 100%；`Ctrl+滚轮` 或工具栏 `+ / −` 缩放，拖动画布区域平移。右侧点击图层查看原始属性。
+4. 也可以把**单个完整 `.comp` 文件夹**拖到窗口中打开；拖入多个文件夹会提示重新选择。
+5. “适合窗口” / `Ctrl+0` 适合显示，`Ctrl+1` 显示 100%；`Ctrl+滚轮` 或工具栏 `+ / −` 缩放，拖动画布区域平移。右侧点击图层查看原始属性。
 
 本版**没有编辑、保存或覆盖源文件的入口**，`Ctrl+S` 也不会保存。文字和形状显示项目已有的 PNG，不需要重新匹配中文字体。原始 metadata 中的英文枚举/字段名按源文件保留，不是可编辑表单。
+
+## 项目查看与反馈
+
+- **重新加载**：工具栏 ↻ 或 `Ctrl+R`，读取源文件当前内容。读取失败保留已打开快照并显示错误；应用不会自动改写项目。
+- **关闭项目**：工具栏 × 或 `Ctrl+W`，回到欢迎页并释放项目和渲染资源；加载中的旧结果会被丢弃。退出程序仍可用 `Alt+F4` 或文件菜单。
+- 右侧可以按名称搜索图层（中文/英文均可），点击组名前的箭头折叠或展开。搜索时临时显示匹配层的父组，清除搜索恢复原折叠状态。
+- 点击“复制兼容性报告”后，可粘贴到问题反馈。报告只含应用/格式版本、尺寸、图层及资源数量、预览来源、兼容性原因和内存估计，不含项目名、路径、图层名/ID或原始元数据。**不会自动发送**；分享前仍可查看剪贴板内容。
+- 打开路径仅在当前会话内用于重载，关闭后释放；不会添加最近文件列表或写入语言设置。
 
 ## 预览边界
 
@@ -37,7 +46,7 @@
 发行页同时提供 `SHA256SUMS.txt`。在 PowerShell 中执行：
 
 ```powershell
-Get-FileHash .\Compositor-Windows-0.1.0-alpha.1-x64.exe -Algorithm SHA256
+Get-FileHash .\Compositor-Windows-0.1.0-alpha.2-x64.exe -Algorithm SHA256
 ```
 
 与校验文件中对应文件的 SHA-256 相同再安装。ZIP 同样可以校验。
@@ -73,9 +82,9 @@ npm run package:win
 
 ## English installation summary
 
-Download the x64 EXE or ZIP from the [Windows prerelease](https://github.com/Pengjingyu1992/Compositor-ZH/releases/tag/windows-v0.1.0-alpha.1). Run the installer, or extract the entire ZIP and launch `Compositor.exe`. Node.js is not required. Packages are unsigned; verify their SHA-256 before opening. Target: Windows 10 22H2 / Windows 11 x64; actual hardware acceptance remains pending.
+Download the x64 EXE or ZIP from the [Windows prerelease](https://github.com/Pengjingyu1992/Compositor-ZH/releases/tag/windows-v0.1.0-alpha.2). Run the installer, or extract the entire ZIP and launch `Compositor.exe`. Node.js is not required. Packages are unsigned; verify their SHA-256 before opening. Target: Windows 10 22H2 / Windows 11 x64; actual hardware acceptance remains pending.
 
-Copy the **entire `.comp` folder** from macOS and select it with **Open project / Ctrl+O**. Use Ctrl+0 to fit, Ctrl+1 for actual size, Ctrl+wheel to zoom, and drag to pan. The top-right selector changes English/Simplified Chinese immediately and persists under `%APPDATA%\Compositor-Windows`.
+Copy the **entire `.comp` folder** from macOS and select it with **Open project / Ctrl+O**. You can also drop one complete `.comp` folder into the window. Use Ctrl+0 to fit, Ctrl+1 for actual size, Ctrl+wheel to zoom, and drag to pan. Ctrl+R reloads the source; Ctrl+W closes the project. Search layer names and collapse groups in the sidebar. Copy compatibility report explicitly copies aggregate data to the clipboard; it contains no project names, paths, layer names/IDs, or raw metadata and is never sent automatically. The top-right selector changes English/Simplified Chinese immediately and persists under `%APPDATA%\Compositor-Windows`.
 
 This is a read-only preview, not the full editor. Basic Normal layers use the Pentrado compositor with explicit sRGB spaces; macOS golden-image fidelity is not yet certified. Unsupported properties use the preview last saved by macOS, which may be stale. Without that preview, only layers/properties are shown. There is no save, painting, PSD, project upload, or telemetry.
 

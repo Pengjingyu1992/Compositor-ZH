@@ -3,6 +3,9 @@ export const messages = {
     title: '叠绘', subtitle: 'Windows · 只读预览', open: '打开项目', fit: '适合窗口', language: '界面语言',
     welcome: '让你的叠层作品，来到 Windows。', intro: '打开 macOS 版保存的 .comp 项目文件夹，查看画布、图层和原始属性。',
     readonly: '只读 · 不修改项目', hint: '支持 .comp 1–11 · 完全离线 · Ctrl+O 打开',
+    reload: '重新加载项目', close: '关闭项目', dropHint: '拖入一个完整的 .comp 项目文件夹',
+    search: '搜索图层名称', clearSearch: '清除搜索', noMatches: '没有匹配的图层。', expand: '展开图层组', collapse: '折叠图层组',
+    copyReport: '复制兼容性报告', reportPrivacy: '报告只含尺寸、数量和兼容性状态，不含项目名称、路径或图层内容。', reportCopied: '报告已复制，可以粘贴分享。', reportError: '报告复制失败，请重试。',
     empty: '打开项目后，在这里查看图层。', layers: '图层', properties: '原始属性（只读）', noSelection: '选择一个图层查看其属性。',
     engine: 'Pentrado 图层预览 · 尚未完成 macOS 黄金图比对', saved: 'macOS 保存的预览图 · 可能不是最新内容', noPreview: '该项目需要保存的预览图，但文件中没有可用预览。图层和属性仍可查看。',
     loading: '正在读取项目…', rendering: '正在合成预览…', errorTitle: '无法打开项目',
@@ -13,12 +16,15 @@ export const messages = {
     settingsError: '语言设置未能保存，请检查设置目录是否可写。', metadata: '元数据', version: '版本',
     sourceNote: '基于 Compositor 与 Pentrado，感谢 Robbie Tilton 和 Terry Jia。',
     issues: { unknown: '未知字段', adjustment: '调整层', effects: '图层效果', clipping: '剪贴蒙版', groupMask: '组蒙版', unlinkedMask: '独立蒙版位置', blend: '非正常混合模式', sampling: '最近邻采样', memory: '超过当前预览内存预算', gpu: '显卡或 WebGL 功能不足', asset: '图像解码失败' },
-    errors: { invalid: '项目数据无效或图层关系不完整。', version: '只支持 .comp 格式版本 1–11。', colorSpace: '目前只支持 sRGB 项目。', limit: '项目超过读取限额：单个资源 64 MiB，总编码资源 256 MiB。', path: '请直接选择 .comp 文件夹，不使用快捷方式、链接或不安全的资源路径。', asset: '项目中包含无效或不支持的图像资源。', changed: '读取时文件发生了变化，请重新打开。', missing: '找不到项目文件或图层资源，请复制完整的 .comp 文件夹。', read: '读取失败，请检查项目目录和访问权限。', stale: '项目已切换，请重新打开。', busy: '正在打开另一个项目。' }
+    errors: { invalid: '项目数据无效或图层关系不完整。', version: '只支持 .comp 格式版本 1–11。', colorSpace: '目前只支持 sRGB 项目。', limit: '项目超过读取限额：单个资源 64 MiB，总编码资源 256 MiB。', path: '请直接选择 .comp 文件夹，不使用快捷方式、链接或不安全的资源路径。', asset: '项目中包含无效或不支持的图像资源。', changed: '读取时文件发生了变化，请重新打开。', missing: '找不到项目文件或图层资源，请复制完整的 .comp 文件夹。', read: '读取失败，请检查项目目录和访问权限。', stale: '项目已切换，请重新打开。', busy: '正在打开另一个项目。', drop: '请一次拖入一个完整的 .comp 文件夹。' }
   },
   en: {
     title: 'Compositor', subtitle: 'Windows · Read-only preview', open: 'Open project', fit: 'Fit to window', language: 'Interface language',
     welcome: 'Your layered work, now on Windows.', intro: 'Open a .comp folder saved by the macOS app to inspect its canvas, layers, and original properties.',
     readonly: 'Read-only · No project changes', hint: '.comp 1–11 · Offline · Ctrl+O to open',
+    reload: 'Reload project', close: 'Close project', dropHint: 'Drop one complete .comp project folder',
+    search: 'Search layer names', clearSearch: 'Clear search', noMatches: 'No matching layers.', expand: 'Expand group', collapse: 'Collapse group',
+    copyReport: 'Copy compatibility report', reportPrivacy: 'Only dimensions, counts, and compatibility status are included. No project names, paths, or layer content.', reportCopied: 'Report copied. Paste it to share.', reportError: 'Could not copy the report. Try again.',
     empty: 'Open a project to inspect its layers.', layers: 'Layers', properties: 'Original properties (read-only)', noSelection: 'Select a layer to inspect its properties.',
     engine: 'Pentrado layer preview · macOS golden-image comparison pending', saved: 'Preview saved by macOS · May be out of date', noPreview: 'This project needs a saved preview, but none is available. Layers and properties remain accessible.',
     loading: 'Reading project…', rendering: 'Compositing preview…', errorTitle: 'Unable to open project',
@@ -29,6 +35,6 @@ export const messages = {
     settingsError: 'Could not save the language setting. Check access to the settings directory.', metadata: 'Metadata', version: 'Version',
     sourceNote: 'Built on Compositor and Pentrado. Thank you, Robbie Tilton and Terry Jia.',
     issues: { unknown: 'Unknown fields', adjustment: 'Adjustment layers', effects: 'Layer effects', clipping: 'Clipping masks', groupMask: 'Group masks', unlinkedMask: 'Independent mask placement', blend: 'Non-Normal blend modes', sampling: 'Nearest-neighbor sampling', memory: 'Preview memory budget exceeded', gpu: 'GPU or WebGL capability unavailable', asset: 'Image decoding failed' },
-    errors: { invalid: 'Invalid project data or layer relationships.', version: 'Only .comp format versions 1–11 are supported.', colorSpace: 'Only sRGB projects are supported.', limit: 'Read limit exceeded: 64 MiB per resource, 256 MiB total encoded resources.', path: 'Select a .comp folder directly, without shortcuts, links, or unsafe resource paths.', asset: 'The project contains an invalid or unsupported image resource.', changed: 'A file changed during reading. Open the project again.', missing: 'Project files or layer resources are missing. Copy the entire .comp folder.', read: 'Cannot read the project. Check the folder and permissions.', stale: 'The project changed. Open it again.', busy: 'Another project is being opened.' }
+    errors: { invalid: 'Invalid project data or layer relationships.', version: 'Only .comp format versions 1–11 are supported.', colorSpace: 'Only sRGB projects are supported.', limit: 'Read limit exceeded: 64 MiB per resource, 256 MiB total encoded resources.', path: 'Select a .comp folder directly, without shortcuts, links, or unsafe resource paths.', asset: 'The project contains an invalid or unsupported image resource.', changed: 'A file changed during reading. Open the project again.', missing: 'Project files or layer resources are missing. Copy the entire .comp folder.', read: 'Cannot read the project. Check the folder and permissions.', stale: 'The project changed. Open it again.', busy: 'Another project is being opened.', drop: 'Drop one complete .comp folder at a time.' }
   }
 } as const;

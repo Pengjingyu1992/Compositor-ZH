@@ -4,7 +4,7 @@ export interface Placement {
   flipX?: boolean; flipY?: boolean; sampling: string;
 }
 export interface LayerRow {
-  id: string; name: string; isVisible: boolean; isGroup?: boolean;
+  id: string; name: string; isVisible: boolean; isGroup?: boolean; parentID?: string;
   imageFile?: string; maskFile?: string; maskEnabled?: boolean;
   transform: Placement; opacity?: number; blendMode?: string;
   text?: Record<string, unknown>; shape?: Record<string, unknown>;
@@ -25,7 +25,13 @@ declare global {
       settings(): Promise<{ language: Language; version: string }>;
       language(value: Language): Promise<{ language: Language }>;
       open(): Promise<OpenResult>;
+      drop(file: File): Promise<OpenResult>;
+      reload(id: string): Promise<OpenResult>;
+      close(): Promise<{ closed: boolean }>;
+      copyReport(id: string, display: { source: 'engine' | 'saved' | 'none'; issues: string[] }): Promise<{ copied?: boolean; error?: string }>;
       onOpen(callback: () => void): () => void;
+      onReload(callback: () => void): () => void;
+      onClose(callback: () => void): () => void;
       onFit(callback: () => void): () => void;
       onActual(callback: () => void): () => void;
     };

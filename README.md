@@ -16,7 +16,7 @@ Built on **[Compositor](https://github.com/robbietilton/Compositor)** by **[Robb
 
 ### Windows 10 / 11（独立预览版 / Separate preview）
 
-- **[Windows 下载 / Windows downloads](https://github.com/Pengjingyu1992/Compositor-ZH/releases/tag/windows-v0.1.0-alpha.1)** · **[安装说明 / Installation guide](docs/windows-install.md)**
+- **[Windows 下载 / Windows downloads](https://github.com/Pengjingyu1992/Compositor-ZH/releases/tag/windows-v0.1.0-alpha.2)** · **[安装说明 / Installation guide](docs/windows-install.md)**
 - Windows 10 22H2 / Windows 11，x64。首版是 `.comp` **只读查看器**，可以查看项目、图层与原始属性，并即时切换中英文。编辑、保存、PSD 和绘图工具尚未开放。 / Windows 10 22H2 / Windows 11, x64. This first release is a **read-only .comp viewer**, with layer/property inspection and persistent Chinese/English switching. Editing, saving, PSD, and painting are not enabled.
 - 基于 Pentrado 引擎，拥有独立安装包、设置和发行标签；不会替换 macOS 版。复杂项目会明确使用 macOS 保存的预览图。真实 Windows 10/11 显卡与用户项目验收仍待完成。 / Built with Pentrado, with separate packages, settings, and release tags. Complex projects explicitly use the preview saved by macOS. Real Windows GPU and user-project acceptance is pending.
 

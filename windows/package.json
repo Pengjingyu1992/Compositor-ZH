@@ -1,6 +1,6 @@
 {
   "name": "compositor-windows",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.2",
   "description": "Compositor / 叠绘 Windows read-only project viewer, built with the Pentrado engine",
   "author": "Compositor-ZH contributors",
   "license": "MIT",

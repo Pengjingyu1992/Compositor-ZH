@@ -1,10 +1,10 @@
-import { app, BrowserWindow, Menu, dialog, ipcMain, protocol } from 'electron';
-import { randomUUID } from 'node:crypto';
+import { app, BrowserWindow, Menu, dialog, ipcMain, protocol, clipboard } from 'electron';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readProject } from '../../../packages/comp-bridge/project.mjs';
 import { getLanguage, setLanguage } from '../../../packages/platform/preferences.mjs';
+import { ProjectSession } from '../../../packages/platform/project-session.mjs';
+import { compatibilityReport } from '../../../packages/platform/compatibility-report.mjs';
 
 const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 const RENDERER = path.join(ROOT, 'out', 'renderer');
@@ -14,7 +14,8 @@ app.setName('Compositor Windows');
 app.setAppUserModelId('org.compositorzh.windows');
 app.setPath('userData', path.join(app.getPath('appData'), 'Compositor-Windows'));
 if (!app.requestSingleInstanceLock()) { app.quit(); process.exit(0); }
-let win, language = 'zh-Hans', opened = null, generation = 0, choosing = false;
+let win, language = 'zh-Hans';
+const session = new ProjectSession();
 let preferenceQueue = Promise.resolve();
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml' };
 const headers = {
@@ -38,6 +39,8 @@ function nativeMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     { label: zh ? '文件' : 'File', submenu: [
       { label: zh ? '打开项目…' : 'Open project…', accelerator: 'Ctrl+O', click: () => win?.webContents.send('viewer:open') },
+      { label: zh ? '重新加载项目' : 'Reload project', accelerator: 'Ctrl+R', enabled: !!session.current && !session.pending, click: () => win?.webContents.send('viewer:reload') },
+      { label: zh ? '关闭项目' : 'Close project', accelerator: 'Ctrl+W', enabled: !!session.current || session.pending, click: () => win?.webContents.send('viewer:close') },
       { type: 'separator' }, { label: zh ? '退出' : 'Quit', role: 'quit' }
     ] },
     { label: zh ? '显示' : 'View', submenu: [
@@ -47,19 +50,10 @@ function nativeMenu() {
     ] }
   ]));
 }
-function serializeProject(project, id) {
-  const urls = Object.fromEntries([...project.resources.keys()].map((key, i) => [key, `compositor://app/project/${id}/${i}`]));
-  return { id, name: project.name, manifest: project.manifest, analysis: project.analysis, urls, preview: project.preview };
-}
-async function loadProject(location) {
-  const token = ++generation;
-  try {
-    const data = await readProject(location);
-    if (token !== generation || !win || win.isDestroyed()) return { error: 'stale' };
-    const id = randomUUID();
-    opened = { id, data, resources: [...data.resources.values()] };
-    return { project: serializeProject(data, id) };
-  } catch (e) { return { error: e.code ?? 'read' }; }
+async function projectRequest(start) {
+  const pending = start();
+  nativeMenu();
+  try { return await pending; } finally { nativeMenu(); }
 }
 // Return from the ESM entry point before waiting for readiness. In particular,
 // Playwright's loader delays ready until the bootstrap has finished importing.
@@ -71,8 +65,8 @@ protocol.handle('compositor', async request => {
     if (request.method !== 'GET') return new Response(null, { status: 405 });
     if (url.host === 'app' && url.pathname.startsWith('/project/')) {
       const [id, index, ...extra] = url.pathname.slice('/project/'.length).split('/');
-      if (!opened || id !== opened.id || !/^(0|[1-9][0-9]*)$/.test(index) || extra.length) return new Response(null, { status: 404 });
-      const resource = opened.resources[Number(index)];
+      if (!session.current || id !== session.current.id || !/^(0|[1-9][0-9]*)$/.test(index) || extra.length) return new Response(null, { status: 404 });
+      const resource = session.current.resources[Number(index)];
       if (!resource) return new Response(null, { status: 404 });
       return new Response(new Uint8Array(resource.bytes), { headers: { ...headers, 'Content-Type': resource.mime } });
     }
@@ -91,7 +85,7 @@ win = new BrowserWindow({
 win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 win.webContents.on('will-navigate', (event, url) => { if (url !== HOME) event.preventDefault(); });
 win.webContents.on('will-attach-webview', event => event.preventDefault());
-win.on('closed', () => { generation++; opened = null; win = null; });
+win.on('closed', () => { session.close(); win = null; });
 app.on('window-all-closed', () => app.quit());
 handler('viewer:settings', () => ({ language, version: app.getVersion() }));
 handler('viewer:language', async value => {
@@ -100,14 +94,20 @@ handler('viewer:language', async value => {
   await preferenceQueue; language = value; nativeMenu();
   return { language };
 });
-handler('viewer:open', async () => {
-  if (choosing) return { error: 'busy' };
-  choosing = true;
-  try {
+handler('viewer:open', () => projectRequest(() => session.open(async () => {
     const result = await dialog.showOpenDialog(win, { title: language === 'en' ? 'Select a .comp project folder' : '选择 .comp 项目文件夹', properties: ['openDirectory'], buttonLabel: language === 'en' ? 'Open project' : '打开项目' });
-    if (result.canceled) return { canceled: true };
-    return await loadProject(result.filePaths[0]);
-  } finally { choosing = false; }
+    return result.canceled ? null : result.filePaths[0];
+})));
+handler('viewer:drop', location => {
+  if (typeof location !== 'string' || !path.isAbsolute(location) || location.length > 32768 || path.extname(location).toLowerCase() !== '.comp') return { error: 'path' };
+  return projectRequest(() => session.open(() => location));
+});
+handler('viewer:reload', id => projectRequest(() => session.reload(id)));
+handler('viewer:close', () => { const result = session.close(); nativeMenu(); return result; });
+handler('viewer:report', (id, display) => {
+  if (!session.current || session.current.id !== id || session.pending) return { error: 'stale' };
+  clipboard.writeText(JSON.stringify(compatibilityReport(session.current.data, app.getVersion(), display), null, 2));
+  return { copied: true };
 });
 nativeMenu();
 await win.loadURL(HOME);

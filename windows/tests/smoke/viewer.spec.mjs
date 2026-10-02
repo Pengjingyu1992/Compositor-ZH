@@ -3,7 +3,7 @@ import { mkdtemp, rm, readFile, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { fixture, png } from '../fixtures.mjs';
+import { fixture, png, IDS } from '../fixtures.mjs';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 let temp, project, before;
 test.beforeEach(async () => {
@@ -73,5 +73,66 @@ test('complex projects use the saved macOS preview through the same-origin resou
     await expect(preview).toBeVisible();
     await expect.poll(() => preview.evaluate(i => i.complete && i.naturalWidth)).toBe(64);
     await expect(page.getByTestId('rendered-canvas')).toHaveCount(0);
+  } finally { await instance.close(); }
+});
+test('group hierarchy, search, and collapse are local viewing controls', async () => {
+  await fixture(project, m => {
+    m.layers.unshift({ id: IDS[2], name: 'Collection / 合集', isGroup: true, isVisible: true, transform: m.layers[0].transform });
+    m.layers[1].parentID = IDS[2]; m.layers[2].parentID = IDS[2]; return m;
+  });
+  before = await readFile(path.join(project, 'manifest.json'));
+  const { instance, page } = await launch();
+  try {
+    await expect(page.getByTestId('rendered-canvas')).toBeVisible();
+    await expect(page.locator('.layer-row')).toHaveCount(3);
+    await expect(page.locator('.layer-row').first()).toContainText('Collection');
+    const fold = page.locator('.fold');
+    await fold.click(); await expect(page.locator('.layer-row')).toHaveCount(1);
+    await page.getByTestId('layer-search').fill('薄荷');
+    await expect(page.locator('.layer-row')).toHaveCount(2);
+    await expect(page.locator('.layer-row').first()).toContainText('Collection');
+    await page.getByRole('button', { name: /Mint \/ 薄荷/ }).click();
+    await expect(page.locator('.inspector pre')).toContainText('Mint / 薄荷');
+    await page.getByTestId('layer-search').fill('unmatched'); await expect(page.locator('.layer-row')).toHaveCount(0);
+    await page.getByTestId('layer-search').fill(''); await expect(page.locator('.layer-row')).toHaveCount(1);
+    await fold.click(); await expect(page.locator('.layer-row')).toHaveCount(3);
+    expect(await readFile(path.join(project, 'manifest.json'))).toEqual(before);
+  } finally { await instance.close(); }
+});
+test('reload, anonymous clipboard report, and close preserve the source package', async () => {
+  const { instance, page } = await launch();
+  try {
+    await expect(page.getByTestId('copy-report')).toBeEnabled();
+    await page.getByTestId('copy-report').click();
+    const reportText = await instance.evaluate(({ clipboard }) => clipboard.readText());
+    const report = JSON.parse(reportText);
+    expect(report.project.layerCount).toBe(2); expect(report.preview.source).toBe('engine');
+    for (const value of ['sample.comp', 'Coral', 'Mint', project, ...IDS]) expect(reportText).not.toContain(value);
+    const changed = JSON.parse(before.toString()); changed.layers[1].name = 'Updated / 更新';
+    const changedBytes = Buffer.from(JSON.stringify(changed)); await writeFile(path.join(project, 'manifest.json'), changedBytes);
+    await page.getByTestId('reload-project').click();
+    await expect(page.locator('.layer-row')).toContainText(['Updated', 'Coral']);
+    await expect(page.getByTestId('copy-report')).toBeEnabled();
+    await page.getByTestId('close-project').click();
+    await expect(page.locator('.welcome')).toBeVisible(); await expect(page.locator('.layer-row')).toHaveCount(0);
+    expect(await readFile(path.join(project, 'manifest.json'))).toEqual(changedBytes);
+    await page.locator('.toolbar .primary').click(); await expect(page.getByTestId('rendered-canvas')).toBeVisible();
+    await page.keyboard.press('Control+w'); await expect(page.locator('.welcome')).toBeVisible();
+  } finally { await instance.close(); }
+});
+test('native folder drop opens a project; synthetic File cannot supply a disk path', async () => {
+  const instance = await _electron.launch({ timeout: 30_000, executablePath: path.join(root, 'release/win-unpacked/Compositor.exe'), args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'], env: { ...process.env, APPDATA: temp } });
+  try {
+    const page = await instance.firstWindow(); await expect(page.locator('.welcome')).toBeVisible();
+    const cdp = await page.context().newCDPSession(page);
+    const data = { items: [], files: [project], dragOperationsMask: 1 };
+    await cdp.send('Input.dispatchDragEvent', { type: 'dragEnter', x: 300, y: 300, data });
+    await cdp.send('Input.dispatchDragEvent', { type: 'dragOver', x: 300, y: 300, data });
+    await cdp.send('Input.dispatchDragEvent', { type: 'drop', x: 300, y: 300, data });
+    await expect(page.getByTestId('rendered-canvas')).toBeVisible(); await expect(page.locator('.layer-row')).toHaveCount(2);
+    const invalid = await page.evaluate(() => window.viewer.drop(new File(['fake'], 'sample.comp')));
+    expect(invalid.error).toBe('path');
+    await expect(page.getByTestId('rendered-canvas')).toBeVisible();
+    expect(await readFile(path.join(project, 'manifest.json'))).toEqual(before);
   } finally { await instance.close(); }
 });

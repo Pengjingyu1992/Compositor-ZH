@@ -89,6 +89,7 @@ test('group hierarchy, search, and collapse are local viewing controls', async (
     const fold = page.locator('.fold');
     await fold.click(); await expect(page.locator('.layer-row')).toHaveCount(1);
     await page.getByTestId('layer-search').fill('薄荷');
+    await expect(fold).toBeDisabled();
     await expect(page.locator('.layer-row')).toHaveCount(2);
     await expect(page.locator('.layer-row').first()).toContainText('Collection');
     await page.getByRole('button', { name: /Mint \/ 薄荷/ }).click();

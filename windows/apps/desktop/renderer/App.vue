@@ -151,7 +151,7 @@ onUnmounted(() => { operation++; epoch++; renderer?.dispose(); subscriptions.for
           <div v-else-if="source !== 'none'" class="canvas-surround" :style="{ minWidth: project.manifest.width * zoom + 80 + 'px', minHeight: project.manifest.height * zoom + 80 + 'px' }">
             <div class="artboard" :style="{ width: project.manifest.width * zoom + 'px', height: project.manifest.height * zoom + 'px' }">
               <canvas v-if="source === 'engine'" ref="canvas" data-testid="rendered-canvas"></canvas>
-              <img v-else :src="previewURL" :alt="t.saved" draggable="false" data-testid="saved-preview" @error="savedPreviewFailed">
+              <img v-else :key="project.id" :src="previewURL" :alt="t.saved" draggable="false" data-testid="saved-preview" @error="savedPreviewFailed">
             </div>
           </div>
           <p v-else class="no-preview">{{ t.noPreview }}</p>
@@ -162,7 +162,7 @@ onUnmounted(() => { operation++; epoch++; renderer?.dispose(); subscriptions.for
         <div class="panel-heading"><strong>{{ t.layers }}</strong><span>{{ project?.analysis.rows.length ?? 0 }}</span></div>
         <div v-if="project" class="layer-search"><input v-model="query" :placeholder="t.search" :aria-label="t.search" maxlength="256" data-testid="layer-search"><button v-if="query" :aria-label="t.clearSearch" @click="query = ''">×</button></div>
         <div class="layer-list"><p v-if="!project" class="muted">{{ t.empty }}</p><p v-else-if="!rows.length" class="muted">{{ t.noMatches }}</p><div v-for="row in rows" :key="row.id" class="layer-row" :class="{ selected: selected?.id === row.id, hidden: !row.effectiveVisible }" :style="{ paddingLeft: 8 + row.depth * 14 + 'px' }">
-          <button v-if="row.isGroup" class="fold" :aria-label="collapsed.has(row.id.toUpperCase()) && !query.trim() ? t.expand : t.collapse" :aria-expanded="!!query.trim() || !collapsed.has(row.id.toUpperCase())" @click="toggleGroup(row)">{{ collapsed.has(row.id.toUpperCase()) && !query.trim() ? '▸' : '▾' }}</button><span v-else class="fold-spacer"></span>
+          <button v-if="row.isGroup" class="fold" :disabled="!!query.trim()" :aria-label="collapsed.has(row.id.toUpperCase()) && !query.trim() ? t.expand : t.collapse" :aria-expanded="!!query.trim() || !collapsed.has(row.id.toUpperCase())" @click="toggleGroup(row)">{{ collapsed.has(row.id.toUpperCase()) && !query.trim() ? '▸' : '▾' }}</button><span v-else class="fold-spacer"></span>
           <button class="layer-select" :aria-pressed="selected?.id === row.id" @click="selected = row"><span aria-hidden="true">{{ row.isGroup ? '▱' : '▧' }}</span><span class="layer-title">{{ row.name }}<small>{{ kind(row) }} · {{ Math.round(row.effectiveOpacity * 100) }}%</small></span><span class="eye" aria-hidden="true">{{ row.effectiveVisible ? '◉' : '○' }}</span></button>
         </div></div>
         <details v-if="project" class="coverage" open><summary>{{ t.coverage }}</summary><dl><div><dt>{{ t.simple }}</dt><dd>{{ project.analysis.coverage.simple }}</dd></div><div><dt>{{ t.pixels }}</dt><dd>{{ project.analysis.coverage.pixelFallback }}</dd></div><div><dt>{{ t.preview }}</dt><dd>{{ project.analysis.coverage.previewOnly }}</dd></div></dl><small>{{ t.coverageNote }}</small><button class="report-button" :disabled="busy" data-testid="copy-report" @click="copyReport">{{ t.copyReport }}</button><small>{{ t.reportPrivacy }}</small><small v-if="reportState !== 'idle'" role="status">{{ reportState === 'copied' ? t.reportCopied : t.reportError }}</small></details>

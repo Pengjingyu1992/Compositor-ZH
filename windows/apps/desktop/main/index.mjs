@@ -48,7 +48,7 @@ function nativeMenu() {
   ]));
 }
 function serializeProject(project, id) {
-  const urls = Object.fromEntries([...project.resources.keys()].map((key, i) => [key, `compositor://project/${id}/${i}`]));
+  const urls = Object.fromEntries([...project.resources.keys()].map((key, i) => [key, `compositor://app/project/${id}/${i}`]));
   return { id, name: project.name, manifest: project.manifest, analysis: project.analysis, urls, preview: project.preview };
 }
 async function loadProject(location) {
@@ -61,14 +61,16 @@ async function loadProject(location) {
     return { project: serializeProject(data, id) };
   } catch (e) { return { error: e.code ?? 'read' }; }
 }
-await app.whenReady();
+// Return from the ESM entry point before waiting for readiness. In particular,
+// Playwright's loader delays ready until the bootstrap has finished importing.
+app.whenReady().then(async () => {
 language = await getLanguage(app.getPath('userData'));
 protocol.handle('compositor', async request => {
   try {
     const url = new URL(request.url);
     if (request.method !== 'GET') return new Response(null, { status: 405 });
-    if (url.host === 'project') {
-      const [id, index, ...extra] = url.pathname.slice(1).split('/');
+    if (url.host === 'app' && url.pathname.startsWith('/project/')) {
+      const [id, index, ...extra] = url.pathname.slice('/project/'.length).split('/');
       if (!opened || id !== opened.id || !/^(0|[1-9][0-9]*)$/.test(index) || extra.length) return new Response(null, { status: 404 });
       const resource = opened.resources[Number(index)];
       if (!resource) return new Response(null, { status: 404 });
@@ -114,3 +116,7 @@ handler('viewer:fixture', async () => {
 });
 nativeMenu();
 await win.loadURL(HOME);
+}).catch(() => {
+  dialog.showErrorBox('Compositor Windows', '无法启动应用。请完整解压安装包后重试。 / Unable to start. Extract the complete application package and try again.');
+  app.quit();
+});

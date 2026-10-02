@@ -33,6 +33,8 @@ jobs:
           cache: npm
           cache-dependency-path: windows/package-lock.json
       - run: npm ci --no-audit --no-fund
+      - name: Download development Electron before timed smoke checks
+        run: node node_modules/electron/install.js
       - name: Review source and localization
         run: node scripts/audit-source.mjs
       - name: Type check
@@ -45,6 +47,8 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       - name: Electron cloud smoke checks (software GPU)
         run: npm run smoke
+        env:
+          DEBUG: pw:browser
       - name: Inspect packaged resources and write checksums
         run: node scripts/audit-package.mjs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

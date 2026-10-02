@@ -1,5 +1,5 @@
 import { test, expect, _electron } from '@playwright/test';
-import { mkdtemp, rm, readFile } from 'node:fs/promises';
+import { mkdtemp, rm, readFile, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -29,6 +29,7 @@ test('opens, renders sRGB normal + mask, changes language, restarts, and never e
     // Mint at 0.5 opacity with a 128/255 grayscale mask above opaque coral.
     const expected = [210, 175, 153, 255]; expected.forEach((n, i) => expect(Math.abs(sample[i] - n)).toBeLessThanOrEqual(3));
     await page.locator('select').selectOption('en'); await expect(page.locator('.badge')).toContainText('Read-only');
+    await page.screenshot({ path: path.join(root, 'test-results/layer-preview.png') });
     await page.keyboard.press('Control+s'); await page.keyboard.press('Control+z');
     expect(await page.evaluate(() => typeof window.viewer.save)).toBe('undefined');
     expect(await page.evaluate(() => typeof window.require)).toBe('undefined');
@@ -54,6 +55,7 @@ test('packaged executable starts with the isolated read-only interface', async (
     const page = await instance.firstWindow();
     await expect(page.locator('.welcome')).toBeVisible();
     await expect(page.locator('.brand img')).toBeVisible();
+    await page.screenshot({ path: path.join(root, 'test-results/welcome-preview.png') });
     expect(await page.evaluate(() => typeof window.viewer.save)).toBe('undefined');
     expect(await page.evaluate(() => typeof window.require)).toBe('undefined');
   } finally { await instance.close(); }
@@ -62,12 +64,10 @@ test('complex projects use the saved macOS preview through the same-origin resou
   await fixture(project, m => { m.layers[1].blendMode = 'Multiply'; return m; });
   const { instance, page } = await launch();
   try {
-    await instance.evaluate(async ({ nativeImage, dialog }, { directory, image }) => {
-      const fs = await import('node:fs/promises');
-      await fs.mkdir(directory + '/QuickLook', { recursive: true });
-      await fs.writeFile(directory + '/QuickLook/Preview.jpg', nativeImage.createFromBuffer(Buffer.from(image, 'base64')).toJPEG(90));
-      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [directory] });
-    }, { directory: project, image: png(64, 48, [240, 160, 144, 255]).toString('base64') });
+    const jpeg = await instance.evaluate(({ nativeImage }, image) => nativeImage.createFromBuffer(Buffer.from(image, 'base64')).toJPEG(90).toString('base64'), png(64, 48, [240, 160, 144, 255]).toString('base64'));
+    await mkdir(path.join(project, 'QuickLook'), { recursive: true });
+    await writeFile(path.join(project, 'QuickLook/Preview.jpg'), Buffer.from(jpeg, 'base64'));
+    await instance.evaluate(({ dialog }, directory) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [directory] }); }, project);
     await page.locator('.toolbar .primary').click();
     const preview = page.getByTestId('saved-preview');
     await expect(preview).toBeVisible();

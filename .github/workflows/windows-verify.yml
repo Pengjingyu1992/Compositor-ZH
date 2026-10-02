@@ -57,6 +57,7 @@ jobs:
             windows/release/*.zip
             windows/release/SHA256SUMS.txt
             windows/release/PACKAGE-REVIEW.json
+            windows/test-results/*-preview.png
           retention-days: 14
           if-no-files-found: error
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

@@ -38,7 +38,7 @@ export function editProject(data, op, codecs) {
     return {...data, locks:{...data.locks,[op.id]:{...data.locks?.[op.id],[op.field]:op.value}},contentSnapshot:data.contentSnapshot??data};
   }
   if (op.kind === 'batch') {
-    if (!Array.isArray(op.operations) || !op.operations.length || op.operations.length > 32 || op.operations.some(v => v.kind === 'batch')) fail('invalid');
+    if (!Array.isArray(op.operations) || !op.operations.length || op.operations.length > 512 || op.operations.some(v => v.kind === 'batch')) fail('invalid');
     return op.operations.reduce((candidate, operation) => editProject(candidate, operation, codecs), data);
   }
   const m = clone(data.manifest), resources = new Map(data.resources);

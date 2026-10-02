@@ -7,7 +7,7 @@ const finite = (v,a=-300000,b=300000) => typeof v==='number' && Number.isFinite(
 const pair = v => Array.isArray(v) && v.length===2 && v.every(n=>finite(n));
 const rgb = v => Array.isArray(v) && v.length===3 && v.every(n=>finite(n,0,255));
 const place = (w,h) => ({origin:[0,0],size:[w,h],rotation:0,flipX:false,flipY:false,sampling:'High quality'});
-export const GLOBAL_OPS = ['selection','lock','canvas','imageSize','arrange','group','merge','guides','flipCanvas'];
+export const GLOBAL_OPS = ['selection','lock','canvas','imageSize','arrange','group','merge','guides','flipCanvas','moveLayers'];
 export function operationTargets(m,op) {
   const all=['canvas','imageSize','flipCanvas'].includes(op.kind),ids=all?m.layers.map(l=>l.id):op.ids??(op.id?[op.id]:[]);
   if(!Array.isArray(ids)||ids.length>10000||ids.some(id=>typeof id!=='string'||!m.layers.some(l=>l.id===id)))fail('stale');
@@ -17,7 +17,7 @@ export function operationTargets(m,op) {
 export function checkPermission(data,op) {
   if(op.kind==='batch'){for(const item of op.operations??[])checkPermission(data,item);return;}
   if(['selection','lock','rename','guides','add','importPixels'].includes(op.kind))return;
-  const dimension=['transform','arrange','canvas','imageSize','flipCanvas','parent'].includes(op.kind)?'position':op.kind==='appearance'?'appearance':'content';
+  const dimension=['transform','transformMask','moveLayers','arrange','canvas','imageSize','flipCanvas','parent'].includes(op.kind)?'position':op.kind==='appearance'?'appearance':'content';
   for(const l of operationTargets(data.manifest,op)) {
     let row=l;for(let n=0;row&&n<65;n++,row=data.manifest.layers.find(v=>v.id===row.parentID))if(data.locks?.[row.id]?.[dimension])fail('locked');
   }
@@ -93,6 +93,11 @@ export function editorOperation(data,m,resources,target,op,codecs,descendants) {
       if(!l){const id=randomUUID().toUpperCase();l={id,name:String(op.name??op.type).slice(0,256),isVisible:true,transform:place(image.width,image.height),imageFile:id+'.png'};if(op.parentID){if(!m.layers.some(p=>p.id===op.parentID&&p.isGroup))fail('invalid');l.parentID=op.parentID;}m.layers.push(l);}else if(!l.imageFile||l.isGroup||l.adjustment)fail('unsupported');
       l.transform.origin=op.origin;l.transform.size=[image.width,image.height];l[op.type]=structuredClone(op.style);delete l[op.type==='text'?'shape':'text'];resources.set(layerFile(l),image);m.activeLayerID=l.id;return true;
     }
+    case 'transformMask':{
+      if(!target.maskFile||!['origin','size','rotation','flipX','flipY','sampling'].includes(op.field))fail('unsupported');
+      if(!target.maskPlacement)target.maskPlacement=structuredClone(target.transform);target.maskLinked=false;target.maskPlacement[op.field]=structuredClone(op.value);return true;
+    }
+    case 'moveLayers':operationTargets(m,op);if(!pair(op.delta))fail('invalid');for(const l of roots(op.ids))shift(descendants(l.id),...op.delta);return true;
     case 'rasterize':delete target.text;delete target.shape;return true;
     case 'canvas':{
       validSurface(op.width,op.height);if(!finite(op.x??0)||!finite(op.y??0))fail('invalid');shift(new Set(m.layers.map(l=>l.id.toUpperCase())),-(op.x??0),-(op.y??0));m.width=op.width;m.height=op.height;

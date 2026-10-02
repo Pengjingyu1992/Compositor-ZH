@@ -21,8 +21,8 @@ function value(event:Event){return (event.target as HTMLInputElement).value;}
       <label><input type="checkbox" v-model="e.options.sampleAll">{{ l.sampleAll }}</label>
     </template>
     <template v-if="brush || ['bucket','gradient'].includes(tool)">
-      <label v-if="brush">{{ l.radius }}<input type="number" min="1" max="500" :value="size" :disabled="disabled" @change="emit('size',Number(value($event)))"></label>
-      <label>{{ l.amount }}<input type="number" min="0" max="100" :value="opacity" :disabled="disabled" @change="emit('opacity',Number(value($event)))"></label>
+      <label v-if="brush">{{ l.radius }}<input data-testid="brush-size" type="number" min="1" max="500" :value="size" :disabled="disabled" @change="emit('size',Number(value($event)))"></label>
+      <label>{{ l.amount }}<input data-testid="brush-opacity" type="number" min="0" max="100" :value="opacity" :disabled="disabled" @change="emit('opacity',Number(value($event)))"></label>
       <template v-if="brush"><label>{{ l.hardness }}<input type="number" min="0" max="100" v-model.number="e.options.hardness"></label><label>{{ l.spacing }}<input type="number" min="1" max="200" v-model.number="e.options.spacing"></label><label><input type="checkbox" v-model="e.options.pressure">{{ l.pressure }}</label>
         <select v-model="e.options.symmetry" :aria-label="l.symmetry"><option v-for="key in ['none','horizontal','vertical','both','radial']" :key="key" :value="key">{{ l[key] }}</option></select><label v-if="e.options.symmetry==='radial'">{{ l.sectors }}<input type="number" min="2" max="16" v-model.number="e.options.sectors"></label>
       </template>

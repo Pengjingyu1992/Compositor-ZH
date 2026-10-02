@@ -64,7 +64,7 @@ async function accept(result: OpenResult) {
     }
   }
 }
-async function request(action: () => Promise<OpenResult>) {
+async function request(action: () => Promise<OpenResult>): Promise<void> {
   if (busy.value) return;
   const own = ++operation;
   requests++; busy.value = true; reportState.value = 'idle';
@@ -84,7 +84,7 @@ async function closeProject() {
 function edit(op:Record<string,unknown>){const p=project.value;if(!p||busy.value)return;return request(()=>window.editor.edit(p.id,p.revision,{id:selected.value?.id,...op}));}
 function history(direction:string){const p=project.value;if(p)return request(()=>window.editor.history(p.id,p.revision,direction));}
 function save(as=false){const p=project.value;if(p)return request(()=>window.editor.save(p.id,p.revision,as));}
-function importImage(){const p=project.value;if(p)return request(()=>window.editor.importImage(p.id,p.revision));}
+function importImage(): Promise<void> | undefined {const p=project.value;if(p)return request(()=>window.editor.importImage(p.id,p.revision));}
 function importPSD(){return request(()=>window.editor.importPSD());}
 function recover(){return request(()=>window.editor.recover());}
 function add(type:string,adjustment?:string){return edit({kind:'add',type,adjustment,name:type==='group'?t.value.editor.group:type==='adjustment'?t.value.adjustments[ADJUSTMENTS.indexOf(adjustment!)]:t.value.raster,parentID:selected.value?.isGroup?selected.value.id:selected.value?.parentID});}
@@ -190,7 +190,8 @@ onMounted(async () => {
   const settings = await window.viewer.settings(); language.value = settings.language; version.value = settings.version;
   document.documentElement.lang = language.value;
   subscriptions.push(window.viewer.onOpen(open), window.viewer.onReload(reload), window.viewer.onClose(closeProject), window.viewer.onFit(fit), window.viewer.onActual(() => zoom.value = 1));
-  for(const [name,action] of Object.entries({new:()=>newDialog.value=true,image:importImage,importPSD:()=>request(()=>window.editor.importPSD()),save:()=>save(),saveAs:()=>save(true),png:()=>exportImage('png'),exportPSD:()=>psdDialog.value=true,recover:()=>request(()=>window.editor.recover()),undo:()=>history('undo'),redo:()=>history('redo')}))subscriptions.push(window.editor.onCommand(name,()=>{if(!painting.value)action();}));
+  const commands: Record<string, () => unknown> = {new:()=>{newDialog.value=true;},image:importImage,importPSD,save:()=>save(),saveAs:()=>save(true),png:()=>exportImage('png'),exportPSD:()=>{psdDialog.value=true;},recover,undo:()=>history('undo'),redo:()=>history('redo')};
+  for(const [name,action] of Object.entries(commands))subscriptions.push(window.editor.onCommand(name,()=>{if(!painting.value)action();}));
   window.addEventListener('keydown', onKey); window.addEventListener('resize', fit);
 });
 onUnmounted(() => { operation++; epoch++; cancelStroke();renderer?.dispose(); subscriptions.forEach(stop => stop()); window.removeEventListener('keydown', onKey); window.removeEventListener('resize', fit); });

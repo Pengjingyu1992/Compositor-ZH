@@ -49,6 +49,7 @@ function inspectPsd(psd) {
     if (depth > 64 || !Array.isArray(layers)) throw new ProjectError('limit');
     for (const l of layers) {
       if (++count > 1000) throw new ProjectError('limit');
+      if (l.mask) pixels += psd.width * psd.height;
       for (const box of [l, l.mask, l.realMask].filter(Boolean)) {
         const w = (box.right ?? box.left ?? 0) - (box.left ?? 0), h = (box.bottom ?? box.top ?? 0) - (box.top ?? 0);
         if (![w, h].every(v => Number.isInteger(v) && v >= 0 && v <= LIMITS.side) || w * h > 16_000_000) throw new ProjectError('limit');
@@ -131,6 +132,13 @@ function pixels(value, w, h) {
 export function exportPSD(data, payload) {
   const { width, height, layers } = data.manifest;
   bound(width, height);
+  let allocated = width * height * 24;
+  const encodedInputs = [payload.composite, ...(payload.flatten ? [] : [...(payload.layers ?? []), ...(payload.masks ?? [])].map(v=>v.image))];
+  for (const input of encodedInputs) {
+    const b=bytes(input),d=pngDimensions(b);bound(d.width,d.height);
+    allocated += d.width*d.height*16+b.length;
+    if (allocated > 512 * 1024 ** 2) throw new ProjectError('limit');
+  }
   const composite = pixels(payload.composite, width, height);
   if (payload.flatten) return writePsdBuffer({ width, height, imageData: composite }, { noBackground: true });
   if (!Array.isArray(payload.layers) || payload.layers.length !== layers.filter(l => l.imageFile).length || payload.layers.length * width * height * 8 > 512 * 1024 ** 2) throw new ProjectError('limit');

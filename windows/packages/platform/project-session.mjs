@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { readProject } from '../comp-bridge/project.mjs';
 import { editProject, newProject } from '../comp-bridge/edit.mjs';
 import { fingerprint, saveProject } from './save-project.mjs';
+import path from 'node:path';
 
 export class ProjectSession {
   constructor(reader = readProject, options = {}) {
@@ -24,6 +25,7 @@ export class ProjectSession {
   }
 
   install(data, location = null, saved = false) {
+    clearTimeout(this.recoveryTimer); this.recoveryFailed = false;
     this.current = { id: randomUUID(), location, data, resources: [...data.resources.values()], fingerprint: location ? fingerprint(data) : null };
     this.revision = randomUUID(); this.saved = saved ? data : null;
     this.undoStack = []; this.redoStack = []; return this.view();
@@ -67,7 +69,7 @@ export class ProjectSession {
 
   scheduleRecovery() {
     clearTimeout(this.recoveryTimer);
-    if (this.current?.data !== this.saved && this.options.recovery) {
+    if (this.current && this.current.data !== this.saved && this.options.recovery) {
       const data = this.current.data, revision = this.revision;
       this.recoveryTimer = setTimeout(() => { this.options.recovery.write(data, revision).catch(() => { this.recoveryFailed = true; }); }, 800);
       this.recoveryTimer.unref?.();
@@ -90,6 +92,7 @@ export class ProjectSession {
       const result = await saveProject(data, selected.location, selected.expected, this.options.journalDirectory);
       if (own !== this.generation || this.current !== current) return { canceled: true };
       current.location = result.destination; current.fingerprint = result.fingerprint;
+      data.name = path.basename(result.destination);
       this.saved = data; clearTimeout(this.recoveryTimer);
       await this.options.recovery?.clear(data.manifest.documentID);
       return { ...this.view(), backup: !!result.backup };

@@ -33,8 +33,6 @@ jobs:
           cache: npm
           cache-dependency-path: windows/package-lock.json
       - run: npm ci --no-audit --no-fund
-      - name: Download development Electron before timed smoke checks
-        run: node node_modules/electron/install.js
       - name: Review source and localization
         run: node scripts/audit-source.mjs
       - name: Type check

@@ -81,8 +81,6 @@ onMounted(async () => {
   document.documentElement.lang = language.value;
   subscriptions.push(window.viewer.onOpen(open), window.viewer.onFit(fit), window.viewer.onActual(() => zoom.value = 1));
   window.addEventListener('keydown', onKey); window.addEventListener('resize', fit);
-  // The packaged app returns canceled; cloud smoke builds can load a synthetic fixture.
-  await accept(await window.viewer.fixture());
 });
 onUnmounted(() => { epoch++; renderer?.dispose(); subscriptions.forEach(stop => stop()); window.removeEventListener('keydown', onKey); window.removeEventListener('resize', fit); });
 </script>

@@ -12,8 +12,13 @@ test.beforeEach(async () => {
 });
 test.afterEach(async () => { await rm(temp, { recursive: true, force: true }); });
 async function launch() {
-  const instance = await _electron.launch({ timeout: 30_000, args: [root, '--use-angle=swiftshader', '--enable-unsafe-swiftshader'], env: { ...process.env, APPDATA: temp, COMPOSITOR_CI_PROJECT: project } });
-  return { instance, page: await instance.firstWindow() };
+  // Exercise the shipped executable. Avoid the development ESM loader, whose
+  // delayed ready event is incompatible with this Electron/Playwright pair.
+  const instance = await _electron.launch({ timeout: 30_000, executablePath: path.join(root, 'release/win-unpacked/Compositor.exe'), args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'], env: { ...process.env, APPDATA: temp } });
+  const page = await instance.firstWindow();
+  await instance.evaluate(({ dialog }, directory) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [directory] }); }, project);
+  await page.locator('.toolbar .primary').click();
+  return { instance, page };
 }
 test('opens, renders sRGB normal + mask, changes language, restarts, and never edits', async () => {
   let { instance, page } = await launch();

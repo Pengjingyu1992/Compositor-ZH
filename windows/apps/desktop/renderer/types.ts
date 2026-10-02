@@ -24,7 +24,7 @@ declare global {
     viewer: {
       settings(): Promise<{ language: Language; version: string }>;
       language(value: Language): Promise<{ language: Language }>;
-      open(): Promise<OpenResult>; fixture(): Promise<OpenResult>;
+      open(): Promise<OpenResult>;
       onOpen(callback: () => void): () => void;
       onFit(callback: () => void): () => void;
       onActual(callback: () => void): () => void;

@@ -109,11 +109,6 @@ handler('viewer:open', async () => {
     return await loadProject(result.filePaths[0]);
   } finally { choosing = false; }
 });
-// CI fixtures can be passed only to unpackaged builds. No production arbitrary-path IPC.
-handler('viewer:fixture', async () => {
-  if (app.isPackaged || !process.env.COMPOSITOR_CI_PROJECT) return { canceled: true };
-  return loadProject(process.env.COMPOSITOR_CI_PROJECT);
-});
 nativeMenu();
 await win.loadURL(HOME);
 }).catch(() => {

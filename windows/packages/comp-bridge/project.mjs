@@ -120,9 +120,17 @@ function jpegDimensions(b) {
   throw new ProjectError('asset');
 }
 async function safeDirectory(p) {
-  const st = await lstat(p);
-  requireValue(st.isDirectory() && !st.isSymbolicLink(), 'path');
-  requireValue(path.resolve(p).toLowerCase() === (await realpath(p)).toLowerCase(), 'path');
+  // Windows TEMP may use an 8.3 short name. Validate ancestors as directory
+  // entries, then canonicalize; string equality would reject legitimate paths.
+  let current = path.resolve(p);
+  while (true) {
+    const st = await lstat(current);
+    requireValue(st.isDirectory() && !st.isSymbolicLink(), 'path');
+    const parent = path.dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+  return realpath(p);
 }
 async function safeRead(p, limit) {
   const st = await lstat(p);
@@ -193,7 +201,7 @@ export function analyze(manifest, sourcePixels = 0, maskPixels = 0) {
 export async function readProject(root) {
   try {
     requireValue(typeof root === 'string' && path.extname(root).toLowerCase() === '.comp', 'path');
-    await safeDirectory(root);
+    root = await safeDirectory(root);
     const sourceBytes = await safeRead(path.join(root, 'manifest.json'), LIMITS.manifest);
     const manifest = parseManifest(sourceBytes);
     const resources = new Map();

@@ -43,3 +43,13 @@ test('unsupported composition without QuickLook never shows a partial render', a
     await expect(page.locator('.layer-row')).toHaveCount(2);
   } finally { await instance.close(); }
 });
+test('packaged executable starts with the isolated read-only interface', async () => {
+  const instance = await _electron.launch({ executablePath: path.join(root, 'release/win-unpacked/Compositor.exe'), args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'], env: { ...process.env, APPDATA: temp } });
+  try {
+    const page = await instance.firstWindow();
+    await expect(page.locator('.welcome')).toBeVisible();
+    await expect(page.locator('.brand img')).toBeVisible();
+    expect(await page.evaluate(() => typeof window.viewer.save)).toBe('undefined');
+    expect(await page.evaluate(() => typeof window.require)).toBe('undefined');
+  } finally { await instance.close(); }
+});

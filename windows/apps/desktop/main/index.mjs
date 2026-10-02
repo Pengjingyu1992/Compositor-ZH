@@ -13,6 +13,7 @@ protocol.registerSchemesAsPrivileged([{ scheme: 'compositor', privileges: { stan
 app.setName('Compositor Windows');
 app.setAppUserModelId('org.compositorzh.windows');
 app.setPath('userData', path.join(app.getPath('appData'), 'Compositor-Windows'));
+if (!app.requestSingleInstanceLock()) { app.quit(); process.exit(0); }
 let win, language = 'zh-Hans', opened = null, generation = 0, choosing = false;
 let preferenceQueue = Promise.resolve();
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml' };
@@ -21,6 +22,7 @@ const headers = {
   'X-Content-Type-Options': 'nosniff',
   'Cache-Control': 'no-store'
 };
+app.on('second-instance', () => { if (win?.isMinimized()) win.restore(); win?.focus(); });
 function allowedSender(event) {
   return win && event.sender === win.webContents && event.senderFrame === win.webContents.mainFrame && event.senderFrame.url === HOME;
 }

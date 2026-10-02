@@ -39,7 +39,7 @@ export function createPreviewRenderer() {
     const [x, y] = placement.origin, [w, h] = placement.size;
     ctx.imageSmoothingQuality = 'high';
     ctx.translate(x + w / 2, y + h / 2);
-    ctx.rotate(placement.rotation * Math.PI / 180);
+    ctx.rotate((placement.rotation % 360) * Math.PI / 180);
     ctx.scale(placement.flipX ? -1 : 1, placement.flipY ? -1 : 1);
     ctx.drawImage(bitmap, -w / 2, -h / 2, w, h); bitmap.close(); canvases.push(canvas);
     return { source: canvas, rect: { x: 0, y: 0, w: canvas.width, h: canvas.height } };

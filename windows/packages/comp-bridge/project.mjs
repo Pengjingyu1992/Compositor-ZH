@@ -20,7 +20,7 @@ function optionalBool(v) { return v === undefined || typeof v === 'boolean'; }
 function optionalID(v) { return v === undefined || (typeof v === 'string' && UUID.test(v)); }
 function pair(v, min, max) { return Array.isArray(v) && v.length === 2 && v.every(n => finite(n, min, max)); }
 function transform(v) {
-  requireValue(record(v) && pair(v.origin, -1_000_000, 1_000_000) && pair(v.size, 1, 300_000) && finite(v.rotation, -1_000_000, 1_000_000));
+  requireValue(record(v) && pair(v.origin, -1_000_000, 1_000_000) && pair(v.size, 1, 300_000) && finite(v.rotation, -Infinity, Infinity));
   requireValue(optionalBool(v.flipX) && optionalBool(v.flipY) && ['Nearest', 'Smooth', 'High quality'].includes(v.sampling));
 }
 function freezeDeep(v) {

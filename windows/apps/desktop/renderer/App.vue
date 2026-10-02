@@ -5,6 +5,7 @@ import { createPreviewRenderer } from '../../../packages/editor-adapter/render';
 import type { Language, ViewerProject, OpenResult, LayerRow } from './types';
 
 const language = ref<Language>('zh-Hans'), version = ref(''), project = ref<ViewerProject>();
+const iconURL = 'compositor://app/icon.png';
 const selected = ref<LayerRow>(), busy = ref(false), error = ref(''), settingError = ref(false);
 const stage = ref<HTMLDivElement>(), canvas = ref<HTMLCanvasElement>(), zoom = ref(1);
 const source = ref<'engine' | 'saved' | 'none'>('none'), extraIssues = ref<string[]>([]);
@@ -89,7 +90,7 @@ onUnmounted(() => { epoch++; renderer?.dispose(); subscriptions.forEach(stop => 
 <template>
   <div class="shell">
     <header class="toolbar">
-      <div class="brand"><img src="./icon.png" alt=""><div><strong>{{ t.title }}</strong><small>{{ t.subtitle }}</small></div></div>
+      <div class="brand"><img :src="iconURL" alt=""><div><strong>{{ t.title }}</strong><small>{{ t.subtitle }}</small></div></div>
       <button class="primary" :disabled="busy" @click="open">{{ t.open }} <kbd>Ctrl O</kbd></button>
       <span class="document-name">{{ project?.name ?? '' }}</span>
       <div class="zoom-tools"><button :disabled="!project" @click="fit">{{ t.fit }}</button><button :disabled="!project" aria-label="−" @click="scale(.8)">−</button><button :disabled="!project" @click="zoom = 1">{{ Math.round(zoom * 100) }}%</button><button :disabled="!project" aria-label="+" @click="scale(1.25)">+</button></div>
@@ -100,7 +101,7 @@ onUnmounted(() => { epoch++; renderer?.dispose(); subscriptions.forEach(stop => 
       <section class="workarea">
         <div v-if="issues.length" class="notice">{{ source === 'saved' ? t.fallback : t.detailsOnly }} {{ issues.map(labelIssue).join(' · ') }}</div>
         <div ref="stage" class="stage" @wheel="wheel" @pointerdown="panStart" @pointermove="panMove" @pointerup="drag = undefined" @pointercancel="drag = undefined">
-          <div v-if="!project" class="welcome"><img src="./icon.png" alt=""><span class="eyebrow">COMPOSITOR / WINDOWS</span><h1>{{ t.welcome }}</h1><p>{{ t.intro }}</p><button class="primary" :disabled="busy" @click.stop="open">{{ busy ? t.loading : t.open }} →</button><small>{{ t.hint }}</small></div>
+          <div v-if="!project" class="welcome"><img :src="iconURL" alt=""><span class="eyebrow">COMPOSITOR / WINDOWS</span><h1>{{ t.welcome }}</h1><p>{{ t.intro }}</p><button class="primary" :disabled="busy" @click.stop="open">{{ busy ? t.loading : t.open }} →</button><small>{{ t.hint }}</small></div>
           <div v-else-if="source !== 'none'" class="canvas-surround" :style="{ minWidth: project.manifest.width * zoom + 80 + 'px', minHeight: project.manifest.height * zoom + 80 + 'px' }">
             <div class="artboard" :style="{ width: project.manifest.width * zoom + 'px', height: project.manifest.height * zoom + 'px' }">
               <canvas v-if="source === 'engine'" ref="canvas" data-testid="rendered-canvas"></canvas>

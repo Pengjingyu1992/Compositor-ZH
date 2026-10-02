@@ -1,16 +1,7 @@
 import { makeCanvas, pngBytes } from './render';
+export { remapRuns, rangeStyle } from './text-runs.mjs';
 const rgb=(s:Record<string,any>)=>'rgb('+[s.red,s.green,s.blue].map(v=>Math.round(v*255)).join(',')+')';
 const family=(v:string)=>({'ArialMT':'Arial','Helvetica':'Arial','MicrosoftYaHei':'Microsoft YaHei','SimSun':'SimSun','SegoeUI':'Segoe UI'} as Record<string,string>)[v]??v;
-export function remapRuns(runs:any[],before:string,after:string) {
-  let start=0,suffix=0;while(start<Math.min(before.length,after.length)&&before[start]===after[start])start++;
-  while(suffix<Math.min(before.length-start,after.length-start)&&before[before.length-1-suffix]===after[after.length-1-suffix])suffix++;
-  const oldEnd=before.length-suffix,shift=after.length-before.length;
-  return runs.flatMap(r=>{const end=r.location+r.length;if(end<=start)return [{...r}];if(r.location>=oldEnd)return [{...r,location:r.location+shift}];return [{...r,location:Math.min(r.location,start),length:Math.max(0,(end>oldEnd?end+shift:after.length-suffix)-Math.min(r.location,start))}];}).filter(r=>r.length>0&&r.location+r.length<=after.length);
-}
-export function rangeStyle(runs:any[],start:number,end:number,style:Record<string,unknown>) {
-  if(end<=start)return runs;const next=runs.flatMap(r=>{const right=r.location+r.length;if(right<=start||r.location>=end)return [{...r}];return [...(r.location<start?[{...r,length:start-r.location}]:[]),...(right>end?[{...r,location:end,length:right-end}]:[])];});
-  return [...next,{location:start,length:end-start,...style}].sort((a,b)=>a.location-b.location);
-}
 export async function renderText(style:Record<string,any>) {
   const [w,h]=style.boxSize.map((v:number)=>Math.ceil(v));if(w*h>16_000_000||w>30000||h>30000)throw new Error('limit');
   const c=makeCanvas(w,h),ctx=c.getContext('2d')!,size=style.fontSize,leading=style.leading||size*1.2,tracking=style.tracking||0,padding=12;

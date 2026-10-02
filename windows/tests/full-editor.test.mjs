@@ -7,6 +7,7 @@ import {fillPixels,strokePixels,resizePixels,filterPixels,FILTERS} from '../pack
 import {ProjectSession} from '../packages/platform/project-session.mjs';
 import {reactive,ref} from 'vue';
 import {ipcData} from '../apps/desktop/renderer/ipc-data.ts';
+import {remapRuns,rangeStyle} from '../packages/editor-adapter/text-runs.mjs';
 const change=(data,op)=>editProject(data,op,codecs);
 const setup=()=>{const data=change(newProject(32,24),{kind:'add',type:'pixels',name:'Synthetic'});return {data,id:data.manifest.layers[0].id};};
 const image=(w=8,h=8)=>({width:w,height:h,data:new Uint8ClampedArray(w*h*4).map((_,i)=>i%4===3?255:80)});
@@ -87,4 +88,9 @@ test('group selection masks have canvas dimensions and structure locks cover ins
  const {data,id}=setup();let a=change(data,{kind:'group',ids:[id],name:'Group'});const group=a.manifest.activeLayerID;a=change(a,{kind:'selection',action:'all'});a=change(a,{kind:'selectionMask',id:group});const r=a.resources.get(`images/${group}.mask.png`);assert.equal(r.width,32);assert.equal(r.height,24);assert.equal(codecs.decodePNG(r).data[0],255);
  a=change(a,{kind:'lock',id:group,field:'content',value:true});assert.throws(()=>change(a,{kind:'add',type:'pixels',name:'Blocked',parentID:group}),e=>e.code==='locked');
  a=change(a,{kind:'lock',id:group,field:'content',value:false});a=change(a,{kind:'lock',id,field:'position',value:true});assert.throws(()=>change(a,{kind:'reorder',id,direction:1}),e=>e.code==='locked');assert.throws(()=>change(a,{kind:'group',ids:[id],name:'Blocked'}),e=>e.code==='locked');
+});
+test('editing across differently styled UTF-16 runs never leaves overlapping ranges',()=>{
+ const runs=[{location:0,length:4,fontName:'ArialMT'},{location:4,length:4,fontName:'SimSun'}];assert.deepEqual(remapRuns(runs,'ABCDEFGH','ABGH'),[{location:0,length:2,fontName:'ArialMT'},{location:2,length:2,fontName:'SimSun'}]);
+ assert.deepEqual(remapRuns([{location:0,length:4,fontName:'ArialMT'}],'中文😀','中文新😀'),[{location:0,length:5,fontName:'ArialMT'}]);assert.deepEqual(remapRuns(runs,'ABCDEFGH',''),[]);
+ const updated=rangeStyle(runs,2,6,{fontName:'Consolas'});assert.deepEqual(updated.map(r=>[r.location,r.length]),[[0,2],[2,4],[6,2]]);assert.deepEqual(runs.map(r=>r.length),[4,4]);
 });

@@ -15,7 +15,7 @@ test.beforeEach(async()=>{
 });
 test.afterEach(async()=>{await instance?.close();await rm(temp,{recursive:true,force:true});});
 async function menu(id){await instance.evaluate(({Menu},id)=>{const item=Menu.getApplicationMenu().getMenuItemById(id);if(!item||!item.enabled)throw new Error('Menu unavailable');item.click();},id);}
-async function selectMint(){await page.getByRole('button',{name:/Mint \/ 薄荷/}).click();await expect(page.getByTestId('layer-opacity')).toBeEnabled();}
+async function selectMint(){await page.locator('.layer-select').filter({hasText:'Mint / 薄荷'}).click();await expect(page.getByTestId('layer-opacity')).toBeEnabled();}
 test('edit undo redo save-as and overwrite protect the opened source',async()=>{
   const before=await readFile(path.join(source,'manifest.json'));await selectMint();
   await page.getByTestId('layer-opacity').fill('80');await page.getByTestId('layer-opacity').press('Tab');await expect(page.getByTestId('undo')).toBeEnabled();

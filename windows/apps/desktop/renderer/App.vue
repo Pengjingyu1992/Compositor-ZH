@@ -92,7 +92,7 @@ async function copyReport() {
   const id = project.value?.id;
   if (!id || busy.value) return;
   try {
-    const result = await window.viewer.copyReport(id, { source: source.value, issues: extraIssues.value });
+    const result = await window.viewer.copyReport(id, { source: source.value, issues: [...extraIssues.value] });
     if (project.value?.id === id) reportState.value = result.copied ? 'copied' : 'error';
   } catch { if (project.value?.id === id) reportState.value = 'error'; }
 }

@@ -30,7 +30,9 @@ test('edit undo redo save-as and overwrite protect the opened source',async()=>{
 test('all 24 candidate blend modes render; adjustment and effects use the worker',async()=>{
   await selectMint();for(const mode of BLEND_MODES){await expect(page.getByTestId('blend-mode')).toBeEnabled();await page.getByTestId('blend-mode').selectOption(mode);await expect(page.getByTestId('blend-mode')).toBeEnabled();expect(await page.getByTestId('rendered-canvas').evaluate(c=>c.getContext('2d').getImageData(32,24,1,1).data[3])).toBe(255);}
   await page.getByLabel('添加调整层',{exact:true}).selectOption('Invert');await expect(page.locator('.layer-row')).toHaveCount(3);await expect(page.getByTestId('layer-opacity')).toBeEnabled();
-  await page.getByTestId('delete-layer').click();await selectMint();await page.getByLabel('添加效果',{exact:true}).selectOption('colorOverlay');await expect(page.getByTestId('layer-opacity')).toBeEnabled();
+  await page.getByTestId('delete-layer').click();await selectMint();
+  await page.getByLabel('添加调整层',{exact:true}).selectOption('Curves');await expect(page.getByTestId('layer-opacity')).toBeEnabled();await page.locator('.curve-editor').click({position:{x:70,y:90}});await expect(page.getByTestId('layer-opacity')).toBeEnabled();await expect(page.locator('[role=alert]')).toHaveCount(0);await page.getByTestId('delete-layer').click();await selectMint();
+  await page.getByLabel('添加效果',{exact:true}).selectOption('colorOverlay');await expect(page.getByTestId('layer-opacity')).toBeEnabled();
   expect(await page.getByTestId('rendered-canvas').evaluate(c=>c.getContext('2d').getImageData(32,24,1,1).data[3])).toBe(255);
 });
 test('mask edits and PNG/PSD exports work through the shipped executable',async()=>{

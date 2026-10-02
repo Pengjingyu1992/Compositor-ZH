@@ -31,7 +31,7 @@ function change(field: string, value: unknown, path?: (string|number)[]) {
 }
 function number(c: Control,e:Event){const n=Number((e.target as HTMLInputElement).value);if(Number.isFinite(n))change(c[7]??c[0],Math.max(c[3],Math.min(c[4],n)),c[7]?[c[0]]:undefined);}
 const curve = computed(()=>props.value.curves?.channels[channel.value]??defaults.curves.channels[channel.value]);
-function curveClick(e:MouseEvent){if(props.disabled)return;const rect=(e.currentTarget as SVGElement).getBoundingClientRect(),x=Math.max(1,Math.min(254,Math.round((e.clientX-rect.left)/rect.width*255))),y=Math.max(0,Math.min(255,Math.round(255-(e.clientY-rect.top)/rect.height*255)));const points=curve.value.filter((p:any)=>p.x!==x);if(points.length>=32)return;change('curves',[...points,{x,y}].sort((a:any,b:any)=>a.x-b.x),['channels',channel.value]);}
+function curveClick(e:MouseEvent){if(props.disabled)return;const rect=(e.currentTarget as SVGElement).getBoundingClientRect(),x=Math.max(1,Math.min(254,Math.round((e.clientX-rect.left)/rect.width*255))),y=Math.max(0,Math.min(255,Math.round(255-(e.clientY-rect.top)/rect.height*255)));const points=curve.value.filter((p:any)=>p.x!==x).map((p:any)=>({x:p.x,y:p.y}));if(points.length>=32)return;change('curves',[...points,{x,y}].sort((a:any,b:any)=>a.x-b.x),['channels',channel.value]);}
 function resetCurve(){change('curves',[{x:0,y:0},{x:255,y:255}],['channels',channel.value]);}
 </script>
 <template>

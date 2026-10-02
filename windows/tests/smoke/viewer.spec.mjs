@@ -17,7 +17,7 @@ async function launch() {
   const instance = await _electron.launch({ timeout: 30_000, executablePath: path.join(root, 'release/win-unpacked/Compositor.exe'), args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'], env: { ...process.env, APPDATA: temp } });
   const page = await instance.firstWindow();
   await instance.evaluate(({ dialog }, directory) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [directory] }); }, project);
-  await page.locator('.toolbar .primary').click();
+  await page.getByTestId('open-project').click();
   return { instance, page };
 }
 test('opens, renders sRGB normal + mask, changes language, restarts, and never edits', async () => {
@@ -68,7 +68,7 @@ test('complex projects use the saved macOS preview through the same-origin resou
     await mkdir(path.join(project, 'QuickLook'), { recursive: true });
     await writeFile(path.join(project, 'QuickLook/Preview.jpg'), Buffer.from(jpeg, 'base64'));
     await instance.evaluate(({ dialog }, directory) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [directory] }); }, project);
-    await page.locator('.toolbar .primary').click();
+    await page.getByTestId('open-project').click();
     const preview = page.getByTestId('saved-preview');
     await expect(preview).toBeVisible();
     await expect.poll(() => preview.evaluate(i => i.complete && i.naturalWidth)).toBe(64);
@@ -88,12 +88,13 @@ test('group hierarchy, search, and collapse are local viewing controls', async (
     await expect(page.locator('.layer-row').first()).toContainText('Collection');
     const fold = page.locator('.fold');
     await fold.click(); await expect(page.locator('.layer-row')).toHaveCount(1);
-    await page.getByTestId('layer-search').fill('薄荷');
+    await page.getByTestId('toggle-layer-search').click();await page.getByTestId('layer-search').fill('薄荷');
     await expect(fold).toBeDisabled();
     await expect(page.locator('.layer-row')).toHaveCount(2);
     await expect(page.locator('.layer-row').first()).toContainText('Collection');
     await page.getByRole('button', { name: /Mint \/ 薄荷/ }).click();
-    await expect(page.locator('.inspector pre')).toContainText('Mint / 薄荷');
+    await page.getByTestId('project-details').click();await page.locator('.raw-properties summary').click();
+    await expect(page.locator('.raw-properties pre')).toContainText('Mint / 薄荷');await page.keyboard.press('Escape');
     await page.getByTestId('layer-search').fill('unmatched'); await expect(page.locator('.layer-row')).toHaveCount(0);
     await page.getByTestId('layer-search').fill(''); await expect(page.locator('.layer-row')).toHaveCount(1);
     await fold.click(); await expect(page.locator('.layer-row')).toHaveCount(3);
@@ -103,7 +104,7 @@ test('group hierarchy, search, and collapse are local viewing controls', async (
 test('reload, anonymous clipboard report, and close preserve the source package', async () => {
   const { instance, page } = await launch();
   try {
-    await page.locator('.coverage summary').click();
+    await page.getByTestId('project-details').click();
     await expect(page.getByTestId('copy-report')).toBeEnabled();
     await page.getByTestId('copy-report').click();
     await expect(page.locator('.coverage [role=status]')).toContainText(/报告已复制|Report copied/);
@@ -113,13 +114,13 @@ test('reload, anonymous clipboard report, and close preserve the source package'
     for (const value of ['sample.comp', 'Coral', 'Mint', project, ...IDS]) expect(reportText).not.toContain(value);
     const changed = JSON.parse(before.toString()); changed.layers[1].name = 'Updated / 更新';
     const changedBytes = Buffer.from(JSON.stringify(changed)); await writeFile(path.join(project, 'manifest.json'), changedBytes);
-    await page.getByTestId('reload-project').click();
+    await page.keyboard.press('Escape');await instance.evaluate(({Menu})=>Menu.getApplicationMenu().getMenuItemById('file-reload').click());
     await expect(page.locator('.layer-row')).toContainText(['Updated', 'Coral']);
-    await expect(page.getByTestId('copy-report')).toBeEnabled();
+    await page.getByTestId('project-details').click();await expect(page.getByTestId('copy-report')).toBeEnabled();await page.keyboard.press('Escape');
     await page.getByTestId('close-project').click();
     await expect(page.locator('.welcome')).toBeVisible(); await expect(page.locator('.layer-row')).toHaveCount(0);
     expect(await readFile(path.join(project, 'manifest.json'))).toEqual(changedBytes);
-    await page.locator('.toolbar .primary').click(); await expect(page.getByTestId('rendered-canvas')).toBeVisible();
+    await page.getByTestId('open-project').click(); await expect(page.getByTestId('rendered-canvas')).toBeVisible();
     await page.keyboard.press('Control+w'); await expect(page.locator('.welcome')).toBeVisible();
   } finally { await instance.close(); }
 });

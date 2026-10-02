@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted, nextTick } from 'vue';
+import { computed, ref, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import { messages } from '../../../packages/locales';
 import { createPreviewRenderer, pngBytes, exportPlaced, makeCanvas } from '../../../packages/editor-adapter/render';
 import { BLEND_MODES, ADJUSTMENT_KINDS as ADJUSTMENTS, EFFECT_KINDS as EFFECTS } from '../../../packages/comp-bridge/capabilities.mjs';
 import AdjustmentEditor from './AdjustmentEditor.vue';
 import EffectEditor from './EffectEditor.vue';
+import Icon from './Icon.vue';
 import { visibleLayers } from '../../../packages/editor-adapter/layer-list';
 import type { Language, ViewerProject, OpenResult, LayerRow } from './types';
 
@@ -17,6 +18,30 @@ const source = ref<'engine' | 'saved' | 'none'>('none'), extraIssues = ref<strin
 const tool=ref('pan'),color=ref('#bae9d6'),brushSize=ref(24),brushOpacity=ref(100),paintTarget=ref('content');
 const newDialog=ref(false),newWidth=ref(1920),newHeight=ref(1080),psdDialog=ref(false),status=ref(''),painting=ref(false);
 const overlay=ref<HTMLCanvasElement>(),artboard=ref<HTMLDivElement>();
+const inspectorTab=ref('properties'), detailsDialog=ref(false), searchOpen=ref(false);
+const tools = ['move','brush','eraser','pan'] as const;
+const toolKeys = {move:'V',brush:'B',eraser:'E',pan:'H'};
+const ui = computed(() => t.value.workspace);
+const thumbURL = (row: LayerRow, mask=false) => project.value?.urls[`images/${mask ? row.maskFile : row.imageFile}`];
+function selectLayer(row: LayerRow) { selected.value=row; inspectorTab.value=row.adjustment?'adjustments':'properties'; }
+function showEffects() { if(selected.value?.imageFile)inspectorTab.value='effects'; }
+function showDetails() { detailsDialog.value=true; }
+function toggleSearch() { searchOpen.value=!searchOpen.value; if(!searchOpen.value)query.value=''; }
+let returnFocus: HTMLElement | null = null;
+watch(() => newDialog.value || psdDialog.value || detailsDialog.value, async visible => {
+  if (visible) {
+    returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    await nextTick();
+    if (newDialog.value || psdDialog.value || detailsDialog.value) document.querySelector<HTMLElement>('.modal-shade:last-of-type input, .modal-shade:last-of-type button')?.focus();
+  } else if (returnFocus?.isConnected) returnFocus.focus();
+});
+function tabKey(event: KeyboardEvent) {
+  if (!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
+  event.preventDefault();
+  const tabs = ['properties','adjustments','effects'], i=tabs.indexOf(inspectorTab.value);
+  inspectorTab.value = tabs[event.key==='Home'?0:event.key==='End'?2:(i+(event.key==='ArrowRight'?1:2))%3];
+  nextTick(() => document.getElementById('tab-'+inspectorTab.value)?.focus());
+}
 const editable=computed(()=>!!project.value&&!busy.value&&!painting.value&&source.value==='engine'&&!issues.value.length);
 const t = computed(() => messages[language.value]);
 const issues = computed(() => [...(project.value?.analysis.issues ?? []), ...extraIssues.value]);
@@ -30,7 +55,7 @@ const formattedProperties = computed(() => {
 let renderer: ReturnType<typeof createPreviewRenderer> | undefined, epoch = 0, operation = 0, requests = 0, dragDepth = 0;
 const subscriptions: (() => void)[] = [];
 function fit() {
-  if (project.value && stage.value) zoom.value = Math.min(1, Math.max(.01, Math.min((stage.value.clientWidth - 80) / project.value.manifest.width, (stage.value.clientHeight - 80) / project.value.manifest.height)));
+  if (project.value && stage.value) zoom.value = Math.min(8, Math.max(.01, Math.min((stage.value.clientWidth - 80) / project.value.manifest.width, (stage.value.clientHeight - 80) / project.value.manifest.height)));
 }
 function scale(factor: number) { zoom.value = Math.max(.01, Math.min(8, zoom.value * factor)); }
 function labelIssue(key: string) { return t.value.issues[key as keyof typeof t.value.issues] ?? key; }
@@ -46,7 +71,8 @@ async function accept(result: OpenResult) {
   const own = ++epoch;
   renderer?.dispose(); renderer = undefined;
   project.value = result.project; selected.value = result.project.analysis.rows.find(l=>l.id===(newActive!==oldActive?newActive:same?selectedID:undefined)); error.value = ''; extraIssues.value = [];
-  if(!same){query.value = ''; collapsed.value = new Set();}reportState.value = 'idle';
+  if(!same){query.value = ''; searchOpen.value=false; collapsed.value = new Set(); status.value='';}
+  if(newActive!==oldActive && selected.value)inspectorTab.value=selected.value.adjustment?'adjustments':'properties';reportState.value = 'idle';
   if(result.backup)status.value=t.value.editor.backup;
   source.value = project.value.analysis.issues.length ? (project.value.preview ? 'saved' : 'none') : 'engine';
   await nextTick(); if(same)zoom.value=previousZoom;else fit();
@@ -140,9 +166,15 @@ async function changeLanguage(event: Event) {
   catch { settingError.value = true; }
 }
 function onKey(event: KeyboardEvent) {
+  if (event.key==='Tab' && (newDialog.value || psdDialog.value || detailsDialog.value)) {
+    const modal=[...document.querySelectorAll<HTMLElement>('.modal-shade')].at(-1);
+    const fields=[...(modal?.querySelectorAll<HTMLElement>('button:not([disabled]),input:not([disabled]),select:not([disabled]),summary') ?? [])].filter(e=>e.getClientRects().length);
+    const first=fields[0],last=fields.at(-1);
+    if(first && ((!event.shiftKey && (document.activeElement===last || !modal?.contains(document.activeElement))) || (event.shiftKey && (document.activeElement===first || !modal?.contains(document.activeElement))))) { event.preventDefault(); (event.shiftKey?last:first)?.focus(); }
+  }
   const input=(event.target as HTMLElement)?.closest('input,textarea,select,[contenteditable]');
   if(!painting.value&&!input&&!event.ctrlKey&&!event.altKey&&!event.metaKey){const k=event.key.toLowerCase();if(['b','e','v','h'].includes(k))tool.value=({b:'brush',e:'eraser',v:'move',h:'pan'} as Record<string,string>)[k];}
-  if(event.key==='Escape'){cancelStroke();newDialog.value=false;psdDialog.value=false;}
+  if(event.key==='Escape'){cancelStroke();newDialog.value=false;psdDialog.value=false;detailsDialog.value=false;}
   if (event.ctrlKey && event.key.toLowerCase() === 'r') { event.preventDefault(); reload(); }
   if (event.ctrlKey && event.key.toLowerCase() === 'w') { event.preventDefault(); closeProject(); }
   if (event.ctrlKey && event.key === '+') { event.preventDefault(); scale(1.25); }
@@ -192,7 +224,7 @@ onMounted(async () => {
   const settings = await window.viewer.settings(); language.value = settings.language; version.value = settings.version;
   document.documentElement.lang = language.value;
   subscriptions.push(window.viewer.onOpen(open), window.viewer.onReload(reload), window.viewer.onClose(closeProject), window.viewer.onFit(fit), window.viewer.onActual(() => zoom.value = 1));
-  const commands: Record<string, () => unknown> = {new:()=>{newDialog.value=true;},image:importImage,importPSD,save:()=>save(),saveAs:()=>save(true),png:()=>exportImage('png'),exportPSD:()=>{psdDialog.value=true;},recover,undo:()=>history('undo'),redo:()=>history('redo')};
+  const commands: Record<string, () => unknown> = {new:()=>{newDialog.value=true;},image:importImage,importPSD,save:()=>save(),saveAs:()=>save(true),png:()=>exportImage('png'),exportPSD:()=>{psdDialog.value=true;},recover,undo:()=>history('undo'),redo:()=>history('redo'),addPixels:()=>add('pixels'),addGroup:()=>add('group'),addMask:()=>{if(selected.value)edit({kind:'mask',action:'add'});},details:showDetails,properties:()=>{inspectorTab.value='properties';},effects:showEffects};
   for(const [name,action] of Object.entries(commands))subscriptions.push(window.editor.onCommand(name,()=>{if(!painting.value)action();}));
   window.addEventListener('keydown', onKey); window.addEventListener('resize', fit);
 });
@@ -202,54 +234,145 @@ onUnmounted(() => { operation++; epoch++; cancelStroke();renderer?.dispose(); su
 <template>
   <div class="shell" @dragenter.prevent="dragEnter" @dragover.prevent="dragOver" @dragleave="dragLeave" @drop.prevent="dropProject">
     <div v-if="dropping" class="drop-target" role="status">{{ t.dropHint }}</div>
-    <header class="toolbar">
-      <div class="brand"><img :src="iconURL" alt=""><div><strong>{{ t.title }}</strong><small>{{ t.subtitle }}</small></div></div>
-      <button class="primary" :disabled="busy" @click="open">{{ t.open }} <kbd>Ctrl O</kbd></button>
-      <button :disabled="busy || painting" data-testid="new-canvas" @click="newDialog=true">{{ t.editor.newCanvas }}</button>
-      <button :disabled="!project || busy || painting" data-testid="save-project" @click="save()">{{ t.editor.save }}{{ project?.dirty?' *':'' }}</button>
-      <button class="project-control" :disabled="!project || busy" :title="t.reload + ' · Ctrl+R'" :aria-label="t.reload" data-testid="reload-project" @click="reload">↻</button>
-      <button class="project-control" :disabled="!project && !busy" :title="t.close + ' · Ctrl+W'" :aria-label="t.close" data-testid="close-project" @click="closeProject">×</button>
-      <span class="document-name">{{ project?.name ?? '' }}</span>
-      <div class="zoom-tools"><button :disabled="!project" @click="fit">{{ t.fit }}</button><button :disabled="!project" aria-label="−" @click="scale(.8)">−</button><button :disabled="!project" @click="zoom = 1">{{ Math.round(zoom * 100) }}%</button><button :disabled="!project" aria-label="+" @click="scale(1.25)">+</button></div>
-      <select :aria-label="t.language" :value="language" data-testid="language" @change="changeLanguage"><option value="zh-Hans">简体中文</option><option value="en">English</option></select>
+    <header class="toolbar documentbar">
+      <div class="brand"><img :src="iconURL" alt=""><strong>{{ t.title }}</strong></div>
+      <div class="document-actions">
+        <button class="icon-button" :disabled="busy || painting" :title="t.editor.newCanvas + ' · Ctrl+N'" :aria-label="t.editor.newCanvas" data-testid="new-canvas" @click="newDialog=true"><Icon name="new"/></button>
+        <button class="icon-button" :disabled="busy || painting" :title="t.open + ' · Ctrl+O'" :aria-label="t.open" data-testid="open-project" @click="open"><Icon name="open"/></button>
+        <button class="icon-button" :disabled="!project || busy || painting" :title="t.editor.save + ' · Ctrl+S'" :aria-label="t.editor.save" data-testid="save-project" @click="save()"><Icon name="save"/></button>
+      </div>
+      <div class="document-tab" :class="{active:project}">
+        <span class="document-name">{{ project?.name ?? ui.noDocument }}<span v-if="project?.dirty" class="dirty-dot" :title="t.editor.unsaved"></span></span>
+        <button v-if="project || busy" class="icon-button tab-close" :title="t.close + ' · Ctrl+W'" :aria-label="t.close" data-testid="close-project" :disabled="painting" @click="closeProject"><Icon name="close"/></button>
+      </div>
+      <div class="history-tools">
+        <button class="icon-button" :disabled="!project?.canUndo || busy || painting" :title="t.editor.undo + ' · Ctrl+Z'" :aria-label="t.editor.undo" data-testid="undo" @click="history('undo')"><Icon name="undo"/></button>
+        <button class="icon-button" :disabled="!project?.canRedo || busy || painting" :title="t.editor.redo + ' · Ctrl+Shift+Z'" :aria-label="t.editor.redo" data-testid="redo" @click="history('redo')"><Icon name="redo"/></button>
+      </div>
+      <div class="toolbar-spacer"></div>
+      <div class="zoom-tools">
+        <button class="icon-button" :disabled="!project" :title="t.fit + ' · Ctrl+0'" :aria-label="t.fit" @click="fit"><Icon name="fit"/></button>
+        <button class="icon-button" :disabled="!project" :aria-label="ui.zoomOut" @click="scale(.8)"><Icon name="minus"/></button>
+        <button class="zoom-value" :disabled="!project" title="100% · Ctrl+1" @click="zoom=1">{{ Math.round(zoom * 100) }}%</button>
+        <button class="icon-button" :disabled="!project" :aria-label="ui.zoomIn" @click="scale(1.25)"><Icon name="plus"/></button>
+      </div>
+      <select class="language-select" :aria-label="t.language" :value="language" data-testid="language" @change="changeLanguage"><option value="zh-Hans">简体中文</option><option value="en">English</option></select>
+      <button class="icon-button" :aria-label="ui.details" :title="ui.details" data-testid="project-details" @click="showDetails"><Icon name="info"/></button>
     </header>
-    <div v-if="error || settingError" class="error" role="alert">{{ settingError ? t.settingsError : t.errorTitle + ' · ' + labelError(error) }}<button @click="error = ''; settingError = false">×</button></div>
+    <div v-if="error || settingError" class="error" role="alert">{{ settingError ? t.settingsError : t.errorTitle + ' · ' + labelError(error) }}<button class="icon-button" :aria-label="t.editor.cancel" @click="error='';settingError=false"><Icon name="close"/></button></div>
+    <div class="optionsbar" data-testid="tool-options">
+      <span class="tool-heading"><Icon :name="tool"/>{{ t.editor[tool as keyof typeof t.editor] }}</span>
+      <template v-if="tool==='brush' || tool==='eraser'">
+        <label>{{ t.editor.size }}<span class="unit-field"><input type="number" v-model.number="brushSize" min="1" max="500" :disabled="painting" data-testid="brush-size"><span>px</span></span></label>
+        <label>{{ t.editor.brushOpacity }}<span class="unit-field"><input type="number" v-model.number="brushOpacity" min="1" max="100" :disabled="painting"><span>%</span></span></label>
+        <label>{{ t.editor.maskTarget }}<select v-model="paintTarget" :disabled="painting"><option value="content">{{ t.editor.content }}</option><option value="mask">{{ t.editor.mask }}</option></select></label>
+        <span class="tool-hint">{{ ui.paintHint }}</span>
+      </template>
+      <template v-else-if="tool==='move' && selected">
+        <label v-for="(key,i) in ['X','Y']" :key="key">{{ key }}<input type="number" :value="selected.transform.origin[i]" :disabled="!editable" @change="transformPair('origin',i,$event)"></label>
+        <label v-for="(key,i) in [t.editor.width,t.editor.height]" :key="key">{{ key }}<input type="number" min="1" max="300000" :value="selected.transform.size[i]" :disabled="!editable || selected.isGroup" @change="transformPair('size',i,$event)"></label>
+        <label>{{ t.editor.rotation }}<span class="unit-field"><input type="number" :value="selected.transform.rotation" :disabled="!editable || selected.isGroup" @change="edit({kind:'transform',field:'rotation',value:numberEvent($event)})"><span>°</span></span></label>
+        <button class="icon-button" :disabled="!editable || selected.isGroup" :title="t.editor.flipH" :aria-label="t.editor.flipH" @click="edit({kind:'transform',field:'flipX',value:!selected.transform.flipX})"><Icon name="flipH"/></button>
+        <button class="icon-button" :disabled="!editable || selected.isGroup" :title="t.editor.flipV" :aria-label="t.editor.flipV" @click="edit({kind:'transform',field:'flipY',value:!selected.transform.flipY})"><Icon name="flipV"/></button>
+      </template>
+      <span v-else class="tool-hint">{{ tool==='pan' ? ui.panHint : ui.moveHint }}</span>
+    </div>
     <main>
-      <nav class="toolrail" :aria-label="t.editor.maskTarget"><button v-for="(symbol,key) in {move:'↖',brush:'●',eraser:'▰',pan:'✥'}" :class="{active:tool===key}" :disabled="painting || (key!=='pan'&&!editable)" :title="t.editor[key as keyof typeof t.editor]" :aria-label="t.editor[key as keyof typeof t.editor]" @click="tool=key">{{ symbol }}</button><input type="color" v-model="color" :aria-label="t.editor.color" :disabled="painting"></nav>
+      <nav class="toolrail" :aria-label="ui.tools">
+        <button v-for="key in tools" :key="key" class="icon-button tool-button" :class="{active:tool===key}" :aria-pressed="tool===key" :disabled="painting || (key!=='pan' && !editable)" :title="t.editor[key] + ' (' + toolKeys[key] + ')'" :aria-label="t.editor[key]" @click="tool=key"><Icon :name="key"/></button>
+        <div class="rail-divider"></div>
+        <label class="color-swatch" :title="t.editor.color"><span :style="{background:color}"></span><input type="color" v-model="color" :aria-label="t.editor.color" :disabled="painting"></label>
+      </nav>
       <section class="workarea">
-        <div v-if="project" class="optionsbar"><button :disabled="!editable" data-testid="import-image" @click="importImage">{{ t.editor.importImage }}</button><button :disabled="busy" @click="importPSD">{{ t.editor.importPSD }}</button><button :disabled="!project.canUndo || busy || painting" data-testid="undo" @click="history('undo')">{{ t.editor.undo }}</button><button :disabled="!project.canRedo || busy || painting" data-testid="redo" @click="history('redo')">{{ t.editor.redo }}</button><button :disabled="busy || painting" data-testid="save-as" @click="save(true)">{{ t.editor.saveAs }}</button><button :disabled="!editable" data-testid="export-png" @click="exportImage('png')">PNG</button><button :disabled="!editable" data-testid="export-psd" @click="psdDialog=true">PSD</button><template v-if="tool==='brush'||tool==='eraser'"><label>{{ t.editor.size }} <input type="number" v-model.number="brushSize" min="1" max="500" :disabled="painting"></label><label>{{ t.editor.brushOpacity }} <input type="number" v-model.number="brushOpacity" min="1" max="100" :disabled="painting"></label><select v-model="paintTarget" :disabled="painting" :aria-label="t.editor.maskTarget"><option value="content">{{ t.editor.content }}</option><option value="mask">{{ t.editor.mask }}</option></select></template></div>
-        <div v-if="issues.length" class="notice">{{ source === 'saved' ? t.fallback : t.detailsOnly }} {{ issues.map(labelIssue).join(' · ') }}</div>
+        <div v-if="issues.length" class="notice">{{ source==='saved' ? t.fallback : t.detailsOnly }} {{ issues.map(labelIssue).join(' · ') }}</div>
         <div ref="stage" class="stage" @wheel="wheel" @pointerdown="panStart" @pointermove="panMove" @pointerup="panEnd" @pointercancel="cancelStroke">
-          <div v-if="!project" class="welcome"><img :src="iconURL" alt=""><span class="eyebrow">COMPOSITOR / WINDOWS</span><h1>{{ t.welcome }}</h1><p>{{ t.intro }}</p><button class="primary" :disabled="busy" @click.stop="open">{{ busy ? t.loading : t.open }} →</button><div><button :disabled="busy" @click="importPSD">{{ t.editor.importPSD }}</button><button :disabled="busy" data-testid="recover" @click="recover">{{ t.editor.recover }}</button></div><small>{{ t.hint }}</small></div>
-          <div v-else-if="source !== 'none'" class="canvas-surround" :style="{ minWidth: project.manifest.width * zoom + 80 + 'px', minHeight: project.manifest.height * zoom + 80 + 'px' }">
-            <div ref="artboard" class="artboard" :class="'tool-'+tool" :style="{ width: project.manifest.width * zoom + 'px', height: project.manifest.height * zoom + 'px' }">
-              <canvas v-if="source === 'engine'" ref="canvas" data-testid="rendered-canvas"></canvas>
-              <canvas v-if="source === 'engine'" ref="overlay" class="paint-overlay"></canvas>
+          <div v-if="!project" class="welcome">
+            <form @submit.prevent="create">
+              <h1>{{ t.editor.newCanvas }}</h1><p>{{ ui.transparent }}</p>
+              <div class="new-dimensions"><label>{{ t.editor.width }}<span class="unit-field"><input type="number" v-model.number="newWidth" min="1" max="30000" required><span>px</span></span></label><button class="icon-button" type="button" :aria-label="t.editor.swap" :title="t.editor.swap" @click="[newWidth,newHeight]=[newHeight,newWidth]"><Icon name="swap"/></button><label>{{ t.editor.height }}<span class="unit-field"><input type="number" v-model.number="newHeight" min="1" max="30000" required><span>px</span></span></label></div>
+              <div class="welcome-actions"><button type="button" :disabled="busy" @click="open">{{ t.open }}</button><button class="primary" type="submit" :disabled="busy">{{ t.editor.create }}</button></div>
+            </form>
+            <div class="welcome-secondary"><button class="text-button" :disabled="busy" @click="importPSD">{{ t.editor.importPSD }}</button><button class="text-button" :disabled="busy" data-testid="recover" @click="recover">{{ t.editor.recover }}</button></div>
+          </div>
+          <div v-else-if="source!=='none'" class="canvas-surround" :style="{minWidth:project.manifest.width * zoom + 80 + 'px',minHeight:project.manifest.height * zoom + 80 + 'px'}">
+            <div ref="artboard" class="artboard" :class="'tool-'+tool" :style="{width:project.manifest.width * zoom + 'px',height:project.manifest.height * zoom + 'px'}">
+              <canvas v-if="source==='engine'" ref="canvas" data-testid="rendered-canvas"></canvas>
+              <canvas v-if="source==='engine'" ref="overlay" class="paint-overlay"></canvas>
               <img v-else :key="project.id" :src="previewURL" :alt="t.saved" draggable="false" data-testid="saved-preview" @error="savedPreviewFailed">
             </div>
           </div>
           <p v-else class="no-preview">{{ t.noPreview }}</p>
         </div>
-        <footer><span>{{ busy ? t.loading : project ? (source === 'engine' ? t.engine : source === 'saved' ? t.saved : t.metadata) : t.sourceNote }}</span><span v-if="project">{{ project.manifest.width.toLocaleString() }} × {{ project.manifest.height.toLocaleString() }} px · sRGB · v{{ project.manifest.version }}</span></footer>
       </section>
       <aside>
-        <div class="panel-heading"><strong>{{ t.layers }}</strong><span>{{ project?.analysis.rows.length ?? 0 }}</span></div>
-        <div v-if="project" class="layer-actions"><button :disabled="!editable" data-testid="add-pixels" :title="t.editor.addPixels" @click="add('pixels')">＋</button><button :disabled="!editable" :title="t.editor.addGroup" @click="add('group')">▱</button><select :disabled="!editable" :aria-label="t.editor.addAdjustment" value="" @change="add('adjustment',($event.target as HTMLSelectElement).value)"><option value="">{{ t.editor.addAdjustment }}</option><option v-for="(kind,i) in ADJUSTMENTS" :value="kind">{{ t.adjustments[i] }}</option></select></div>
-        <div v-if="project" class="layer-search"><input v-model="query" :placeholder="t.search" :aria-label="t.search" maxlength="256" data-testid="layer-search"><button v-if="query" :aria-label="t.clearSearch" @click="query = ''">×</button></div>
-        <div class="layer-list"><p v-if="!project" class="muted">{{ t.empty }}</p><p v-else-if="!rows.length" class="muted">{{ t.noMatches }}</p><div v-for="row in rows" :key="row.id" class="layer-row" :class="{ selected: selected?.id === row.id, hidden: !row.effectiveVisible }" :style="{ paddingLeft: 8 + row.depth * 14 + 'px' }">
-          <button v-if="row.isGroup" class="fold" :disabled="!!query.trim()" :aria-label="collapsed.has(row.id.toUpperCase()) && !query.trim() ? t.expand : t.collapse" :aria-expanded="!!query.trim() || !collapsed.has(row.id.toUpperCase())" @click="toggleGroup(row)">{{ collapsed.has(row.id.toUpperCase()) && !query.trim() ? '▸' : '▾' }}</button><span v-else class="fold-spacer"></span>
-          <button class="layer-select" :disabled="painting" :aria-pressed="selected?.id === row.id" @click="selected = row"><span aria-hidden="true">{{ row.isGroup ? '▱' : '▧' }}</span><span class="layer-title">{{ row.name }}<small>{{ kind(row) }} · {{ Math.round(row.effectiveOpacity * 100) }}%{{ row.maskFile?' · ◧':'' }}{{ row.maskSourceID?' · ↳':'' }}</small></span><span class="eye" aria-hidden="true">{{ row.effectiveVisible ? '◉' : '○' }}</span></button>
-        </div></div>
-        <div class="inspector"><template v-if="selected"><strong>{{ t.editor.edit }}</strong><p v-if="!editable&&!busy" class="muted">{{ t.editor.readOnly }}</p><div class="parameter-form"><label>{{ t.editor.rename }}<input :value="selected.name" maxlength="256" :disabled="busy" data-testid="layer-name" @change="edit({kind:'rename',name:($event.target as HTMLInputElement).value})"></label><label>{{ t.editor.visible }}<input type="checkbox" :checked="selected.isVisible" :disabled="!editable" @change="edit({kind:'appearance',field:'isVisible',value:($event.target as HTMLInputElement).checked})"></label><label>{{ t.editor.opacity }}<input type="number" min="0" max="100" :value="Math.round((selected.opacity??1)*100)" :disabled="!editable" data-testid="layer-opacity" @change="edit({kind:'appearance',field:'opacity',value:numberEvent($event)/100})"></label><label>{{ t.editor.blend }}<select :value="selected.blendMode??'Normal'" :disabled="!editable||selected.isGroup" data-testid="blend-mode" @change="edit({kind:'appearance',field:'blendMode',value:($event.target as HTMLSelectElement).value})"><option v-for="(mode,i) in BLEND_MODES" :value="mode">{{ t.blends[i] }}</option></select></label><label v-for="(key,i) in ['X','Y']" :key="key">{{ key }}<input type="number" :value="selected.transform.origin[i]" :disabled="!editable" @change="transformPair('origin',i,$event)"></label><label v-for="(key,i) in [t.editor.width,t.editor.height]" :key="key">{{ key }}<input type="number" min="1" max="300000" :value="selected.transform.size[i]" :disabled="!editable||selected.isGroup" @change="transformPair('size',i,$event)"></label><label>{{ t.editor.rotation }}<input type="number" :value="selected.transform.rotation" :disabled="!editable||selected.isGroup" @change="edit({kind:'transform',field:'rotation',value:numberEvent($event)})"></label><div class="button-row"><button :disabled="!editable||selected.isGroup" @click="edit({kind:'transform',field:'flipX',value:!selected.transform.flipX})">{{ t.editor.flipH }}</button><button :disabled="!editable||selected.isGroup" @click="edit({kind:'transform',field:'flipY',value:!selected.transform.flipY})">{{ t.editor.flipV }}</button></div><label>{{ t.editor.parent }}<select :disabled="!editable" :value="selected.parentID??''" @change="edit({kind:'parent',parentID:($event.target as HTMLSelectElement).value})"><option value="">{{ t.editor.root }}</option><option v-for="g in project?.analysis.rows.filter(l=>l.isGroup&&l.id!==selected?.id)" :value="g.id">{{ g.name }}</option></select></label><label v-if="!selected.isGroup">{{ t.editor.clip }}<select :disabled="!editable" :value="selected.maskSourceID??''" data-testid="clip-source" @change="edit({kind:'clip',sourceID:($event.target as HTMLSelectElement).value})"><option value="">{{ t.editor.none }}</option><option v-for="l in project?.analysis.rows.filter(l=>!l.isGroup&&l.imageFile&&l.id!==selected?.id&&l.parentID?.toUpperCase()===selected?.parentID?.toUpperCase())" :value="l.id">{{ l.name }}</option></select></label><div class="button-row"><button :disabled="!editable||selected.isGroup" @click="edit({kind:'duplicate'})">{{ t.editor.duplicate }}</button><button :disabled="!editable" data-testid="delete-layer" @click="edit({kind:'delete'})">{{ t.editor.delete }}</button><button :disabled="!editable" @click="edit({kind:'reorder',direction:1})">↑</button><button :disabled="!editable" @click="edit({kind:'reorder',direction:-1})">↓</button></div><button v-if="!selected.maskFile" :disabled="!editable" data-testid="add-mask" @click="edit({kind:'mask',action:'add'})">{{ t.editor.addMask }}</button><template v-else><label><input type="checkbox" :checked="selected.maskEnabled!==false" :disabled="!editable" @change="edit({kind:'mask',action:'toggle'})">{{ t.editor.enableMask }}</label><label><input type="checkbox" :checked="selected.maskLinked!==false" :disabled="!editable" @change="edit({kind:'mask',action:'link',value:($event.target as HTMLInputElement).checked})">{{ t.editor.linkMask }}</label><div class="button-row"><button :disabled="!editable" data-testid="invert-mask" @click="edit({kind:'mask',action:'invert'})">{{ t.editor.invertMask }}</button><button :disabled="!editable" @click="edit({kind:'mask',action:'remove'})">{{ t.editor.removeMask }}</button></div></template></div>
-          <small v-if="selected.text||selected.shape" class="muted">{{ t.editor.rasterize }}</small>
-          <details v-if="selected.adjustment" open><summary>{{ t.editor.adjustment }}</summary><AdjustmentEditor :value="selected.adjustment" :zh="language==='zh-Hans'" :disabled="!editable" @edit="edit({kind:'adjustment',...$event})"/></details>
-          <details v-if="selected.imageFile" open><summary>{{ t.editor.effect }}</summary><select :disabled="!editable" value="" :aria-label="t.editor.addEffect" @change="edit({kind:'effect',effect:($event.target as HTMLSelectElement).value})"><option value="">{{ t.editor.addEffect }}</option><option v-for="(effect,i) in EFFECTS" :value="effect">{{ t.effects[i] }}</option></select><EffectEditor :value="selected.effects??{}" :zh="language==='zh-Hans'" :disabled="!editable" :names="t.effects" @edit="edit({kind:'effect',...$event})"/></details>
-          <details class="raw-properties"><summary>{{ t.properties }}</summary><pre>{{ formattedProperties }}</pre></details></template><p v-else class="muted">{{ t.noSelection }}</p></div>
-        <details v-if="project" class="coverage"><summary>{{ t.coverage }}</summary><dl><div><dt>{{ t.simple }}</dt><dd>{{ project.analysis.coverage.simple }}</dd></div><div><dt>{{ t.pixels }}</dt><dd>{{ project.analysis.coverage.pixelFallback }}</dd></div><div><dt>{{ t.preview }}</dt><dd>{{ project.analysis.coverage.previewOnly }}</dd></div></dl><small>{{ t.coverageNote }}</small><button class="report-button" :disabled="busy" data-testid="copy-report" @click="copyReport">{{ t.copyReport }}</button><small>{{ t.reportPrivacy }}</small><small v-if="reportState !== 'idle'" role="status">{{ reportState === 'copied' ? t.reportCopied : t.reportError }}</small></details>
+        <section class="layers-panel">
+          <div class="panel-heading"><strong>{{ t.layers }}</strong><span class="layer-count">{{ project?.analysis.rows.length ?? 0 }}</span><button class="icon-button" :disabled="!project" :aria-label="ui.search" :title="ui.search" :aria-expanded="searchOpen" data-testid="toggle-layer-search" @click="toggleSearch"><Icon name="search"/></button></div>
+          <div v-if="project" class="layer-appearance">
+            <label class="blend-control"><span class="sr-only">{{ t.editor.blend }}</span><select :value="selected?.blendMode ?? 'Normal'" :disabled="!selected || !editable || selected.isGroup" data-testid="blend-mode" @change="edit({kind:'appearance',field:'blendMode',value:($event.target as HTMLSelectElement).value})"><option v-for="(mode,i) in BLEND_MODES" :key="mode" :value="mode">{{ t.blends[i] }}</option></select></label>
+            <label class="opacity-control">{{ t.editor.opacity }}<span class="unit-field"><input type="number" min="0" max="100" :value="Math.round((selected?.opacity ?? 1) * 100)" :disabled="!selected || !editable" data-testid="layer-opacity" @change="edit({kind:'appearance',field:'opacity',value:numberEvent($event)/100})"><span>%</span></span></label>
+            <input class="opacity-slider" type="range" min="0" max="100" :value="Math.round((selected?.opacity ?? 1) * 100)" :disabled="!selected || !editable" :aria-label="ui.opacitySlider" @change="edit({kind:'appearance',field:'opacity',value:numberEvent($event)/100})">
+          </div>
+          <div v-if="project && searchOpen" class="layer-search"><Icon name="search"/><input v-model="query" :placeholder="t.search" :aria-label="t.search" maxlength="256" data-testid="layer-search"><button v-if="query" class="icon-button" :aria-label="t.clearSearch" @click="query=''"><Icon name="close"/></button></div>
+          <div class="layer-list">
+            <p v-if="!project" class="muted">{{ t.empty }}</p><p v-else-if="!rows.length" class="muted">{{ query ? t.noMatches : ui.noLayers }}</p>
+            <div v-for="row in rows" :key="row.id" class="layer-row" :class="{selected:selected?.id===row.id,hidden:!row.effectiveVisible}" :style="{paddingLeft:6 + row.depth * 12 + 'px'}">
+              <button class="icon-button visibility-toggle" :disabled="!editable" :title="(row.isVisible ? ui.hideLayer : ui.showLayer) + ' · ' + row.name" :aria-label="(row.isVisible ? ui.hideLayer : ui.showLayer) + ' · ' + row.name" @click="edit({kind:'appearance',id:row.id,field:'isVisible',value:!row.isVisible})"><Icon :name="row.isVisible?'eye':'eyeOff'"/></button>
+              <button v-if="row.isGroup" class="icon-button fold" :disabled="!!query.trim()" :aria-label="collapsed.has(row.id.toUpperCase()) && !query.trim() ? t.expand : t.collapse" :aria-expanded="!!query.trim() || !collapsed.has(row.id.toUpperCase())" @click="toggleGroup(row)"><Icon name="chevron"/></button><span v-else class="fold-spacer"></span>
+              <button class="layer-select" :disabled="painting" :aria-pressed="selected?.id===row.id" @click="selectLayer(row);paintTarget='content'">
+                <span class="thumbnail"><img v-if="row.imageFile" :src="thumbURL(row)" alt="" loading="lazy" draggable="false"><Icon v-else :name="row.isGroup?'folder':'adjustment'"/></span>
+                <span class="layer-title">{{ row.name }}<small>{{ kind(row) }}<span v-if="row.maskSourceID"> · {{ t.editor.clip }}</span></small></span>
+              </button>
+              <button v-if="row.maskFile" class="mask-thumbnail thumbnail" :class="{active:selected?.id===row.id && paintTarget==='mask'}" :title="ui.maskThumbnail + ' · ' + row.name" :aria-label="ui.maskThumbnail + ' · ' + row.name" :disabled="painting" @click="selectLayer(row);paintTarget='mask'"><img :src="thumbURL(row,true)" alt="" loading="lazy" draggable="false"></button>
+            </div>
+          </div>
+          <div class="layer-actions">
+            <button class="icon-button" :disabled="!editable" :title="t.editor.addPixels" :aria-label="t.editor.addPixels" data-testid="add-pixels" @click="add('pixels')"><Icon name="layer"/></button>
+            <button class="icon-button" :disabled="!editable" :title="t.editor.addGroup" :aria-label="t.editor.addGroup" @click="add('group')"><Icon name="folder"/></button>
+            <button class="icon-button" :disabled="!editable || !selected || !!selected.maskFile" :title="t.editor.addMask" :aria-label="t.editor.addMask" data-testid="add-mask" @click="edit({kind:'mask',action:'add'})"><Icon name="mask"/></button>
+            <label class="adjustment-picker"><Icon name="adjustment"/><select :disabled="!editable" :aria-label="t.editor.addAdjustment" value="" @change="add('adjustment',($event.target as HTMLSelectElement).value)"><option value="">{{ t.editor.addAdjustment }}</option><option v-for="(kind,i) in ADJUSTMENTS" :key="kind" :value="kind">{{ t.adjustments[i] }}</option></select></label>
+            <button class="icon-button" :disabled="!editable || !selected" :title="t.editor.delete" :aria-label="t.editor.delete" data-testid="delete-layer" @click="edit({kind:'delete'})"><Icon name="trash"/></button>
+          </div>
+        </section>
+        <section class="inspector-panel">
+          <div class="inspector-tabs" role="tablist" @keydown="tabKey">
+            <button v-for="tab in ['properties','adjustments','effects']" :key="tab" role="tab" :tabindex="inspectorTab===tab?0:-1" :aria-selected="inspectorTab===tab" :aria-controls="'panel-'+tab" :class="{active:inspectorTab===tab}" :id="'tab-'+tab" @click="inspectorTab=tab">{{ ui[tab as 'properties'|'adjustments'|'effects'] }}</button>
+          </div>
+          <div class="inspector" role="tabpanel" :id="'panel-'+inspectorTab" :aria-labelledby="'tab-'+inspectorTab">
+            <template v-if="selected && inspectorTab==='properties'">
+              <div class="parameter-form">
+                <label>{{ t.editor.rename }}<input :value="selected.name" maxlength="256" :disabled="busy || painting" data-testid="layer-name" @change="edit({kind:'rename',name:($event.target as HTMLInputElement).value})"></label>
+                <details class="property-section" open><summary>{{ ui.transform }}</summary><div class="transform-grid">
+                  <label v-for="(key,i) in ['X','Y']" :key="key">{{ key }}<input type="number" :value="selected.transform.origin[i]" :disabled="!editable" @change="transformPair('origin',i,$event)"></label>
+                  <label v-for="(key,i) in [t.editor.width,t.editor.height]" :key="key">{{ key }}<input type="number" min="1" max="300000" :value="selected.transform.size[i]" :disabled="!editable || selected.isGroup" @change="transformPair('size',i,$event)"></label>
+                  <label>{{ t.editor.rotation }}<input type="number" :value="selected.transform.rotation" :disabled="!editable || selected.isGroup" @change="edit({kind:'transform',field:'rotation',value:numberEvent($event)})"></label>
+                  <div class="button-row"><button class="icon-button" :disabled="!editable || selected.isGroup" :title="t.editor.flipH" :aria-label="t.editor.flipH" @click="edit({kind:'transform',field:'flipX',value:!selected.transform.flipX})"><Icon name="flipH"/></button><button class="icon-button" :disabled="!editable || selected.isGroup" :title="t.editor.flipV" :aria-label="t.editor.flipV" @click="edit({kind:'transform',field:'flipY',value:!selected.transform.flipY})"><Icon name="flipV"/></button></div>
+                </div></details>
+                <details class="property-section"><summary>{{ ui.structure }}</summary>
+                  <label>{{ t.editor.parent }}<select :disabled="!editable" :value="selected.parentID ?? ''" @change="edit({kind:'parent',parentID:($event.target as HTMLSelectElement).value})"><option value="">{{ t.editor.root }}</option><option v-for="g in project?.analysis.rows.filter(l=>l.isGroup && l.id!==selected?.id)" :key="g.id" :value="g.id">{{ g.name }}</option></select></label>
+                  <label v-if="!selected.isGroup">{{ t.editor.clip }}<select :disabled="!editable" :value="selected.maskSourceID ?? ''" data-testid="clip-source" @change="edit({kind:'clip',sourceID:($event.target as HTMLSelectElement).value})"><option value="">{{ t.editor.none }}</option><option v-for="l in project?.analysis.rows.filter(l=>!l.isGroup && l.imageFile && l.id!==selected?.id && l.parentID?.toUpperCase()===selected?.parentID?.toUpperCase())" :key="l.id" :value="l.id">{{ l.name }}</option></select></label>
+                  <div class="button-row"><button :disabled="!editable || selected.isGroup" @click="edit({kind:'duplicate'})"><Icon name="duplicate"/>{{ t.editor.duplicate }}</button><button class="icon-button" :disabled="!editable" :title="t.editor.up" :aria-label="t.editor.up" @click="edit({kind:'reorder',direction:1})"><Icon name="up"/></button><button class="icon-button" :disabled="!editable" :title="t.editor.down" :aria-label="t.editor.down" @click="edit({kind:'reorder',direction:-1})"><Icon name="down"/></button></div>
+                </details>
+                <details v-if="selected.maskFile" class="property-section" open><summary>{{ ui.mask }}</summary><div class="mask-flags"><label><input type="checkbox" :checked="selected.maskEnabled!==false" :disabled="!editable" @change="edit({kind:'mask',action:'toggle'})">{{ t.editor.enableMask }}</label><label><input type="checkbox" :checked="selected.maskLinked!==false" :disabled="!editable" @change="edit({kind:'mask',action:'link',value:($event.target as HTMLInputElement).checked})">{{ t.editor.linkMask }}</label></div><div class="button-row"><button :disabled="!editable" data-testid="invert-mask" @click="edit({kind:'mask',action:'invert'})">{{ t.editor.invertMask }}</button><button :disabled="!editable" @click="edit({kind:'mask',action:'remove'})">{{ t.editor.removeMask }}</button></div></details>
+              </div>
+              <small v-if="selected.text || selected.shape" class="muted">{{ t.editor.rasterize }}</small>
+              <p v-if="!editable && !busy" class="muted">{{ t.editor.readOnly }}</p>
+            </template>
+            <template v-else-if="selected?.adjustment && inspectorTab==='adjustments'"><h2>{{ t.adjustments[ADJUSTMENTS.indexOf(selected.adjustment.kind)] }}</h2><AdjustmentEditor :value="selected.adjustment" :zh="language==='zh-Hans'" :disabled="!editable" @edit="edit({kind:'adjustment',...$event})"/></template>
+            <template v-else-if="selected?.imageFile && inspectorTab==='effects'"><select class="effect-picker" :disabled="!editable" value="" :aria-label="t.editor.addEffect" @change="edit({kind:'effect',effect:($event.target as HTMLSelectElement).value})"><option value="">{{ t.editor.addEffect }}</option><option v-for="(effect,i) in EFFECTS" :key="effect" :value="effect">{{ t.effects[i] }}</option></select><EffectEditor :value="selected.effects ?? {}" :zh="language==='zh-Hans'" :disabled="!editable" :names="t.effects" @edit="edit({kind:'effect',...$event})"/></template>
+            <p v-else class="inspector-empty"><Icon :name="inspectorTab==='effects'?'effects':inspectorTab==='adjustments'?'adjustment':'layer'"/>{{ inspectorTab==='effects'?ui.selectPixels:inspectorTab==='adjustments'?ui.selectAdjustment:ui.selectLayer }}</p>
+          </div>
+        </section>
       </aside>
     </main>
-    <div class="statusbar"><span class="badge">{{ t.readonly }} · {{ project?.dirty?t.editor.unsaved:t.editor.saved }}</span><span role="status">{{ status }}</span><span>{{ t.version }} {{ version }}</span></div>
-    <div v-if="newDialog" class="modal-shade" @click.self="newDialog=false"><form class="dialog" @submit.prevent="create"><h2>{{ t.editor.newCanvas }}</h2><div class="new-dimensions"><label>{{ t.editor.width }}<input type="number" v-model.number="newWidth" min="1" max="30000" required></label><button type="button" :aria-label="t.editor.swap" @click="[newWidth,newHeight]=[newHeight,newWidth]">⇄</button><label>{{ t.editor.height }}<input type="number" v-model.number="newHeight" min="1" max="30000" required></label></div><div class="button-row"><button type="button" @click="newDialog=false">{{ t.editor.cancel }}</button><button class="primary" type="submit">{{ t.editor.create }}</button></div></form></div>
-    <div v-if="psdDialog" class="modal-shade" @click.self="psdDialog=false"><div class="dialog"><h2>{{ t.editor.conversion }}</h2><p>{{ t.editor.conversionNote }}</p><div class="button-row"><button @click="psdDialog=false">{{ t.editor.cancel }}</button><button :disabled="!layeredPSD||!editable" @click="exportImage('psd')">{{ t.editor.layered }}</button><button :disabled="!editable" class="primary" @click="exportImage('psd',true)">{{ t.editor.flattened }}</button></div></div></div>
+    <div class="statusbar">
+      <span class="canvas-status">{{ busy ? ui.loading : project ? Math.round(zoom*100) + '%' : ui.transparent }}</span>
+      <span v-if="project">{{ project.manifest.width.toLocaleString() }} × {{ project.manifest.height.toLocaleString() }} px · sRGB</span>
+      <span class="preview-status" v-if="project">{{ source==='engine'?ui.livePreview:source==='saved'?ui.savedPreview:ui.metadataOnly }}</span>
+      <span role="status">{{ status }}</span>
+      <span class="badge">{{ t.readonly }} · {{ project?.dirty?t.editor.unsaved:t.editor.saved }} · {{ version }}</span>
+    </div>
+    <div v-if="newDialog" class="modal-shade" @click.self="newDialog=false"><form class="dialog" role="dialog" aria-modal="true" :aria-label="t.editor.newCanvas" @submit.prevent="create"><h2>{{ t.editor.newCanvas }}</h2><p>{{ ui.transparent }}</p><div class="new-dimensions"><label>{{ t.editor.width }}<input type="number" v-model.number="newWidth" min="1" max="30000" required></label><button class="icon-button" type="button" :aria-label="t.editor.swap" :title="t.editor.swap" @click="[newWidth,newHeight]=[newHeight,newWidth]"><Icon name="swap"/></button><label>{{ t.editor.height }}<input type="number" v-model.number="newHeight" min="1" max="30000" required></label></div><div class="button-row"><button type="button" @click="newDialog=false">{{ t.editor.cancel }}</button><button class="primary" type="submit">{{ t.editor.create }}</button></div></form></div>
+    <div v-if="psdDialog" class="modal-shade" @click.self="psdDialog=false"><div class="dialog" role="dialog" aria-modal="true" :aria-label="t.editor.conversion"><h2>{{ t.editor.conversion }}</h2><p>{{ t.editor.conversionNote }}</p><div class="button-row"><button @click="psdDialog=false">{{ t.editor.cancel }}</button><button :disabled="!layeredPSD || !editable" @click="exportImage('psd')">{{ t.editor.layered }}</button><button :disabled="!editable" class="primary" @click="exportImage('psd',true)">{{ t.editor.flattened }}</button></div></div></div>
+    <div v-if="detailsDialog" class="modal-shade" @click.self="detailsDialog=false"><section class="dialog details-dialog" role="dialog" aria-modal="true" :aria-label="ui.details"><div class="dialog-heading"><h2>{{ ui.details }}</h2><button class="icon-button" :aria-label="t.close" @click="detailsDialog=false"><Icon name="close"/></button></div><p>{{ t.sourceNote }}</p><p>{{ t.readonly }} · {{ version }}</p><template v-if="project"><p>{{ ui.source }}：{{ source==='engine'?t.engine:source==='saved'?t.saved:t.metadata }}</p><section class="coverage"><h3>{{ t.coverage }}</h3><dl><div><dt>{{ t.simple }}</dt><dd>{{ project.analysis.coverage.simple }}</dd></div><div><dt>{{ t.pixels }}</dt><dd>{{ project.analysis.coverage.pixelFallback }}</dd></div><div><dt>{{ t.preview }}</dt><dd>{{ project.analysis.coverage.previewOnly }}</dd></div></dl><p>{{ t.coverageNote }}</p><button :disabled="busy" data-testid="copy-report" @click="copyReport">{{ t.copyReport }}</button><small>{{ t.reportPrivacy }}</small><small v-if="reportState!=='idle'" role="status">{{ reportState==='copied'?t.reportCopied:t.reportError }}</small></section><details v-if="selected" class="raw-properties"><summary>{{ t.properties }}</summary><pre>{{ formattedProperties }}</pre></details></template><div class="button-row"><button class="primary" @click="detailsDialog=false">{{ t.close }}</button></div></section></div>
   </div>
 </template>

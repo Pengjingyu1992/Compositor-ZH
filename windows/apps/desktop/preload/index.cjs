@@ -21,7 +21,7 @@ contextBridge.exposeInMainWorld('viewer', Object.freeze({
   onFit: callback => subscribe('viewer:fit', callback),
   onActual: callback => subscribe('viewer:actual', callback)
 }));
-const commands = new Set(['new', 'image', 'importPSD', 'save', 'saveAs', 'png', 'exportPSD', 'recover', 'undo', 'redo']);
+const commands = new Set(['new', 'image', 'importPSD', 'save', 'saveAs', 'png', 'exportPSD', 'recover', 'undo', 'redo', 'addPixels', 'addGroup', 'addMask', 'details', 'properties', 'effects']);
 contextBridge.exposeInMainWorld('editor', Object.freeze({
   create: (w, h) => ipcRenderer.invoke('editor:new', w, h),
   edit: (id, revision, op) => ipcRenderer.invoke('editor:edit', id, revision, op),

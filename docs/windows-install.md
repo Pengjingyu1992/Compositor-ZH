@@ -2,13 +2,21 @@
 
 ## 下载和安装
 
-1. 打开 [Windows 编辑预览版发行页](https://github.com/Pengjingyu1992/Compositor-ZH/releases/tag/windows-v0.2.0-alpha.1)。`releases/latest` 保留给 macOS。
-2. 目标系统：**Windows 10 22H2 / Windows 11，Intel/AMD x64**。下载 `Compositor-Windows-0.2.0-alpha.1-x64.exe`，运行安装向导。无需 Node.js、Xcode 或 API Key；暂无 ARM64/32 位包。
+1. 打开 [Windows 编辑预览版发行页](https://github.com/Pengjingyu1992/Compositor-ZH/releases/tag/windows-v0.2.0-alpha.2)。`releases/latest` 保留给 macOS。
+2. 目标系统：**Windows 10 22H2 / Windows 11，Intel/AMD x64**。下载 `Compositor-Windows-0.2.0-alpha.2-x64.exe`，运行安装向导。无需 Node.js、Xcode 或 API Key；暂无 ARM64/32 位包。
 3. 便携版下载同名 ZIP，**完整解压**，运行 `Compositor.exe`。保留 resources、DLL、语言资源和许可证。
 4. 社区包未签名。核对来源和 SHA-256 后按系统提供的选项打开；无需关闭 Defender。
 5. 右上角切换简体中文 / English，即时生效并保留到下次启动。
 
 真实 Win10/11 设备、中文输入法、高 DPI、多显示器、实际显卡与 Photoshop/Photopea 人工打开验收仍待完成。云端 Windows Server 的通过结果不等于这些项目已通过。本版保留为预发布，不替换 macOS 安装包或更新入口。
+
+## 界面布局
+
+- 顶部保留 Windows 原生文件/编辑/显示/图层/帮助菜单，紧凑文档栏放常用打开、新建、保存、撤销和缩放。
+- 工具参数栏随移动/画笔/橡皮擦/抓手切换；左侧使用统一 SVG 图标。
+- 右侧上方为图层：混合、不透明度、缩略图、可见性、蒙版与新增/删除操作；搜索按需展开。
+- 右侧下方使用属性/调整/效果选项卡。原始数据和兼容性报告集中到“项目详情”，不占用常规编辑空间。
+- 小画布也可放大适合窗口；100% 与用户缩放入口保留。
 
 ## 打开与编辑
 
@@ -53,7 +61,7 @@ Windows 渲染仍是**候选实现**：所有混合空间显式设为 sRGB；尚
 ## 校验下载
 
 ```powershell
-Get-FileHash .\Compositor-Windows-0.2.0-alpha.1-x64.exe -Algorithm SHA256
+Get-FileHash .\Compositor-Windows-0.2.0-alpha.2-x64.exe -Algorithm SHA256
 ```
 
 与发行页 SHA256SUMS.txt 比较；ZIP 同样校验。
@@ -75,7 +83,7 @@ Windows 使用 windows-v* 标签、预发布、make_latest=false。下载审核�
 
 ## English summary
 
-Install the x64 EXE or fully extract the ZIP from the [Windows editor prerelease](https://github.com/Pengjingyu1992/Compositor-ZH/releases/tag/windows-v0.2.0-alpha.1). No Node.js or API key is required. Verify SHA-256; packages are unsigned. Target: Windows 10 22H2 / Windows 11 x64; hardware, IME, high-DPI and real Photoshop acceptance remain pending.
+Install the x64 EXE or fully extract the ZIP from the [Windows editor prerelease](https://github.com/Pengjingyu1992/Compositor-ZH/releases/tag/windows-v0.2.0-alpha.2). No Node.js or API key is required. Verify SHA-256; packages are unsigned. Target: Windows 10 22H2 / Windows 11 x64; hardware, IME, high-DPI and real Photoshop acceptance remain pending.
 
 Edit layers, paint pixels/masks, adjust appearance and effects, undo/redo, Save/Save As, restore local snapshots, and convert PSD/PNG. Unknown data is retained. Text/shapes use saved pixels and are rasterized by painting. Unsupported compositions remain read-only with explicit saved-preview fallback. All 24 blends are candidates, with macOS golden-image calibration pending; spatial filters/effects use bounded approximations.
 

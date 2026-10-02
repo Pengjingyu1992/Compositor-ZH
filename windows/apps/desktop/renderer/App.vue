@@ -8,6 +8,7 @@ import EffectEditor from './EffectEditor.vue';
 import Icon from './Icon.vue';
 import CompleteControls from './CompleteControls.vue';
 import { useCompleteEditor, TOOL_LIST, TOOL_KEYS } from './useCompleteEditor';
+import { ipcData } from './ipc-data';
 import { visibleLayers } from '../../../packages/editor-adapter/layer-list';
 import type { Language, ViewerProject, OpenResult, LayerRow } from './types';
 
@@ -104,7 +105,7 @@ async function closeProject() {
   project.value = undefined; selected.value = undefined; source.value = 'none'; error.value = ''; extraIssues.value = [];
   query.value = ''; collapsed.value = new Set(); reportState.value = 'idle';
 }
-function edit(op:Record<string,unknown>){const p=project.value;if(!p||busy.value)return;if(op.kind==='transform'&&(full.ids.length>1||selected.value?.isGroup))op={...op,kind:'transformLayers',ids:full.ids};return request(()=>window.editor.edit(p.id,p.revision,{id:selected.value?.id,...op}));}
+function edit(op:Record<string,unknown>){const p=project.value;if(!p||busy.value)return;if(op.kind==='transform'&&(full.ids.length>1||selected.value?.isGroup))op={...op,kind:'transformLayers',ids:full.ids};return request(()=>window.editor.edit(p.id,p.revision,ipcData({id:selected.value?.id,...op})));}
 function history(direction:string){const p=project.value;if(p)return request(()=>window.editor.history(p.id,p.revision,direction));}
 function save(as=false){const p=project.value;if(p)return request(()=>window.editor.save(p.id,p.revision,as));}
 function importImage(): Promise<void> | undefined {const p=project.value;if(p)return request(()=>window.editor.importImage(p.id,p.revision));}
@@ -179,7 +180,7 @@ function onKey(event: KeyboardEvent) {
 }
 function wheel(event: WheelEvent) { if (event.ctrlKey) { event.preventDefault(); scale(event.deltaY < 0 ? 1.1 : 1 / 1.1); } }
 let drag: { x: number; y: number; left: number; top: number } | undefined;
-const full=reactive(useCompleteEditor({project,selected,tool,color,brushSize,brushOpacity,paintTarget,painting,editable,language,canvas,overlay,artboard,stage,zoom,error,execute:(op,p=project.value)=>{if((source.value!=='engine'||issues.value.length)&&!['rename','lock','selection'].includes(String(op.kind))){error.value='unsupported';return;}if(p)return request(()=>window.editor.edit(p.id,p.revision,{id:selected.value?.id,...op}));},receive:result=>request(()=>Promise.resolve(result)),history,scale}));
+const full=reactive(useCompleteEditor({project,selected,tool,color,brushSize,brushOpacity,paintTarget,painting,editable,language,canvas,overlay,artboard,stage,zoom,error,execute:(op,p=project.value)=>{if((source.value!=='engine'||issues.value.length)&&!['rename','lock','selection'].includes(String(op.kind))){error.value='unsupported';return;}if(p)return request(()=>window.editor.edit(p.id,p.revision,ipcData({id:selected.value?.id,...op})));},receive:result=>request(()=>Promise.resolve(result)),history,scale}));
 watch(() => newDialog.value || psdDialog.value || detailsDialog.value || full.modal, async visible => {
   if (visible) {
     returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;

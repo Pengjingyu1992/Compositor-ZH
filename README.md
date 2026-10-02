@@ -16,8 +16,8 @@ Built on **[Compositor](https://github.com/robbietilton/Compositor)** by **[Robb
 
 ### Windows 10 / 11（独立预览版 / Separate preview）
 
-- **[Windows 下载 / Windows downloads](https://github.com/Pengjingyu1992/Compositor-ZH/releases/tag/windows-v0.2.0-alpha.2)** · **[安装说明 / Installation guide](docs/windows-install.md)**
-- Windows 10 22H2 / Windows 11，x64。编辑预览版支持图层属性、画笔/蒙版、24 种候选混合、调整/效果、撤销、恢复副本、项目保存和 PSD 转换，中英文即时切换。 / Windows 10 22H2 / Windows 11, x64. The editor preview supports layer properties, painting/masks, 24 candidate blends, adjustments/effects, undo, recovery snapshots, project saving, and PSD conversion with Chinese/English switching.
+- **[Windows 下载 / Windows downloads](https://github.com/Pengjingyu1992/Compositor-ZH/releases/tag/windows-v0.3.0-alpha.1)** · **[安装说明 / Installation guide](docs/windows-install.md)** · **[工具与快捷键 / Tools and shortcuts](docs/windows-full-editor.md)**
+- Windows 10 22H2 / Windows 11，x64。0.3.0 编辑器预发布版提供 17 类工具：选区、裁剪、中文文字、可编辑形状、绘画/蒙版、渐变/油漆桶、仿制/修复/涂抹、取色与导航；另有多层变换、对齐/分布、编组/合并、21 项滤镜、调整/效果、剪贴板、撤销、保存、恢复和 PSD/PNG 转换，中英文即时切换。 / Windows 10 22H2 / Windows 11, x64. The 0.3.0 editor prerelease provides 17 tools for selections, crop, Chinese text, editable shapes, painting/masks, gradients/fill, clone/healing/smear, eyedropper and navigation, plus multi-layer transforms, arrangement, groups/merge, 21 filters, adjustments/effects, clipboard, undo, saving, recovery, PSD/PNG conversion, and Chinese/English switching.
 - 基于 Pentrado 引擎，拥有独立安装包、设置和发行标签；不会替换 macOS 版。复杂项目会明确使用 macOS 保存的预览图。真实 Windows 10/11 显卡与用户项目验收仍待完成。 / Built with Pentrado, with separate packages, settings, and release tags. Complex projects explicitly use the preview saved by macOS. Real Windows GPU and user-project acceptance is pending.
 
 ### macOS
@@ -53,7 +53,7 @@ Core layers, masks, brushes, text, shapes, selections, adjustments, Camera Raw, 
 - PSD 分层导出将文字和形状栅格化；调整层、图层效果及不支持的剪贴关系需要合成导出。详见 [PSD 导出说明](docs/psd-export.md)。 / Text and shapes are rasterized; adjustments, effects, and unsupported clipping relationships require flattened export.
 - 恢复副本延迟 2 秒写入，最后的改动可能尚未落盘。详见 [恢复说明](docs/recovery.md)。 / Recovery writes are delayed by two seconds; the latest edits may not have reached disk.
 - 更新菜单打开本仓库的下载页，手动安装新版本。 / The update command opens this edition's releases for manual installation.
-- 图层锁定、对称画笔和任意矢量路径持久化尚未实现。 / Layer locks, symmetric painting, and persistent arbitrary vector paths are not implemented yet.
+- macOS 版尚未实现图层锁定和对称画笔；Windows 版提供会话锁定和对称绘画。任意矢量路径持久化仍未实现。 / Layer locks and symmetric painting are pending on macOS; Windows provides session locks and symmetry. Persistent arbitrary vector paths remain unimplemented.
 
 ## 构建 / Build
 

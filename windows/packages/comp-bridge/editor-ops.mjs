@@ -17,10 +17,13 @@ export function operationTargets(m,op) {
 }
 export function checkPermission(data,op) {
   if(op.kind==='batch'){for(const item of op.operations??[])checkPermission(data,item);return;}
-  if(['selection','lock','rename','guides','add','importPixels'].includes(op.kind))return;
-  const dimension=['transform','transformMask','transformLayers','moveLayers','arrange','canvas','imageSize','flipCanvas','parent'].includes(op.kind)?'position':op.kind==='appearance'?'appearance':'content';
-  for(const l of operationTargets(data.manifest,op)) {
-    let row=l;for(let n=0;row&&n<65;n++,row=data.manifest.layers.find(v=>v.id.toUpperCase()===row.parentID?.toUpperCase()))if(data.locks?.[row.id]?.[dimension])fail('locked');
+  if(['selection','lock','rename','guides'].includes(op.kind))return;
+  const inserting=['add','importPixels'].includes(op.kind)||(op.kind==='styled'&&!op.id);
+  const dimensions=['group','ungroup','reorder','parent','merge'].includes(op.kind)?['content','position']:['transform','transformMask','transformLayers','moveLayers','arrange','canvas','imageSize','flipCanvas'].includes(op.kind)?['position']:op.kind==='appearance'?['appearance']:['content'];
+  const targets=inserting?[]:operationTargets(data.manifest,op);
+  if(op.parentID){const parent=data.manifest.layers.find(l=>l.id===op.parentID);if(!parent?.isGroup)fail('invalid');targets.push(parent);}
+  for(const l of targets) {
+    let row=l;for(let n=0;row&&n<65;n++,row=data.manifest.layers.find(v=>v.id.toUpperCase()===row.parentID?.toUpperCase()))if(dimensions.some(d=>data.locks?.[row.id]?.[d]))fail('locked');
   }
 }
 export function selectionEdit(data,op,codecs) {
@@ -85,7 +88,8 @@ export function editorOperation(data,m,resources,target,op,codecs,descendants) {
         }
         output=fillPixels(image,t,data.selection,{...s,action:op.kind==='clear'?'clear':op.kind==='gradient'?'gradient':'fill'},coverage);
       }
-      if(s.lockAlpha)for(let i=3;i<output.data.length;i+=4)output.data[i]=image.data[i];
+      if(s.lockAlpha)for(let i=0;i<output.data.length;i+=4){output.data[i+3]=image.data[i+3];if(!image.data[i+3])output.data.set(image.data.subarray(i,i+4),i);}
+      if(output.data.every((v,i)=>v===image.data[i]))return true;
       resources.set(`images/${file}`,codecs.encodePixels(output,mask));if(!mask){delete target.text;delete target.shape;}return true;
     }
     case 'styled':{
@@ -127,7 +131,7 @@ export function editorOperation(data,m,resources,target,op,codecs,descendants) {
       operationTargets(m,op);const ls=roots(op.ids);if(!ls.length||ls.some(l=>l.parentID!==ls[0].parentID))fail('invalid');const id=randomUUID().toUpperCase(),group={id,name:String(op.name??'Group').slice(0,256),isVisible:true,isGroup:true,transform:place(m.width,m.height)};if(ls[0].parentID)group.parentID=ls[0].parentID;
       m.layers.splice(Math.min(...ls.map(l=>m.layers.indexOf(l))),0,group);for(const l of ls)l.parentID=id;m.activeLayerID=id;return true;
     }
-    case 'ungroup':if(!target.isGroup||target.maskFile||(target.opacity??1)!==1)fail('unsupported');for(const l of m.layers)if(l.parentID===target.id){if(target.parentID)l.parentID=target.parentID;else delete l.parentID;}m.layers=m.layers.filter(l=>l.id!==target.id);delete m.activeLayerID;return true;
+    case 'ungroup':{if(!target.isGroup||target.maskFile||(target.opacity??1)!==1)fail('unsupported');const children=m.layers.filter(l=>l.parentID===target.id);for(const l of children){if(target.parentID)l.parentID=target.parentID;else delete l.parentID;}m.layers=m.layers.filter(l=>l.id!==target.id);if(children.length)m.activeLayerID=children[0].id;else delete m.activeLayerID;return true;}
     case 'duplicateTree':{
       const ids=descendants(target.id),ls=m.layers.filter(l=>ids.has(l.id.toUpperCase())),map=new Map(ls.map(l=>[l.id,randomUUID().toUpperCase()]));
       const copies=ls.map(l=>{const v=structuredClone(l);v.id=map.get(l.id);if(l.id===target.id)v.name+=' (copy)';if(map.has(v.parentID))v.parentID=map.get(v.parentID);if(map.has(v.maskSourceID))v.maskSourceID=map.get(v.maskSourceID);for(const f of ['imageFile','maskFile'])if(v[f]){const old=v[f];v[f]=v.id+(f==='maskFile'?'.mask':'')+'.png';resources.set(`images/${v[f]}`,resources.get(`images/${old}`));}return v;});
@@ -145,7 +149,7 @@ export function editorOperation(data,m,resources,target,op,codecs,descendants) {
       resources.set(layerFile(target),codecs.encodePixels(image));for(const k of ['maskFile','maskEnabled','maskPlacement','maskLinked','text','shape'])delete target[k];return true;
     }
     case 'selectionMask':{
-      if(!data.selection||target.maskFile)fail('selection');const r=target.imageFile?resources.get(layerFile(target)):{w:m.width,h:m.height},pixels=new Uint8ClampedArray(r.width*r.height*4);
+      if(!data.selection||target.maskFile)fail('selection');const r=target.imageFile?resources.get(layerFile(target)):{width:m.width,height:m.height},pixels=new Uint8ClampedArray(r.width*r.height*4);
       for(let y=0;y<r.height;y++)for(let x=0;x<r.width;x++){const at=(y*r.width+x)*4,v=selectionCoverage(data.selection,toDocument([x+.5,y+.5],target.transform,r.width,r.height))*255;pixels[at]=pixels[at+1]=pixels[at+2]=v;pixels[at+3]=255;}
       target.maskFile=target.id+'.mask.png';target.maskEnabled=true;resources.set(`images/${target.maskFile}`,codecs.encodePixels({...r,data:pixels},true));return true;
     }

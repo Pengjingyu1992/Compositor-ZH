@@ -5,6 +5,8 @@ import * as codecs from '../packages/comp-bridge/codecs.mjs';
 import {arrange,bounds,following,toLocal,toDocument,shapeMask,combineMasks,modifyMask,floodMask,symmetryPoints} from '../packages/comp-bridge/editor-math.mjs';
 import {fillPixels,strokePixels,resizePixels,filterPixels,FILTERS} from '../packages/comp-bridge/raster-tools.mjs';
 import {ProjectSession} from '../packages/platform/project-session.mjs';
+import {reactive,ref} from 'vue';
+import {ipcData} from '../apps/desktop/renderer/ipc-data.ts';
 const change=(data,op)=>editProject(data,op,codecs);
 const setup=()=>{const data=change(newProject(32,24),{kind:'add',type:'pixels',name:'Synthetic'});return {data,id:data.manifest.layers[0].id};};
 const image=(w=8,h=8)=>({width:w,height:h,data:new Uint8ClampedArray(w*h*4).map((_,i)=>i%4===3?255:80)});
@@ -72,4 +74,17 @@ test('group rotation/resize and linked/unlinked masks follow the rectangle model
  a=change(a,{kind:'transformLayers',ids:[group],field:'rotation',value:90});let l=a.manifest.layers.find(l=>l.id===id);assert.ok(Math.abs(l.transform.rotation-90)<1e-8);assert.deepEqual(l.maskPlacement.origin,[3,4]);
  a=change(a,{kind:'canvas',x:2,y:1,width:30,height:23});l=a.manifest.layers.find(l=>l.id===id);assert.deepEqual(l.maskPlacement.origin,[1,3]);
  const t=following(placement,{...placement,size:[8,8]},{...placement,size:[16,16]});assert.deepEqual(t.size,[16,16]);assert.deepEqual(t.origin,[0,0]);
+});
+test('reactive tool parameters cross IPC without proxies or corrupting PNG arrays',()=>{
+ const source=ref([4,5]),op=reactive({ids:['one','two'],settings:{source:source.value},png:new Uint8Array([1,2,3]),id:undefined});const copied=structuredClone(ipcData(op));assert.deepEqual(copied.ids,['one','two']);assert.deepEqual(copied.settings.source,[4,5]);assert.ok(copied.png instanceof Uint8Array);assert.equal(copied.id,undefined);
+});
+test('empty strokes and alpha-locked fill retain editable metadata and save identity',()=>{
+ const {data,id}=setup();data.manifest.layers[0].shape={kind:'Rectangle',red:0,green:0,blue:0,cornerRadius:0,lineWidth:0,start:[0,0],end:[1,1]};
+ const before=data.resources.get(`images/${id}.png`);assert.equal(change(data,{kind:'stroke',id,settings:{points:[[-100,-100]],size:4,color:[255,0,0]}}),data);
+ const locked=change(data,{kind:'lock',id,field:'alpha',value:true}),after=change(locked,{kind:'fill',id,settings:{color:[255,0,0]}});assert.equal(after,locked);assert.equal(after.resources.get(`images/${id}.png`),before);assert.ok(after.manifest.layers[0].shape);
+});
+test('group selection masks have canvas dimensions and structure locks cover insertion',()=>{
+ const {data,id}=setup();let a=change(data,{kind:'group',ids:[id],name:'Group'});const group=a.manifest.activeLayerID;a=change(a,{kind:'selection',action:'all'});a=change(a,{kind:'selectionMask',id:group});const r=a.resources.get(`images/${group}.mask.png`);assert.equal(r.width,32);assert.equal(r.height,24);assert.equal(codecs.decodePNG(r).data[0],255);
+ a=change(a,{kind:'lock',id:group,field:'content',value:true});assert.throws(()=>change(a,{kind:'add',type:'pixels',name:'Blocked',parentID:group}),e=>e.code==='locked');
+ a=change(a,{kind:'lock',id:group,field:'content',value:false});a=change(a,{kind:'lock',id,field:'position',value:true});assert.throws(()=>change(a,{kind:'reorder',id,direction:1}),e=>e.code==='locked');assert.throws(()=>change(a,{kind:'group',ids:[id],name:'Blocked'}),e=>e.code==='locked');
 });

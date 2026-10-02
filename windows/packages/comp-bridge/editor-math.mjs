@@ -108,6 +108,7 @@ export function selectionCoverage(selection,point) {
 // Compositor's rectangle decomposition preserves flips and drops shear, which
 // its persistent transform model cannot represent.
 export function following(t,old,next) {
+  if(old.size.every((v,i)=>v===next.size[i])&&old.rotation===next.rotation&&!!old.flipX===!!next.flipX&&!!old.flipY===!!next.flipY)return {...t,origin:t.origin.map((v,i)=>v+next.origin[i]-old.origin[i])};
   const map=p=>toDocument(toLocal(toDocument(p,t,1,1),old,1,1),next,1,1),a=map([0,0]),x=map([1,0]),y=map([0,1]);
   const ax=x[0]-a[0],ay=x[1]-a[1],bx=y[0]-a[0],by=y[1]-a[1],sign=t.flipX?-1:1,angle=Math.atan2(ay*sign,ax*sign),along=-bx*Math.sin(angle)+by*Math.cos(angle),w=Math.hypot(ax,ay),h=Math.abs(along),degree=angle*180/Math.PI;
   return {...t,origin:[a[0]+(ax+bx)/2-w/2,a[1]+(ay+by)/2-h/2],size:[Math.max(1,w),Math.max(1,h)],rotation:degree+Math.round((t.rotation-degree)/360)*360,flipY:along<0};

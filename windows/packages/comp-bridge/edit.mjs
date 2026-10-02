@@ -172,6 +172,8 @@ export function editProject(data, op, codecs) {
     }
     default: fail('invalid');
   }
+  // An empty gesture must retain editable metadata, previews and save identity.
+  if(JSON.stringify(m)===JSON.stringify(data.manifest)&&resources.size===data.resources.size&&[...resources].every(([key,value])=>data.resources.get(key)===value))return data;
   // Windows only emits fields already defined by the current macOS schema.
   m.version = 11;
   if (op.kind !== 'rename') { resources.delete('QuickLook/Preview.jpg'); resources.delete('QuickLook/Thumbnail.png'); }

@@ -13,7 +13,7 @@ export function fillPixels(image,t,selection,settings={},coverage) {
   const out={...image,data:new Uint8ClampedArray(image.data)},w=image.width,h=image.height;
   for(let y=0;y<h;y++)for(let x=0;x<w;x++){
     const doc=toDocument([x+.5,y+.5],t,w,h),mask=selectionCoverage(selection,doc)*(coverage?coverage[y*w+x]/255:1),at=(y*w+x)*4;
-    if(!mask)continue;
+    if(!mask||(settings.lockAlpha&&!image.data[at+3]))continue;
     if(settings.action==='clear'){if(settings.mask)blend(out.data,at,[0,0,0],mask*(settings.opacity??1));else blend(out.data,at,[0,0,0],mask,true);continue;}
     let rgb=settings.color??[0,0,0],alpha=(settings.opacity??1)*mask;
     if(settings.action==='gradient'){
@@ -53,8 +53,8 @@ export function strokePixels(image,t,selection,settings) {
       if(mode==='clone'||mode==='healing'){const src=nearest(original,w,h,x+offset[0],y+offset[1]);if(!src)continue;sample=color(src.slice(0,3).map((v,c)=>v+correction[c]));blend(out,at,sample,delta*src[3]/255,false,settings.lockAlpha);continue;}
       if(mode==='blur'){
         const values=[0,0,0,0];let n=0;
-        for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){const src=nearest(original,w,h,x+dx,y+dy);if(src){n++;for(let c=0;c<4;c++)values[c]+=src[c];}}
-        if(n)for(let c=0;c<4;c++)out[at+c]=out[at+c]*(1-delta)+values[c]/n*delta;continue;
+        for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){const src=nearest(original,w,h,x+dx,y+dy);if(src){n++;const a=src[3]/255;for(let c=0;c<3;c++)values[c]+=src[c]*a;values[3]+=a;}}
+        if(n){const a=out[at+3]/255,alpha=a*(1-delta)+values[3]/n*delta;for(let c=0;c<3;c++)out[at+c]=alpha?(out[at+c]*a*(1-delta)+values[c]/n*delta)/alpha:0;out[at+3]=alpha*255;}continue;
       }
       if(mode==='smudge'||mode==='liquify'){
         const src=nearest(out,w,h,x-(doc[0]-(previous?.[0]??doc[0]))*w/t.size[0],y-(doc[1]-(previous?.[1]??doc[1]))*h/t.size[1]);

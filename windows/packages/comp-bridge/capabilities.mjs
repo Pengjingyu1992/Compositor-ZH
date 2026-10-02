@@ -5,11 +5,12 @@ const finite = (v, lo, hi) => typeof v === 'number' && Number.isFinite(v) && v >
 const object = v => !!v && typeof v === 'object' && !Array.isArray(v);
 const known = (v, keys) => object(v) && Object.keys(v).every(k => keys.includes(k));
 const numbers = (v, specs) => Object.entries(specs).every(([k, [lo, hi]]) => v[k] === undefined || finite(v[k], lo, hi));
-const color = v => known(v, ['red', 'green', 'blue']) && numbers(v, { red: [0, 1], green: [0, 1], blue: [0, 1] });
+const color = v => known(v, ['red', 'green', 'blue']) && ['red', 'green', 'blue'].every(k => finite(v[k], 0, 1));
 const flag = v => v === undefined || typeof v === 'boolean';
 export function supportsAdjustment(a) {
   if (!known(a, ['kind', 'hue', 'saturation', 'lightness', 'colorize', 'levels', 'curves', 'exposureSettings', 'gradientMapSettings', 'grainSettings', 'blackWhiteSettings', 'colorBalanceSettings', 'blurRadius', 'motionAngle', 'motionDistance', 'noiseAmount', 'noiseGaussian', 'noiseMonochromatic', 'noiseSeed']) || !ADJUSTMENT_KINDS.includes(a.kind)) return false;
   if (!numbers(a, { hue: [-360, 360], saturation: [-100, 100], lightness: [-100, 100], blurRadius: [.1, 250], motionAngle: [-90, 90], motionDistance: [1, 2000], noiseAmount: [.1, 400], noiseSeed: [0, 4294967295] }) || ![a.colorize, a.noiseGaussian, a.noiseMonochromatic].every(flag)) return false;
+  if (a.noiseSeed !== undefined && !Number.isInteger(a.noiseSeed) || a.grainSettings?.seed !== undefined && !Number.isInteger(a.grainSettings.seed)) return false;
   if (a.levels && (!known(a.levels, ['channel', 'ranges']) || !Array.isArray(a.levels.ranges) || a.levels.ranges.length !== 4 || !a.levels.ranges.every(r => known(r, ['black', 'white', 'gamma', 'outputBlack', 'outputWhite']) && numbers(r, { black: [0, 254], white: [1, 255], gamma: [.1, 9.99], outputBlack: [0, 255], outputWhite: [0, 255] }) && (r.black ?? 0) < (r.white ?? 255)))) return false;
   if (a.curves && (!known(a.curves, ['channel', 'channels']) || !Array.isArray(a.curves.channels) || a.curves.channels.length !== 4 || !a.curves.channels.every(p => Array.isArray(p) && p.length >= 2 && p.length <= 32 && p[0].x === 0 && p.at(-1).x === 255 && p.every((v, i) => known(v, ['x', 'y']) && finite(v.x, 0, 255) && finite(v.y, 0, 255) && (!i || v.x > p[i - 1].x))))) return false;
   const specs = {

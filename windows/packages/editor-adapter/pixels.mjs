@@ -21,7 +21,7 @@ const level = (v, r = {}) => ((r.outputBlack ?? 0) + Math.pow(clamp((v * 255 - (
 const linear = v => v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4;
 const encoded = v => v <= .0031308 ? v * 12.92 : 1.055 * Math.max(0, v) ** (1 / 2.4) - .055;
 const mix32 = value => { let v = value >>> 0; v ^= v >>> 16; v = Math.imul(v, 0x7feb352d); v ^= v >>> 15; v = Math.imul(v, 0x846ca68b); return (v ^ v >>> 16) >>> 0; };
-const random = (x, y, seed, c = 0) => (mix32(Math.imul(x, 0x9e3779b1) ^ mix32(Math.imul(y, 0x85ebca77) ^ seed ^ Math.imul(c, 0x27d4eb2d))) + .5) / 4294967296;
+const noiseUnit = key => (mix32(key) >>> 8) / 16777216;
 function grainField(x, y, size, seed) {
   const ix = Math.floor(x / size), iy = Math.floor(y / size), sx = x / size - ix, sy = y / size - iy, tx = sx*sx*(3-2*sx), ty = sy*sy*(3-2*sy);
   const lattice = (x, y) => { const h = mix32(Math.imul(x, 0x9e3779b1) ^ mix32(Math.imul(y, 0x85ebca77) ^ seed)); return (h & 65535) / 65535 + (h >>> 16) / 65535 - 1; };
@@ -43,8 +43,9 @@ export function boxPlane(input, w, h, radius) {
 }
 export function blurPlane(input, w, h, sigma) {
   if (!sigma) return new Float32Array(input);
-  const ideal = Math.sqrt(4 * sigma * sigma + 1), lower = Math.floor(ideal) | 1;
-  const widths = [lower, lower, lower + 2];
+  const ideal = Math.sqrt(4 * sigma * sigma + 1), floor = Math.floor(ideal), lower = floor % 2 ? floor : floor - 1;
+  const count = Math.round((12*sigma*sigma-3*lower*lower-12*lower-9)/(-4*lower-4));
+  const widths = Array.from({length:3},(_,i)=>i<count?lower:lower+2);
   let data = input; for (const width of widths) data = boxPlane(data, w, h, (width - 1) / 2);
   return data;
 }
@@ -80,7 +81,8 @@ export function adjustedPixels(image, a) {
       case 'Exposure': { const s = a.exposureSettings ?? {}; values = values.map(v => clamp(encoded(Math.max(0, linear(v)*2**(s.exposure??0)+(s.offset??0))**(1/(s.gamma??1))))); break; }
       case 'Hue/Saturation': {
         let [hue,s,l] = hsl(values); hue = a.colorize ? (a.hue??0)/360 : hue+(a.hue??0)/360;
-        s = a.colorize ? clamp((a.saturation??0)/100) : clamp(s*(1+(a.saturation??0)/100));
+        const amount=(a.saturation??0)/100;
+        s = a.colorize ? clamp(amount) : amount<=0?clamp(s*(1+amount)):amount>=1?(s>0?1:0):clamp(s/(1-amount));
         const change = (a.lightness??0)/100; l = change < 0 ? l*(1+change) : l+(1-l)*change; values = rgb([hue,s,l]); break;
       }
       case 'Gradient Map': {
@@ -103,7 +105,10 @@ export function adjustedPixels(image, a) {
         const s=a.grainSettings??{},size=s.size??1.5,seed=s.seed??0, rough=(s.roughness??50)/100;
         const smooth=grainField(x+.5,y+.5,size,seed),fine=grainField(x+.5,y+.5,Math.max(.5,size*.35),mix32(seed^0xa511e9b3)),level=values[0]*.2126+values[1]*.7152+values[2]*.0722,delta=(smooth+(fine-smooth)*rough)*(s.amount??25)/100*.35*(.4+2.4*level*(1-level)); values=values.map(v=>clamp(v+delta));break;
       }
-      case 'Add Noise': values=values.map((v,c)=>{const channel=a.noiseMonochromatic?0:c,u=random(x,y,a.noiseSeed??0,channel),z=a.noiseGaussian?Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*random(x,y,a.noiseSeed??0,channel+4)):(u*2-1);return clamp(v+z*(a.noiseAmount??10)/100);});break;
+      case 'Add Noise': {
+        const base=mix32((a.noiseSeed??0)^mix32(Math.imul(x,0x9e3779b9)^mix32(Math.imul(y,0x85ebca6b))));
+        values=values.map((v,c)=>{const key=a.noiseMonochromatic?base:(base+Math.imul(c,0x9e3779b9))>>>0,u=noiseUnit(key),z=a.noiseGaussian?Math.sqrt(-2*Math.log(1-u))*Math.cos(2*Math.PI*noiseUnit(key^0x68e31da4))*(2/3):u*2-1;return clamp(v+z*(a.noiseAmount??10)/200);});break;
+      }
     }
     for(let c=0;c<3;c++)data[at+c]=clamp(values[c])*255;
   }

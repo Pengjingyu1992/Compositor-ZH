@@ -39,8 +39,8 @@ export function editProject(data, op, codecs) {
   if (needsTarget && !target) fail('stale');
   if (data.analysis.issues.length && !['rename'].includes(op.kind)) fail('unsupported');
   const descendants = id => {
-    const result = new Set([id]);
-    for (let n = 0; n < 64; n++) for (const l of m.layers) if (result.has(l.parentID)) result.add(l.id);
+    const result = new Set([id.toUpperCase()]);
+    for (let n = 0; n < 64; n++) for (const l of m.layers) if (result.has(l.parentID?.toUpperCase())) result.add(l.id.toUpperCase());
     return result;
   };
   const add = (kind, name) => {
@@ -76,7 +76,8 @@ export function editProject(data, op, codecs) {
       if (target.isGroup) {
         if (op.field !== 'origin' || !Array.isArray(op.value) || op.value.length !== 2) fail('unsupported');
         const [dx, dy] = op.value.map((v, i) => v - target.transform.origin[i]);
-        for (const l of m.layers) if (descendants(target.id).has(l.id)) {
+        const moving = descendants(target.id);
+        for (const l of m.layers) if (moving.has(l.id.toUpperCase())) {
           l.transform.origin = l.transform.origin.map((v, i) => v + (i === 0 ? dx : dy));
           if (l.maskPlacement && l.maskLinked === false) l.maskPlacement.origin = l.maskPlacement.origin.map((v, i) => v + (i === 0 ? dx : dy));
         }
@@ -85,9 +86,9 @@ export function editProject(data, op, codecs) {
     }
     case 'delete': {
       const removed = descendants(target.id);
-      m.layers = m.layers.filter(l => !removed.has(l.id));
-      for (const l of m.layers) if (removed.has(l.maskSourceID)) delete l.maskSourceID;
-      if (removed.has(m.activeLayerID)) delete m.activeLayerID;
+      m.layers = m.layers.filter(l => !removed.has(l.id.toUpperCase()));
+      for (const l of m.layers) if (removed.has(l.maskSourceID?.toUpperCase())) delete l.maskSourceID;
+      if (removed.has(m.activeLayerID?.toUpperCase())) delete m.activeLayerID;
       // Opaque files may be referenced by future fields. Keep them conservatively.
       break;
     }
@@ -102,12 +103,12 @@ export function editProject(data, op, codecs) {
     }
     case 'reorder': {
       if (![1, -1].includes(op.direction)) fail('invalid');
-      const siblings = m.layers.filter(l => l.parentID === target.parentID), i = siblings.indexOf(target), other = siblings[i + op.direction];
+      const siblings = m.layers.filter(l => l.parentID?.toUpperCase() === target.parentID?.toUpperCase()), i = siblings.indexOf(target), other = siblings[i + op.direction];
       if (!other) break;
       const a = m.layers.indexOf(target), b = m.layers.indexOf(other); [m.layers[a], m.layers[b]] = [m.layers[b], m.layers[a]]; break;
     }
     case 'parent': {
-      if (op.parentID && (!m.layers.some(l => l.id === op.parentID && l.isGroup) || descendants(target.id).has(op.parentID))) fail('invalid');
+      if (op.parentID && (!m.layers.some(l => l.id.toUpperCase() === op.parentID.toUpperCase() && l.isGroup) || descendants(target.id).has(op.parentID.toUpperCase()))) fail('invalid');
       if (op.parentID) target.parentID = op.parentID; else delete target.parentID; break;
     }
     case 'clip': if (target.isGroup) fail('unsupported'); if (op.sourceID) target.maskSourceID = op.sourceID; else delete target.maskSourceID; break;

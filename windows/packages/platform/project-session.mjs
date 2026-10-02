@@ -94,7 +94,7 @@ export class ProjectSession {
       current.location = result.destination; current.fingerprint = result.fingerprint;
       data.name = path.basename(result.destination);
       this.saved = data; clearTimeout(this.recoveryTimer);
-      await this.options.recovery?.clear(data.manifest.documentID);
+      try { await this.options.recovery?.clear(data.manifest.documentID); } catch { this.recoveryFailed = true; }
       return { ...this.view(), backup: !!result.backup };
     } catch (e) { return { error: e.code ?? 'write' }; }
     finally { this.pending = false; }

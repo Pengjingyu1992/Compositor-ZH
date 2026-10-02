@@ -73,7 +73,7 @@ export function importPSD(value, flatten = false) {
     const row = { id, name: String(l.name ?? 'Layer').slice(0, 256), isVisible: !l.hidden, opacity: l.opacity ?? 1, blendMode: l.children ? 'Normal' : BLEND_MODES[index], transform: placement(m.width, m.height) };
     if (parentID) row.parentID = parentID;
     if (l.children) {
-      if (!['pass through', 'normal', undefined].includes(l.blendMode) || l.effects || l.vectorMask) throw new ProjectError('psdConversion');
+      if (l.blendMode !== 'pass through' || l.effects || l.vectorMask) throw new ProjectError('psdConversion');
       row.isGroup = true; m.layers.push(row); visit(l.children, id);
     } else {
       const ranges = l.blendingRanges, normalRange = r => Array.isArray(r) && r.length === 4 && r.every((v,i) => v === [0,0,255,255][i]);
@@ -89,7 +89,7 @@ export function importPSD(value, flatten = false) {
       m.layers.push(row);
     }
     if (l.mask) {
-      if (l.mask.userMaskDensity !== undefined || l.mask.userMaskFeather || l.mask.vectorMaskDensity !== undefined || l.mask.vectorMaskFeather || l.realMask) throw new ProjectError('psdConversion');
+      if (l.mask.positionRelativeToLayer || l.mask.userMaskDensity !== undefined || l.mask.userMaskFeather || l.mask.vectorMaskDensity !== undefined || l.mask.vectorMaskFeather || l.realMask) throw new ProjectError('psdConversion');
       const image = getLayerMaskImageData(l);
       if (!image) throw new ProjectError('psdConversion');
       // PSD masks may use white outside their rectangle. Place them over a
@@ -146,7 +146,7 @@ export function exportPSD(data, payload) {
   const inputs = new Map(payload.layers.map(l => [l.id, l]));
   const convert = l => {
     const ps = { name: l.name, hidden: !l.isVisible, opacity: l.opacity ?? 1, blendMode: l.isGroup ? 'pass through' : PSD_MODES[BLEND_MODES.indexOf(l.blendMode ?? 'Normal')], top: 0, left: 0, bottom: height, right: width };
-    if (l.isGroup) ps.children = layers.filter(c => c.parentID === l.id).map(convert);
+    if (l.isGroup) ps.children = layers.filter(c => c.parentID?.toUpperCase() === l.id.toUpperCase()).map(convert);
     else if (l.imageFile) { const input = inputs.get(l.id); if (!input || !Number.isInteger(input.left) || !Number.isInteger(input.top) || Math.abs(input.left)>1_000_000 || Math.abs(input.top)>1_000_000) throw new ProjectError('invalid'); ps.imageData = pixels(input.image); ps.left=input.left; ps.top=input.top; ps.right=ps.left+ps.imageData.width; ps.bottom=ps.top+ps.imageData.height; }
     if (l.maskFile) {
       const value = payload.masks?.find(v => v.id === l.id);
@@ -160,7 +160,7 @@ export function exportPSD(data, payload) {
   };
   // PSD clipping is a contiguous sibling stack. Refuse unrelated relationships.
   for (const l of layers.filter(l => l.maskSourceID)) {
-    const siblings = layers.filter(s => s.parentID === l.parentID), index = siblings.indexOf(l);
+    const siblings = layers.filter(s => s.parentID?.toUpperCase() === l.parentID?.toUpperCase()), index = siblings.indexOf(l);
     let i = index - 1; while (i >= 0 && siblings[i].maskSourceID) i--;
     if (i < 0 || siblings[i].id !== l.maskSourceID) throw new ProjectError('psdConversion');
   }

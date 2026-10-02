@@ -89,6 +89,10 @@ async function chooseSave(current, as) {
   } catch (e) { if (e.code !== 'ENOENT') throw e; }
   return { location: selected.filePath, expected };
 }
+async function clearRecovery() {
+  clearTimeout(session.recoveryTimer);
+  if (session.current) try { await recovery.clear(session.current.data.manifest.documentID); } catch { /* Keep the snapshot if cleanup fails; this must not block quitting. */ }
+}
 async function canLeave() {
   if (session.pending) return false;
   if (!session.current || session.current.data === session.saved) return true;
@@ -97,7 +101,7 @@ async function canLeave() {
   try { choice = await dialog.showMessageBox(win, { type: 'warning', message: language === 'en' ? 'Save changes before leaving this project?' : '离开项目前保存修改？', buttons: language === 'en' ? ['Cancel', 'Discard', 'Save'] : ['取消', '放弃修改', '保存'], defaultId: 2, cancelId: 0 }); }
   finally { session.pending = false; }
   if (choice.response === 0) return false;
-  if (choice.response === 1) return true;
+  if (choice.response === 1) { await clearRecovery(); return true; }
   const result = await session.save(session.current.id, session.revision, c => chooseSave(c, false));
   return !!result.project && !result.error;
 }
@@ -142,7 +146,8 @@ win.webContents.on('will-attach-webview', event => event.preventDefault());
 win.on('close', event => {
   if (closing) return;
   event.preventDefault(); if (closePending) return; closePending = true;
-  canLeave().then(async ok => { if (ok) { if (session.current) await recovery.clear(session.current.data.manifest.documentID); closing = true; win.close(); } }).catch(() => {}).finally(() => closePending = false);
+  const waitForIdle = async () => { while (session.pending) await new Promise(resolve => setTimeout(resolve, 100)); return canLeave(); };
+  waitForIdle().then(async ok => { if (ok) { await clearRecovery(); closing = true; win.close(); } }).catch(() => {}).finally(() => closePending = false);
 });
 win.on('closed', () => { session.close(); win = null; });
 app.on('window-all-closed', () => app.quit());
@@ -162,7 +167,7 @@ handler('viewer:drop', async location => {
   if (!(await canLeave())) return { canceled: true }; return projectRequest(() => session.open(() => location));
 });
 handler('viewer:reload', async id => { if (!(await canLeave())) return { canceled: true }; return projectRequest(() => session.reload(id)); });
-handler('viewer:close', async () => { if (!(await canLeave())) return { closed: false }; if (session.current) await recovery.clear(session.current.data.manifest.documentID); const result = session.close(); nativeMenu(); return result; });
+handler('viewer:close', async () => { if (!(await canLeave())) return { closed: false }; await clearRecovery(); const result = session.close(); nativeMenu(); return result; });
 handler('editor:new', async (w, h) => { if (!(await canLeave())) return { canceled: true }; return projectRequest(() => Promise.resolve(session.create(w, h))); });
 handler('editor:edit', (id, revision, op) => { const result = session.edit(id, revision, op); nativeMenu(); return result; });
 handler('editor:history', (id, revision, dir) => { const result = session.history(id, revision, dir); nativeMenu(); return result; });

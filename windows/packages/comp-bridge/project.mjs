@@ -169,7 +169,7 @@ export function analyze(manifest, sourcePixels = 0, maskPixels = 0) {
   const visit = (parent, opacity, visible, depth) => {
     for (const l of children.get(parent) ?? []) {
       const shown = visible && l.isVisible, alpha = opacity * (l.opacity ?? 1);
-      const unknown = Object.keys(l).some(k => !KNOWN_LAYER.has(k)) || Object.keys(l.transform).some(k => !KNOWN_TRANSFORM.has(k));
+      const unknown = Object.keys(l).some(k => !KNOWN_LAYER.has(k)) || Object.keys(l.transform).some(k => !KNOWN_TRANSFORM.has(k)) || Object.keys(l.maskPlacement ?? {}).some(k => !KNOWN_TRANSFORM.has(k));
       const reasons = [];
       if (unknown) reasons.push('unknown');
       if (l.adjustment && !supportsAdjustment(l.adjustment)) reasons.push('adjustment');
@@ -178,7 +178,8 @@ export function analyze(manifest, sourcePixels = 0, maskPixels = 0) {
       // Complex, noncontiguous live-alpha relationships require a saved preview.
       if (l.maskSourceID) {
         const siblings = children.get(parent) ?? [], index = siblings.indexOf(l), source = manifest.layers.find(s => s.id.toUpperCase() === l.maskSourceID.toUpperCase());
-        if (!source || source.parentID?.toUpperCase() !== l.parentID?.toUpperCase() || !siblings.slice(0, index).some(s => s.id === source.id)) reasons.push('clipping');
+        const base = siblings.indexOf(source);
+        if (!source?.imageFile || source.maskSourceID || source.parentID?.toUpperCase() !== l.parentID?.toUpperCase() || base < 0 || base >= index || siblings.slice(base + 1, index).some(s => s.maskSourceID?.toUpperCase() !== source.id.toUpperCase())) reasons.push('clipping');
       }
       if (shown && alpha > 0) reasons.forEach(r => issues.add(r));
       const category = reasons.length ? 'preview' : l.text || l.shape ? 'pixels' : 'simple';

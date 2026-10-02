@@ -29,10 +29,10 @@ export function createPreviewRenderer() {
   const engine = createWebGLCompositor(), worker = new Worker(new URL('./pixels-worker.ts', import.meta.url), { type: 'module' });
   let live = true, width = 0, height = 0, frame = 0, requestID = 0, lossTimer: ReturnType<typeof setTimeout> | undefined;
   const pending = new Map<number, { resolve: (v: ImageData) => void; reject: (e: Error) => void }>();
-  worker.onmessage = event => { const p = pending.get(event.data.id); if (!p) return; pending.delete(event.data.id); if (event.data.error) p.reject(new Error('asset')); else { const r = event.data.result; p.resolve(new ImageData(r.data,r.width,r.height)); } };
-  worker.onerror = () => { for (const p of pending.values()) p.reject(new Error('asset')); pending.clear(); };
+  worker.onmessage = event => { const p = pending.get(event.data.id); if (!p) return; pending.delete(event.data.id); if (event.data.error) p.reject(new Error('asset')); else { try { const r = event.data.result; p.resolve(new ImageData(r.data,r.width,r.height)); } catch { p.reject(new Error('asset')); } } };
+  worker.onerror = event => { console.warn('Pixel worker failed',event.message);  for (const p of pending.values()) p.reject(new Error('asset')); pending.clear(); };
   function process(image: ImageData, adjustment?: Record<string, unknown>, effects?: Record<string, unknown>) {
-    return new Promise<ImageData>((resolve,reject) => { const id = ++requestID; pending.set(id,{resolve,reject}); worker.postMessage({id,image,adjustment,effects},[image.data.buffer]); });
+    return new Promise<ImageData>((resolve,reject) => { const id = ++requestID; pending.set(id,{resolve,reject}); worker.postMessage({id,image:{width:image.width,height:image.height,data:image.data},adjustment,effects},[image.data.buffer]); });
   }
   function pixels(c: HTMLCanvasElement) { return context(c).getImageData(0,0,width,height); }
   function put(c: HTMLCanvasElement, data: ImageData) { context(c).putImageData(data,0,0); }
@@ -86,7 +86,7 @@ export function createPreviewRenderer() {
         for(const l of rows){
           if(!live)throw new Error('stale');if(l.isGroup||!l.effectiveVisible||!l.effectiveOpacity||consumed.has(l.id))continue;
           if(l.adjustment&&!l.maskSourceID){await adjust(backdrop,l);continue;}
-          const siblings=rows.filter(s=>s.parentID===l.parentID&&!s.isGroup),index=siblings.indexOf(l),clipped:LayerRow[]=[];
+          const siblings=rows.filter(s=>s.parentID?.toUpperCase()===l.parentID?.toUpperCase()&&!s.isGroup),index=siblings.indexOf(l),clipped:LayerRow[]=[];
           if(!l.maskSourceID)for(let i=index+1;i<siblings.length&&siblings[i].maskSourceID?.toUpperCase()===l.id.toUpperCase();i++)clipped.push(siblings[i]);
           let image=await own(l,false);
           if(clipped.length){const base=pixels(image),opaque=pixels(image);for(let i=3;i<opaque.data.length;i+=4)opaque.data[i]=255;put(image,opaque);

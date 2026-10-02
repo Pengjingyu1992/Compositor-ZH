@@ -9,7 +9,7 @@ const root=fileURLToPath(new URL('../../',import.meta.url));
 let temp,source,instance,page;
 test.beforeEach(async()=>{
   temp=await mkdtemp(path.join(os.tmpdir(),'comp-edit-smoke-'));source=path.join(temp,'source.comp');await fixture(source);
-  instance=await _electron.launch({timeout:30000,executablePath:path.join(root,'release/win-unpacked/Compositor.exe'),args:['--use-angle=swiftshader','--enable-unsafe-swiftshader'],env:{...process.env,APPDATA:temp}});page=await instance.firstWindow();
+  instance=await _electron.launch({timeout:30000,executablePath:path.join(root,'release/win-unpacked/Compositor.exe'),args:['--use-angle=swiftshader','--enable-unsafe-swiftshader'],env:{...process.env,APPDATA:temp}});page=await instance.firstWindow();page.on('console',m=>{if(['error','warning'].includes(m.type()))console.error('Renderer:',m.text());});page.on('pageerror',e=>console.error('Renderer error:',e.message));
   await instance.evaluate(({dialog},source)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[source]});dialog.showMessageBox=async()=>({response:1});},source);
   await page.locator('.toolbar .primary').click();await expect(page.getByTestId('rendered-canvas')).toBeVisible();
 });

@@ -13,7 +13,7 @@ export const sensitive = [
   /(?:api[_-]?key|access[_-]?token|password)\s*[:=]\s*["'][A-Za-z0-9_\-]{20,}["']/i
 ];
 for (const file of files) {
-  if (!/\.(?:mjs|cjs|ts|vue|md|yml|json|txt)$/.test(file) || !(file.startsWith('windows/') || file.startsWith('docs/windows-') || file.includes('/windows-'))) continue;
+  if (!/\.(?:mjs|cjs|ts|vue|md|yml|json|txt|py)$/.test(file) || !(file.startsWith('windows/') || file.startsWith('docs/windows-') || file.includes('/windows-'))) continue;
   const text = await readFile(path.join(root, file), 'utf8');
   if (sensitive.some(pattern => pattern.test(text))) findings.push(file);
 }

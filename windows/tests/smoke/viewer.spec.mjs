@@ -104,6 +104,7 @@ test('reload, anonymous clipboard report, and close preserve the source package'
   try {
     await expect(page.getByTestId('copy-report')).toBeEnabled();
     await page.getByTestId('copy-report').click();
+    await expect(page.getByRole('status')).toContainText(/报告已复制|Report copied/);
     const reportText = await instance.evaluate(({ clipboard }) => clipboard.readText());
     const report = JSON.parse(reportText);
     expect(report.project.layerCount).toBe(2); expect(report.preview.source).toBe('engine');

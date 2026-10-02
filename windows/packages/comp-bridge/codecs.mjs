@@ -22,11 +22,11 @@ export function encodePixels(pixels, gray = false) {
   return { bytes: png, mime: 'image/png', width: pixels.width, height: pixels.height };
 }
 export function decodePNG(resource) {
-  const dim=pngDimensions(resource.bytes);bound(dim.width,dim.height);
+  const dim=pngDimensions(resource.bytes,resource.bytes[25]===0);bound(dim.width,dim.height);
   const image=PNG.sync.read(resource.bytes,{checkCRC:true});return {...dim,data:new Uint8ClampedArray(image.data)};
 }
 export function validatePNG(value, mask = false) {
-  const b = bytes(value), dim = pngDimensions(b); bound(dim.width, dim.height);
+  const b = bytes(value), dim = pngDimensions(b,mask && b[25]===0); bound(dim.width, dim.height);
   const image = PNG.sync.read(b, { checkCRC: true });
   if (mask) {
     for (let i = 0; i < image.data.length; i += 4) image.data[i + 1] = image.data[i + 2] = image.data[i], image.data[i + 3] = 255;

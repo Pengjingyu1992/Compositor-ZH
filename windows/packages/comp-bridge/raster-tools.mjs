@@ -133,6 +133,6 @@ export function inpaintPixels(image,selection,t) {
 }
 export function applySelectedFilter(image,t,selection,kind,settings) {
   const changed=kind==='Content-Aware Fill'?inpaintPixels(image,selection,t):filterPixels(image,kind,settings),out=new Uint8ClampedArray(image.data);
-  for(let y=0;y<image.height;y++)for(let x=0;x<image.width;x++){const a=selectionCoverage(selection,toDocument([x+.5,y+.5],t,image.width,image.height)),at=(y*image.width+x)*4;for(let c=0;c<4;c++)out[at+c]=out[at+c]*(1-a)+changed.data[at+c]*a;}
+  for(let y=0;y<image.height;y++)for(let x=0;x<image.width;x++){const a=selectionCoverage(selection,toDocument([x+.5,y+.5],t,image.width,image.height)),at=(y*image.width+x)*4;const before=image.data[at+3]/255,after=changed.data[at+3]/255,alpha=before*(1-a)+after*a;for(let c=0;c<3;c++)out[at+c]=alpha?(image.data[at+c]*before*(1-a)+changed.data[at+c]*after*a)/alpha:0;out[at+3]=alpha*255;}
   return {width:image.width,height:image.height,data:out};
 }

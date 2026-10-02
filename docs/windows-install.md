@@ -2,8 +2,8 @@
 
 ## 下载和安装
 
-1. 打开 [Windows 编辑预览版发行页](https://github.com/Pengjingyu1992/Compositor-ZH/releases/tag/windows-v0.2.0-alpha.2)。`releases/latest` 保留给 macOS。
-2. 目标系统：**Windows 10 22H2 / Windows 11，Intel/AMD x64**。下载 `Compositor-Windows-0.2.0-alpha.2-x64.exe`，运行安装向导。无需 Node.js、Xcode 或 API Key；暂无 ARM64/32 位包。
+1. 打开 [Windows 编辑器预发布页](https://github.com/Pengjingyu1992/Compositor-ZH/releases/tag/windows-v0.3.0-alpha.1)。`releases/latest` 保留给 macOS。
+2. 目标系统：**Windows 10 22H2 / Windows 11，Intel/AMD x64**。下载 `Compositor-Windows-0.3.0-alpha.1-x64.exe`，运行安装向导。无需 Node.js、Xcode 或 API Key；暂无 ARM64/32 位包。
 3. 便携版下载同名 ZIP，**完整解压**，运行 `Compositor.exe`。保留 resources、DLL、语言资源和许可证。
 4. 社区包未签名。核对来源和 SHA-256 后按系统提供的选项打开；无需关闭 Defender。
 5. 右上角切换简体中文 / English，即时生效并保留到下次启动。
@@ -12,8 +12,8 @@
 
 ## 界面布局
 
-- 顶部保留 Windows 原生文件/编辑/显示/图层/帮助菜单，紧凑文档栏放常用打开、新建、保存、撤销和缩放。
-- 工具参数栏随移动/画笔/橡皮擦/抓手切换；左侧使用统一 SVG 图标。
+- 顶部保留 Windows 原生文件/编辑/显示/选择/图像/图层/滤镜/帮助菜单，紧凑文档栏放常用打开、新建、保存、撤销和缩放。
+- 工具参数栏随左侧 17 个工具切换；左侧使用统一 SVG 图标。
 - 右侧上方为图层：混合、不透明度、缩略图、可见性、蒙版与新增/删除操作；搜索按需展开。
 - 右侧下方使用属性/调整/效果选项卡。原始数据和兼容性报告集中到“项目详情”，不占用常规编辑空间。
 - 小画布也可放大适合窗口；100% 与用户缩放入口保留。
@@ -21,15 +21,17 @@
 ## 打开与编辑
 
 - 将 macOS 保存的**整个 `.comp` 文件夹**复制到 Windows；保留 manifest.json、images 和全部资源。Ctrl+O 选择项目文件夹，也可拖入一个完整文件夹。
-- 新建画布支持互换宽高。导入 PNG/JPEG，建立像素层/组/调整层；现有文字和形状使用保存的像素。画笔改动文字/形状像素会移除其可编辑元数据，撤销可恢复。
-- 左侧工具：移动（V）、画笔（B）、橡皮擦（E）、抓手（H）。选中图层后绘画；目标选择“蒙版”可绘制白色显露、橡皮擦绘制黑色隐藏。Escape 取消当前笔画。
-- 右侧编辑名称、可见性、不透明度、24 种混合、位置/大小/旋转/翻转、所属组和剪贴源；组移动带动全部后代。删除剪贴源会解除引用，组删除包含后代。复制像素层保留原始资源并生成新 UUID。
-- 可添加/移除/反转/启停蒙版，切换链接状态。支持独立蒙版位置的渲染；本版没有独立蒙版变换控件。
+- 新建画布支持互换宽高。导入 PNG/JPEG，建立像素层/组/调整层、中文文字及矩形/椭圆/直线形状；文字和形状同时保存参数与像素，支持重新编辑。画笔改动文字/形状像素会移除其可编辑元数据，撤销可恢复。
+- 左侧工具：移动、选框、套索、魔棒、裁剪、画笔、橡皮擦、修复、仿制、涂抹、渐变、油漆桶、形状、文字、取色、抓手、缩放。选中图层后绘画；目标选择“蒙版”可绘制白色显露、橡皮擦绘制黑色隐藏。Escape 取消当前笔画。
+- 右侧编辑名称、可见性、不透明度、24 种混合、位置/大小/旋转/翻转、所属组和剪贴源；组移动带动全部后代。删除剪贴源会解除引用，组删除包含后代。Ctrl/Shift 多选，对齐/分布、编组、组树复制、合并/拼合共用事务；复制保留原始资源并生成新 UUID。
+- 可添加/移除/反转/启停蒙版，切换链接状态。支持独立蒙版位置的渲染；蒙版解链后可编辑其位置、尺寸和旋转。
 - 12 类调整：色相/饱和度、色阶、曲线、曝光、渐变映射、颗粒、反相、黑白、色彩平衡、高斯模糊、动感模糊、添加杂色。曲线点击添加点并可重置。6 类效果：描边、投影、颜色叠加、内阴影、外发光、内发光。
 - Ctrl+Z 撤销、Ctrl+Shift+Z 重做；每个完整操作/笔画一个历史步骤。历史最多 80 步，按共享图像缓冲计入 256 MiB 预算。超预算时丢弃最旧历史。
 - Ctrl+0 适合窗口、Ctrl+1 原始大小、Ctrl+滚轮缩放；抓手平移。搜索和折叠图层不会更改项目。
 
 Windows 渲染仍是**候选实现**：所有混合空间显式设为 sRGB；尚未完成 macOS 黄金图定标。空间滤镜、描边及发光采用有界近似，不能据功能名称宣称逐像素一致。高级 HSV 分色范围、未知属性和不能准确映射的剪贴关系会明确回退到保存的预览并禁止视觉编辑；仅允许改名及无损保存副本。没有预览时只显示图层/属性，不展示缺层的残缺合成图。
+
+工具、选区、文字、滤镜、锁定与快捷键完整说明见 [Windows 编辑器工具补全](windows-full-editor.md)。
 
 ## 保存与恢复
 
@@ -61,7 +63,7 @@ Windows 渲染仍是**候选实现**：所有混合空间显式设为 sRGB；尚
 ## 校验下载
 
 ```powershell
-Get-FileHash .\Compositor-Windows-0.2.0-alpha.2-x64.exe -Algorithm SHA256
+Get-FileHash .\Compositor-Windows-0.3.0-alpha.1-x64.exe -Algorithm SHA256
 ```
 
 与发行页 SHA256SUMS.txt 比较；ZIP 同样校验。
@@ -83,9 +85,9 @@ Windows 使用 windows-v* 标签、预发布、make_latest=false。下载审核�
 
 ## English summary
 
-Install the x64 EXE or fully extract the ZIP from the [Windows editor prerelease](https://github.com/Pengjingyu1992/Compositor-ZH/releases/tag/windows-v0.2.0-alpha.2). No Node.js or API key is required. Verify SHA-256; packages are unsigned. Target: Windows 10 22H2 / Windows 11 x64; hardware, IME, high-DPI and real Photoshop acceptance remain pending.
+Install the x64 EXE or fully extract the ZIP from the [Windows editor prerelease](https://github.com/Pengjingyu1992/Compositor-ZH/releases/tag/windows-v0.3.0-alpha.1). No Node.js or API key is required. Verify SHA-256; packages are unsigned. Target: Windows 10 22H2 / Windows 11 x64; hardware, IME, high-DPI and real Photoshop acceptance remain pending.
 
-Edit layers, paint pixels/masks, adjust appearance and effects, undo/redo, Save/Save As, restore local snapshots, and convert PSD/PNG. Unknown data is retained. Text/shapes use saved pixels and are rasterized by painting. Unsupported compositions remain read-only with explicit saved-preview fallback. All 24 blends are candidates, with macOS golden-image calibration pending; spatial filters/effects use bounded approximations.
+Use 17 tools: selections, crop/resize, Chinese text, editable shapes, gradients/bucket, painting/masks, clone/healing/smear, navigation and eyedropper. Multi-select, align/distribute, group/duplicate/merge, 21 filters, adjustments/effects, clipboard, undo/redo, Save/Save As, recovery and PSD/PNG conversion are available. Unknown data is retained. Text/shapes save parameters with pixels; painting rasterizes them. Locks are session-only. Unsupported compositions remain read-only with explicit saved-preview fallback. All 24 blends are candidates, with macOS golden-image calibration pending; spatial filters/effects use bounded approximations.
 
 Overwrite saves stage and validate a complete package, reject external changes, retain a complete backup, and use a durable journal for interruption recovery. Two directory renames are not one atomic operation. Recovery copies never mark the project saved. PSD layers preserve core structure/masks; text/shapes rasterize and adjustment/effect projects require explicit flattened PSD export. No telemetry or project upload. Windows settings, releases and binaries are independent of macOS.
 

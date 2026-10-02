@@ -53,11 +53,17 @@ export function maskBounds(mask,w,h) {
 export function shapeMask(w,h,kind,start,end,points=[]) {
   validSurface(w,h);const out=new Uint8Array(w*h);
   const x0=Math.min(start[0],end[0]),y0=Math.min(start[1],end[1]),rw=Math.max(1,Math.abs(end[0]-start[0])),rh=Math.max(1,Math.abs(end[1]-start[1]));
-  let rect=kind==='lasso'?union(points.map(p=>({x:p[0],y:p[1],w:1,h:1}))):{x:x0,y:y0,w:rw,h:rh};
+  if(kind==='lasso'){
+    const rect=union(points.map(p=>({x:p[0],y:p[1],w:1,h:1})));
+    for(let y=Math.max(0,Math.floor(rect.y));y<Math.min(h,Math.ceil(rect.y+rect.h));y++){
+      const crossings=[];for(let i=0,j=points.length-1;i<points.length;j=i++){const a=points[i],b=points[j];if((a[1]>y+.5)!==(b[1]>y+.5))crossings.push((b[0]-a[0])*(y+.5-a[1])/(b[1]-a[1])+a[0]);}
+      crossings.sort((a,b)=>a-b);for(let i=0;i+1<crossings.length;i+=2){const start=Math.max(0,Math.ceil(crossings[i]-.5)),end=Math.min(w,Math.ceil(crossings[i+1]-.5));if(end>start)out.fill(255,y*w+start,y*w+end);}
+    }
+    return out;
+  }
+  const rect={x:x0,y:y0,w:rw,h:rh};
   for(let y=Math.max(0,Math.floor(rect.y));y<Math.min(h,Math.ceil(rect.y+rect.h));y++)for(let x=Math.max(0,Math.floor(rect.x));x<Math.min(w,Math.ceil(rect.x+rect.w));x++){
-    let inside=true;
-    if(kind==='ellipse')inside=((x+.5-x0-rw/2)/(rw/2))**2+((y+.5-y0-rh/2)/(rh/2))**2<=1;
-    if(kind==='lasso'){inside=false;for(let i=0,j=points.length-1;i<points.length;j=i++){const a=points[i],b=points[j];if((a[1]>y+.5)!==(b[1]>y+.5)&&x+.5<(b[0]-a[0])*(y+.5-a[1])/(b[1]-a[1])+a[0])inside=!inside;}}
+    const inside=kind!=='ellipse'||((x+.5-x0-rw/2)/(rw/2))**2+((y+.5-y0-rh/2)/(rh/2))**2<=1;
     if(inside)out[y*w+x]=255;
   }
   return out;

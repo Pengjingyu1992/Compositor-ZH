@@ -195,7 +195,7 @@ function buildEdit(data,op) {
   });
 }
 handler('editor:edit', (id,revision,op)=>{
-  const heavy=o=>['stroke','fill','gradient','bucket','filter','imageSize','applyMask','selectionMask'].includes(o?.kind)||(o?.kind==='selection'&&o.action==='wand')||(o?.kind==='batch'&&Array.isArray(o.operations)&&o.operations.some(heavy));
+  const heavy=o=>['stroke','fill','gradient','bucket','filter','imageSize','applyMask','selectionMask'].includes(o?.kind)||o?.kind==='selection'||(o?.kind==='batch'&&Array.isArray(o.operations)&&o.operations.some(heavy));
   return projectRequest(async()=>{const result=heavy(op)?await session.editAsync(id,revision,op,buildEdit):session.edit(id,revision,op);nativeMenu();return result;});
 });
 handler('editor:clipboard',async(id,revision,action,png)=>{

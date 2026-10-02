@@ -52,7 +52,7 @@ test('canvas crop preserves effects and pixels; image resizing scales and raster
   a=change(a,{kind:'imageSize',width:32,height:24});assert.equal(a.resources.get(`images/${id}.png`).width,64);assert.equal(a.manifest.layers[0].effects.shadow.distance,20);
 });
 test('group duplication remaps descendants; ancestor locks stop every pixel path',()=>{
-  const {data,id}=setup();let a=change(data,{kind:'group',ids:[id],name:'Group'}),group=a.manifest.activeLayerID;a=change(a,{kind:'duplicateTree',id:group});assert.equal(a.manifest.layers.length,4);assert.equal(new Set(a.manifest.layers.map(l=>l.id)).size,4);
+  const {data,id}=setup();let a=change(data,{kind:'group',ids:[id],name:'Group'}),group=a.manifest.activeLayerID;const hidden=change(a,{kind:'appearance',id:group,field:'isVisible',value:false});assert.equal(change(hidden,{kind:'ungroup',id:group}).manifest.layers.find(l=>l.id===id).isVisible,false);a=change(a,{kind:'duplicateTree',id:group,copySuffix:' 副本'});assert.equal(a.manifest.layers.length,4);assert.equal(new Set(a.manifest.layers.map(l=>l.id)).size,4);assert.equal(a.manifest.layers.find(l=>l.id===a.manifest.activeLayerID).name,'Group 副本');
   a=change(a,{kind:'lock',id:group,field:'content',value:true});for(const kind of ['delete','fill','filter','stroke','pixels'])assert.throws(()=>change(a,{kind,id,filter:'Invert',settings:{points:[[2,2]]}}),e=>e.code==='locked');
 });
 test('style creation validates UTF-16 runs and saves only current schema fields',()=>{

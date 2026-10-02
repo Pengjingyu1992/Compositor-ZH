@@ -86,7 +86,7 @@ export function useCompleteEditor(c:Context){
   function trim(){const surface=c.canvas.value;if(!surface)return;const pixels=surface.getContext('2d')!.getImageData(0,0,surface.width,surface.height).data,alpha=Uint8Array.from({length:surface.width*surface.height},(_,i)=>pixels[i*4+3]),box=maskBounds(alpha,surface.width,surface.height);if(box)return c.execute({kind:'canvas',x:box.x,y:box.y,width:box.w,height:box.h});}
   function align(operation:string){return c.execute({kind:'arrange',ids:ids.value.length?ids.value:[c.selected.value?.id].filter(Boolean),operation,reference:options.reference,keyID:c.selected.value?.id});}
   function group(){return c.execute({kind:'group',ids:ids.value,name:labels.value.group});}
-  function duplicate(){const p=c.project.value;if(!p)return;return c.execute({kind:'batch',operations:roots(p,ids.value).map(id=>({kind:'duplicateTree',id}))});}
+  function duplicate(){const p=c.project.value;if(!p)return;return c.execute({kind:'batch',operations:roots(p,ids.value).map(id=>({kind:'duplicateTree',id,copySuffix:labels.value.copySuffix}))});}
   function remove(){const p=c.project.value;if(!p)return;return c.execute({kind:'batch',operations:roots(p,ids.value).map(id=>({kind:'delete',id}))});}
   function merge(flatten=false){return instant(()=>performMerge(flatten));}
   async function performMerge(flatten=false){const p=c.project.value;if(!p||!c.canvas.value)return;const chosen=flatten?p.manifest.layers.filter(l=>!l.parentID).map(l=>l.id):roots(p,ids.value);if(!chosen.length)return;

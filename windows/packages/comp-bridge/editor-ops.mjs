@@ -131,10 +131,11 @@ export function editorOperation(data,m,resources,target,op,codecs,descendants) {
       operationTargets(m,op);const ls=roots(op.ids);if(!ls.length||ls.some(l=>l.parentID!==ls[0].parentID))fail('invalid');const id=randomUUID().toUpperCase(),group={id,name:String(op.name??'Group').slice(0,256),isVisible:true,isGroup:true,transform:place(m.width,m.height)};if(ls[0].parentID)group.parentID=ls[0].parentID;
       m.layers.splice(Math.min(...ls.map(l=>m.layers.indexOf(l))),0,group);for(const l of ls)l.parentID=id;m.activeLayerID=id;return true;
     }
-    case 'ungroup':{if(!target.isGroup||target.maskFile||(target.opacity??1)!==1)fail('unsupported');const children=m.layers.filter(l=>l.parentID===target.id);for(const l of children){if(target.parentID)l.parentID=target.parentID;else delete l.parentID;}m.layers=m.layers.filter(l=>l.id!==target.id);if(children.length)m.activeLayerID=children[0].id;else delete m.activeLayerID;return true;}
+    case 'ungroup':{if(!target.isGroup||target.maskFile||(target.opacity??1)!==1)fail('unsupported');const children=m.layers.filter(l=>l.parentID===target.id);for(const l of children){if(!target.isVisible)l.isVisible=false;if(target.parentID)l.parentID=target.parentID;else delete l.parentID;}m.layers=m.layers.filter(l=>l.id!==target.id);if(children.length)m.activeLayerID=children[0].id;else delete m.activeLayerID;return true;}
     case 'duplicateTree':{
       const ids=descendants(target.id),ls=m.layers.filter(l=>ids.has(l.id.toUpperCase())),map=new Map(ls.map(l=>[l.id,randomUUID().toUpperCase()]));
-      const copies=ls.map(l=>{const v=structuredClone(l);v.id=map.get(l.id);if(l.id===target.id)v.name+=' (copy)';if(map.has(v.parentID))v.parentID=map.get(v.parentID);if(map.has(v.maskSourceID))v.maskSourceID=map.get(v.maskSourceID);for(const f of ['imageFile','maskFile'])if(v[f]){const old=v[f];v[f]=v.id+(f==='maskFile'?'.mask':'')+'.png';resources.set(`images/${v[f]}`,resources.get(`images/${old}`));}return v;});
+      const suffix=typeof op.copySuffix==='string'&&op.copySuffix.length<=32?op.copySuffix:' (copy)';
+      const copies=ls.map(l=>{const v=structuredClone(l);v.id=map.get(l.id);if(l.id===target.id)v.name=v.name.slice(0,256-suffix.length)+suffix;if(map.has(v.parentID))v.parentID=map.get(v.parentID);if(map.has(v.maskSourceID))v.maskSourceID=map.get(v.maskSourceID);for(const f of ['imageFile','maskFile'])if(v[f]){const old=v[f];v[f]=v.id+(f==='maskFile'?'.mask':'')+'.png';resources.set(`images/${v[f]}`,resources.get(`images/${old}`));}return v;});
       m.layers.splice(m.layers.indexOf(target)+ls.length,0,...copies);m.activeLayerID=map.get(target.id);return true;
     }
     case 'merge':{

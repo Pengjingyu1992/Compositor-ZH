@@ -1,0 +1,34 @@
+export const messages = {
+  'zh-Hans': {
+    title: '叠绘', subtitle: 'Windows · 只读预览', open: '打开项目', fit: '适合窗口', language: '界面语言',
+    welcome: '让你的叠层作品，来到 Windows。', intro: '打开 macOS 版保存的 .comp 项目文件夹，查看画布、图层和原始属性。',
+    readonly: '只读 · 不修改项目', hint: '支持 .comp 1–11 · 完全离线 · Ctrl+O 打开',
+    empty: '打开项目后，在这里查看图层。', layers: '图层', properties: '原始属性（只读）', noSelection: '选择一个图层查看其属性。',
+    engine: 'Pentrado 图层预览 · 尚未完成 macOS 黄金图比对', saved: 'macOS 保存的预览图 · 可能不是最新内容', noPreview: '该项目需要保存的预览图，但文件中没有可用预览。图层和属性仍可查看。',
+    loading: '正在读取项目…', rendering: '正在合成预览…', errorTitle: '无法打开项目',
+    fallback: '本版未渲染以下属性，已使用保存的预览图：', detailsOnly: '本版未渲染以下属性：',
+    coverage: '后续编辑范围评估', simple: '基础图层', pixels: '文字/形状像素预览', preview: '复杂属性只读',
+    coverageNote: '当前版本全部只读；这些数字是按图层分类的能力估计，不代表已经可以编辑。',
+    group: '图层组', text: '文字', shape: '形状', raster: '像素', adjustment: '调整层',
+    settingsError: '语言设置未能保存，请检查设置目录是否可写。', metadata: '元数据', version: '版本',
+    sourceNote: '基于 Compositor 与 Pentrado，感谢 Robbie Tilton 和 Terry Jia。',
+    issues: { unknown: '未知字段', adjustment: '调整层', effects: '图层效果', clipping: '剪贴蒙版', groupMask: '组蒙版', unlinkedMask: '独立蒙版位置', blend: '非正常混合模式', sampling: '最近邻采样', memory: '超过当前预览内存预算', gpu: '显卡或 WebGL 功能不足', asset: '图像解码失败' },
+    errors: { invalid: '项目数据无效或图层关系不完整。', version: '只支持 .comp 格式版本 1–11。', colorSpace: '目前只支持 sRGB 项目。', limit: '项目超过读取限额：单个资源 64 MiB，总编码资源 256 MiB。', path: '请直接选择 .comp 文件夹，不使用快捷方式、链接或不安全的资源路径。', asset: '项目中包含无效或不支持的图像资源。', changed: '读取时文件发生了变化，请重新打开。', missing: '找不到项目文件或图层资源，请复制完整的 .comp 文件夹。', read: '读取失败，请检查项目目录和访问权限。', stale: '项目已切换，请重新打开。', busy: '正在打开另一个项目。' }
+  },
+  en: {
+    title: 'Compositor', subtitle: 'Windows · Read-only preview', open: 'Open project', fit: 'Fit to window', language: 'Interface language',
+    welcome: 'Your layered work, now on Windows.', intro: 'Open a .comp folder saved by the macOS app to inspect its canvas, layers, and original properties.',
+    readonly: 'Read-only · No project changes', hint: '.comp 1–11 · Offline · Ctrl+O to open',
+    empty: 'Open a project to inspect its layers.', layers: 'Layers', properties: 'Original properties (read-only)', noSelection: 'Select a layer to inspect its properties.',
+    engine: 'Pentrado layer preview · macOS golden-image comparison pending', saved: 'Preview saved by macOS · May be out of date', noPreview: 'This project needs a saved preview, but none is available. Layers and properties remain accessible.',
+    loading: 'Reading project…', rendering: 'Compositing preview…', errorTitle: 'Unable to open project',
+    fallback: 'Using the saved preview because these properties are not rendered:', detailsOnly: 'These properties are not rendered in this version:',
+    coverage: 'Potential editing coverage', simple: 'Basic layers', pixels: 'Text/shape raster previews', preview: 'Complex read-only properties',
+    coverageNote: 'All layers are read-only today. These counts classify potential capability; they do not enable editing.',
+    group: 'Group', text: 'Text', shape: 'Shape', raster: 'Pixels', adjustment: 'Adjustment',
+    settingsError: 'Could not save the language setting. Check access to the settings directory.', metadata: 'Metadata', version: 'Version',
+    sourceNote: 'Built on Compositor and Pentrado. Thank you, Robbie Tilton and Terry Jia.',
+    issues: { unknown: 'Unknown fields', adjustment: 'Adjustment layers', effects: 'Layer effects', clipping: 'Clipping masks', groupMask: 'Group masks', unlinkedMask: 'Independent mask placement', blend: 'Non-Normal blend modes', sampling: 'Nearest-neighbor sampling', memory: 'Preview memory budget exceeded', gpu: 'GPU or WebGL capability unavailable', asset: 'Image decoding failed' },
+    errors: { invalid: 'Invalid project data or layer relationships.', version: 'Only .comp format versions 1–11 are supported.', colorSpace: 'Only sRGB projects are supported.', limit: 'Read limit exceeded: 64 MiB per resource, 256 MiB total encoded resources.', path: 'Select a .comp folder directly, without shortcuts, links, or unsafe resource paths.', asset: 'The project contains an invalid or unsupported image resource.', changed: 'A file changed during reading. Open the project again.', missing: 'Project files or layer resources are missing. Copy the entire .comp folder.', read: 'Cannot read the project. Check the folder and permissions.', stale: 'The project changed. Open it again.', busy: 'Another project is being opened.' }
+  }
+} as const;

@@ -1,0 +1,66 @@
+name: Windows verify and package
+
+on:
+  workflow_dispatch:
+  workflow_call:
+  push:
+    branches: ['**']
+    paths: ['windows/**', 'docs/windows-*.md', 'docs/project-format.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md', '.github/workflows/windows-*.yml']
+  pull_request:
+    paths: ['windows/**', 'docs/windows-*.md', 'docs/project-format.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md', '.github/workflows/windows-*.yml']
+
+concurrency:
+  group: windows-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: Windows x64 cloud checks and installers
+    runs-on: windows-2025
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: windows
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: windows/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: Review source and localization
+        run: node scripts/audit-source.mjs
+      - name: Type check
+        run: npm run typecheck
+      - name: Project validation and preservation checks
+        run: npm test
+      - name: Build Windows installer and ZIP
+        run: npm run package:win
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Electron cloud smoke checks (software GPU)
+        run: npm run smoke
+      - name: Inspect packaged resources and write checksums
+        run: node scripts/audit-package.mjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: compositor-windows-x64
+          path: |
+            windows/release/*.exe
+            windows/release/*.zip
+            windows/release/SHA256SUMS.txt
+            windows/release/PACKAGE-REVIEW.json
+          retention-days: 14
+          if-no-files-found: error
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: failure()
+        with:
+          name: windows-check-diagnostics
+          path: windows/test-results/
+          retention-days: 7
+          if-no-files-found: ignore

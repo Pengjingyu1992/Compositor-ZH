@@ -1,0 +1,55 @@
+{
+  "name": "compositor-windows",
+  "version": "0.1.0-alpha.1",
+  "description": "Compositor / 叠绘 Windows read-only project viewer, built with the Pentrado engine",
+  "author": "Compositor-ZH contributors",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "main": "apps/desktop/main/index.mjs",
+  "engines": { "node": ">=22.12" },
+  "scripts": {
+    "build": "node scripts/prepare.mjs && vite build",
+    "typecheck": "vue-tsc --noEmit",
+    "test": "node --test tests/*.test.mjs",
+    "smoke": "playwright test",
+    "start": "electron .",
+    "package:win": "npm run build && electron-builder --win nsis zip --x64 --publish never"
+  },
+  "devDependencies": {
+    "pentrado": "0.1.1",
+    "vue": "3.5.43",
+    "@playwright/test": "1.63.0",
+    "@types/node": "24.19.1",
+    "@vitejs/plugin-vue": "6.0.9",
+    "electron": "44.5.1",
+    "electron-builder": "26.15.3",
+    "typescript": "5.9.3",
+    "vite": "8.3.2",
+    "vue-tsc": "3.3.12"
+  },
+  "build": {
+    "appId": "org.compositorzh.windows",
+    "productName": "Compositor",
+    "artifactName": "Compositor-Windows-${version}-${arch}.${ext}",
+    "directories": { "output": "release", "buildResources": "assets" },
+    "files": ["apps/desktop/main/**", "apps/desktop/preload/**", "packages/comp-bridge/**", "packages/platform/**", "out/renderer/**", "package.json"],
+    "extraResources": [
+      { "from": "out/licenses", "to": "licenses" },
+      { "from": "../LICENSE", "to": "licenses/Compositor-LICENSE.txt" },
+      { "from": "THIRD_PARTY_NOTICES.md", "to": "licenses/THIRD_PARTY_NOTICES.md" }
+    ],
+    "asar": true,
+    "npmRebuild": false,
+    "win": { "icon": "assets/app.ico", "target": ["nsis", "zip"] },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false,
+      "createDesktopShortcut": true,
+      "shortcutName": "Compositor Windows",
+      "uninstallDisplayName": "Compositor Windows"
+    }
+  }
+}

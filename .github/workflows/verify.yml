@@ -2,7 +2,17 @@ name: Verify
 
 on:
   push:
+    branches: ['**']
+    tags: ['v*']
+    paths-ignore:
+      - 'windows/**'
+      - 'docs/windows-*.md'
+      - '.github/workflows/windows-*.yml'
   pull_request:
+    paths-ignore:
+      - 'windows/**'
+      - 'docs/windows-*.md'
+      - '.github/workflows/windows-*.yml'
 
 concurrency:
   group: verify-${{ github.workflow }}-${{ github.ref }}

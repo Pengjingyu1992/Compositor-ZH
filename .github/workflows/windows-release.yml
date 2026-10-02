@@ -1,0 +1,12 @@
+name: Windows release candidate
+on:
+  workflow_dispatch:
+  push:
+    tags: ['windows-v*']
+permissions:
+  contents: read
+jobs:
+  candidate:
+    uses: ./.github/workflows/windows-verify.yml
+# Publication is deliberately a separate reviewed step. See docs/windows-install.md.
+# Never publish a Windows candidate as /releases/latest automatically.

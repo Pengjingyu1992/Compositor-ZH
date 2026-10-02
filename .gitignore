@@ -33,3 +33,14 @@ localization-audit.json
 # Claude Code settings personal to this machine
 .claude/settings.local.json
 BUILD_PLAN.md
+
+# Windows dependencies and generated packages
+node_modules/
+.vite/
+windows/**/out/
+windows/**/release/
+windows/**/test-results/
+windows/**/playwright-report/
+windows/**/*.asar
+windows/assets/app.ico
+windows/apps/desktop/renderer/public/

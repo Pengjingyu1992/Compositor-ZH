@@ -14,6 +14,14 @@ Built on **[Compositor](https://github.com/robbietilton/Compositor)** by **[Robb
 
 ## 下载与使用 / Download and use
 
+### Windows 10 / 11（独立预览版 / Separate preview）
+
+- **[Windows 下载 / Windows downloads](https://github.com/Pengjingyu1992/Compositor-ZH/releases/tag/windows-v0.1.0-alpha.1)** · **[安装说明 / Installation guide](docs/windows-install.md)**
+- Windows 10 22H2 / Windows 11，x64。首版是 `.comp` **只读查看器**，可以查看项目、图层与原始属性，并即时切换中英文。编辑、保存、PSD 和绘图工具尚未开放。 / Windows 10 22H2 / Windows 11, x64. This first release is a **read-only .comp viewer**, with layer/property inspection and persistent Chinese/English switching. Editing, saving, PSD, and painting are not enabled.
+- 基于 Pentrado 引擎，拥有独立安装包、设置和发行标签；不会替换 macOS 版。复杂项目会明确使用 macOS 保存的预览图。真实 Windows 10/11 显卡与用户项目验收仍待完成。 / Built with Pentrado, with separate packages, settings, and release tags. Complex projects explicitly use the preview saved by macOS. Real Windows GPU and user-project acceptance is pending.
+
+### macOS
+
 - [下载最新版本 / Download the latest release](https://github.com/Pengjingyu1992/Compositor-ZH/releases/latest)
 - **macOS 26 或更高版本，Apple Silicon。 / macOS 26 or later, Apple silicon.**
 - 解压后将 `Compositor.app` 拖到“应用程序”目录。 / Unzip and drag `Compositor.app` into Applications.
@@ -48,6 +56,8 @@ Core layers, masks, brushes, text, shapes, selections, adjustments, Camera Raw, 
 - 图层锁定、对称画笔和任意矢量路径持久化尚未实现。 / Layer locks, symmetric painting, and persistent arbitrary vector paths are not implemented yet.
 
 ## 构建 / Build
+
+Windows 构建、云端验证与发布纪律见 [Windows 安装和开发说明](docs/windows-install.md)。macOS 构建保持以下流程。 / For the separate Windows build and cloud checks, see [Windows installation and development](docs/windows-install.md).
 
 ### Xcode
 

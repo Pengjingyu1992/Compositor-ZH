@@ -34,6 +34,13 @@ export function validatePNG(value, mask = false) {
   }
   return { bytes: Buffer.from(b), mime: 'image/png', ...dim };
 }
+export function importPNG(value) {
+  const b=bytes(value);
+  if(b.length<33||!b.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]))||b.toString('ascii',12,16)!=='IHDR'||![1,2,4,8,16].includes(b[24])||![0,2,3,4,6].includes(b[25]))throw new ProjectError('asset');
+  bound(b.readUInt32BE(16),b.readUInt32BE(20));
+  // External PNGs may be grayscale, indexed or 16-bit. Stored assets are RGBA8.
+  return encodePixels(PNG.sync.read(b,{checkCRC:true}));
+}
 export function blankPNG(w, h, mask, value = 0) {
   bound(w, h); const data = Buffer.alloc(w * h * 4);
   if (mask) for (let i = 0; i < data.length; i += 4) { data[i] = data[i + 1] = data[i + 2] = value; data[i + 3] = 255; }

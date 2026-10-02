@@ -64,7 +64,7 @@ export function editProject(data, op, codecs) {
     }
     if (kind === 'pixels') {
       l.imageFile = `${id}.png`;
-      const r = op.kind === 'importPixels' ? codecs.validatePNG(op.png) : codecs.blankPNG(m.width, m.height, false);
+      const r = op.kind === 'importPixels' ? codecs.importPNG(op.png) : codecs.blankPNG(m.width, m.height, false);
       if (r.width * r.height > 16_000_000) fail('limit');
       l.transform = placement(r.width, r.height);
       resources.set(`images/${l.imageFile}`, r);

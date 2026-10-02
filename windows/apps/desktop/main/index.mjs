@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, dialog, ipcMain, protocol, clipboard, nativeImage } from 'electron';
+import { app, BrowserWindow, Menu, dialog, ipcMain, protocol, clipboard, ClipboardItem, nativeImage } from 'electron';
 import { readFile, lstat, open, rename, rm } from 'node:fs/promises';
 import { Worker } from 'node:worker_threads';
 import { createRequire } from 'node:module';
@@ -200,10 +200,13 @@ handler('editor:edit', (id,revision,op)=>{
 });
 handler('editor:clipboard',async(id,revision,action,png)=>{
   if(session.pending)return {error:'busy'};if(!session.current||session.current.id!==id||session.revision!==revision)return {error:'stale'};
-  try {if(action==='copy'){const resource=codecs.validatePNG(png);clipboard.writeImage(nativeImage.createFromBuffer(resource.bytes));return {copied:true};}
-    if(action!=='paste')return {error:'invalid'};const image=clipboard.readImage();if(image.isEmpty())return {error:'asset'};const size=image.getSize();if(size.width*size.height>16000000||size.width>30000||size.height>30000)return {error:'limit'};
-    const result=session.edit(id,revision,{kind:'importPixels',name:language==='en'?'Pasted image':'粘贴图像',png:new Uint8Array(image.toPNG())});nativeMenu();return result;
-  }catch(e){return {error:e.code??'invalid'};}
+  const owner=session.current;session.pending=true;nativeMenu();
+  try {if(action==='copy'){const resource=codecs.validatePNG(png);await clipboard.write([new ClipboardItem({'image/png':new Blob([new Uint8Array(resource.bytes)],{type:'image/png'})})]);return {copied:true};}
+    if(action!=='paste')return {error:'invalid'};const items=await clipboard.read(),item=items.find(i=>i.types.includes('image/png')||i.types.includes('image/jpeg'));if(!item)return {error:'asset'};const type=item.types.includes('image/png')?'image/png':'image/jpeg',blob=await item.getType(type);if(blob.size>LIMITS.asset)return {error:'limit'};
+    let bytes=Buffer.from(await blob.arrayBuffer());if(type==='image/jpeg'){jpegDimensions(bytes);const image=nativeImage.createFromBuffer(bytes);if(image.isEmpty())return {error:'asset'};bytes=image.toPNG();}
+    if(session.current!==owner||session.revision!==revision)return {error:'stale'};session.pending=false;
+    return session.edit(id,revision,{kind:'importPixels',name:language==='en'?'Pasted image':'粘贴图像',png:new Uint8Array(bytes)});
+  }catch(e){return {error:e.code??'invalid'};}finally{session.pending=false;nativeMenu();}
 });
 handler('editor:textClipboard',action=>{if(!['copy','cut','paste','selectAll'].includes(action))return;win.webContents[action]();});
 handler('editor:history', (id, revision, dir) => { const result = session.history(id, revision, dir); nativeMenu(); return result; });
@@ -253,9 +256,9 @@ handler('editor:recover', async () => {
   try { const data = await recovery.restore(items[0].key); if (own !== session.generation) return { canceled: true }; session.generation++; return session.install(data); }
   catch (e) { return { error: e.code ?? 'read' }; } finally { session.pending = false; nativeMenu(); }
 });
-handler('viewer:report', (id, display) => {
+handler('viewer:report', async (id, display) => {
   if (!session.current || session.current.id !== id || session.pending) return { error: 'stale' };
-  clipboard.writeText(JSON.stringify(compatibilityReport(session.current.data, app.getVersion(), display), null, 2));
+  await clipboard.writeText(JSON.stringify(compatibilityReport(session.current.data, app.getVersion(), display), null, 2));
   return { copied: true };
 });
 nativeMenu();

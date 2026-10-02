@@ -96,3 +96,7 @@ test('editing across differently styled UTF-16 runs never leaves overlapping ran
  assert.deepEqual(remapRuns([{location:0,length:4,fontName:'ArialMT'}],'中文😀','中文新😀'),[{location:0,length:5,fontName:'ArialMT'}]);assert.deepEqual(remapRuns(runs,'ABCDEFGH',''),[]);
  const updated=rangeStyle(runs,2,6,{fontName:'Consolas'});assert.deepEqual(updated.map(r=>[r.location,r.length]),[[0,2],[2,4],[6,2]]);assert.deepEqual(runs.map(r=>r.length),[4,4]);
 });
+test('external grayscale PNGs normalize to RGBA8 after bounded header checks',()=>{
+ const input=codecs.blankPNG(8,8,true,127),r=codecs.importPNG(input.bytes);assert.equal(r.bytes[25],6);assert.equal(codecs.decodePNG(r).data[0],127);assert.equal(codecs.decodePNG(r).data[3],255);
+ const large=Buffer.from(input.bytes);large.writeUInt32BE(30000,16);large.writeUInt32BE(30000,20);assert.throws(()=>codecs.importPNG(large),e=>e.code==='limit');
+});

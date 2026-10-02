@@ -1,5 +1,6 @@
 import { app, BrowserWindow, Menu, dialog, ipcMain, protocol, clipboard, nativeImage } from 'electron';
 import { readFile, lstat, open, rename, rm } from 'node:fs/promises';
+import { Worker } from 'node:worker_threads';
 import { createRequire } from 'node:module';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
@@ -43,7 +44,7 @@ function handler(name, fn) {
 }
 function nativeMenu() {
   const zh = language === 'zh-Hans';
-  win?.setTitle((zh ? '叠绘 · Windows' : 'Compositor · Windows') + (session.current && session.current.data !== session.saved ? ' *' : ''));
+  win?.setTitle((zh ? '叠绘 · Windows' : 'Compositor · Windows') + (session.isDirty() ? ' *' : ''));
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     { label: zh ? '文件' : 'File', submenu: [
       { id: 'file-new', label: zh ? '新建画布…' : 'New canvas…', accelerator: 'Ctrl+N', click: () => win?.webContents.send('editor:new') },
@@ -62,21 +63,27 @@ function nativeMenu() {
     { label: zh ? '编辑' : 'Edit', submenu: [
       { label: zh ? '撤销' : 'Undo', accelerator: 'Ctrl+Z', enabled: !!session.undoStack.length && !session.pending, click: () => win?.webContents.send('editor:undo') },
       { label: zh ? '重做' : 'Redo', accelerator: 'Ctrl+Shift+Z', enabled: !!session.redoStack.length && !session.pending, click: () => win?.webContents.send('editor:redo') },
-      { type: 'separator' }, { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }
+      { type: 'separator' }, ...[['cut','剪切','Cut','Ctrl+X'],['copy','复制','Copy','Ctrl+C'],['copyMerged','合并复制','Copy merged','Ctrl+Shift+C'],['paste','粘贴','Paste','Ctrl+V']].map(([name,cn,en,accelerator])=>({label:zh?cn:en,accelerator,click:()=>win?.webContents.send('editor:'+name)}))
     ] },
     { label: zh ? '显示' : 'View', submenu: [
       { label: zh ? '适合窗口' : 'Fit to window', accelerator: 'Ctrl+0', click: () => win?.webContents.send('viewer:fit') },
       { label: '100%', accelerator: 'Ctrl+1', click: () => win?.webContents.send('viewer:actual') },
+      ...[['grid','网格','Grid'],['snap','吸附','Snap']].map(([name,cn,en])=>({label:zh?cn:en,click:()=>win?.webContents.send('editor:'+name)})),
       { label: zh ? '全屏' : 'Full screen', role: 'togglefullscreen' }
     ] },
+    { label:zh?'选择':'Select',submenu:[['selectAll','全选','Select all','Ctrl+A'],['deselect','取消选区','Deselect','Ctrl+D'],['invertSelection','反选','Invert selection','Ctrl+Shift+I'],['expandSelection','扩展选区','Expand selection'],['contractSelection','收缩选区','Contract selection'],['featherSelection','羽化选区','Feather selection'],['fill','填充前景色','Fill foreground'],['clear','清除','Clear'],['selectionMask','选区转蒙版','Selection to mask']].map(([name,cn,en,accelerator])=>({label:zh?cn:en,accelerator,enabled:!!session.current,click:()=>win?.webContents.send('editor:'+name)})) },
+    { label:zh?'图像':'Image',submenu:[['canvasSize','画布尺寸…','Canvas size…'],['imageSize','图像尺寸…','Image size…'],['cropSelection','裁剪到选区','Crop to selection'],['trim','修剪透明边缘','Trim transparent edges'],['flipCanvasH','水平翻转画布','Flip canvas horizontally'],['flipCanvasV','垂直翻转画布','Flip canvas vertically']].map(([name,cn,en])=>({label:zh?cn:en,enabled:!!session.current,click:()=>win?.webContents.send('editor:'+name)})) },
     { label: zh ? '图层' : 'Layer', submenu: [
       { id: 'layer-new', label: zh ? '新建像素层' : 'New pixel layer', click: () => win?.webContents.send('editor:addPixels') },
       { id: 'layer-group', label: zh ? '新建组' : 'New group', click: () => win?.webContents.send('editor:addGroup') },
       { id: 'layer-mask', label: zh ? '添加蒙版' : 'Add mask', click: () => win?.webContents.send('editor:addMask') },
       { type: 'separator' },
+      ...[['text','新建文字／编辑文字…','New / edit text…'],['shape','新建形状／编辑形状…','New / edit shape…'],['group','编组','Group','Ctrl+G'],['ungroup','解组','Ungroup','Ctrl+Shift+G'],['duplicate','复制图层','Duplicate layers'],['delete','删除图层','Delete layers'],['merge','合并所选图层','Merge selected layers'],['flatten','拼合图像','Flatten image'],['rasterize','栅格化','Rasterize'],['applyMask','应用蒙版','Apply mask']].map(([name,cn,en,accelerator])=>({label:zh?cn:en,accelerator,enabled:!!session.current,click:()=>win?.webContents.send('editor:'+name)})),
+      { type: 'separator' },
       { label: zh ? '图层属性' : 'Layer properties', click: () => win?.webContents.send('editor:properties') },
       { label: zh ? '图层效果' : 'Layer effects', click: () => win?.webContents.send('editor:effects') }
     ] },
+    {label:zh?'滤镜':'Filter',submenu:[{label:zh?'滤镜图库…':'Filter gallery…',enabled:!!session.current,click:()=>win?.webContents.send('editor:filter')}]},
     { label: zh ? '帮助' : 'Help', submenu: [
       { id: 'project-details', label: zh ? '项目详情与兼容性' : 'Project details and compatibility', click: () => win?.webContents.send('editor:details') }
     ] }
@@ -106,7 +113,7 @@ async function clearRecovery() {
 }
 async function canLeave() {
   if (session.pending) return false;
-  if (!session.current || session.current.data === session.saved) return true;
+  if (!session.isDirty()) return true;
   session.pending = true;
   let choice;
   try { choice = await dialog.showMessageBox(win, { type: 'warning', message: language === 'en' ? 'Save changes before leaving this project?' : '离开项目前保存修改？', buttons: language === 'en' ? ['Cancel', 'Discard', 'Save'] : ['取消', '放弃修改', '保存'], defaultId: 2, cancelId: 0 }); }
@@ -180,7 +187,25 @@ handler('viewer:drop', async location => {
 handler('viewer:reload', async id => { if (!(await canLeave())) return { canceled: true }; return projectRequest(() => session.reload(id)); });
 handler('viewer:close', async () => { if (!(await canLeave())) return { closed: false }; await clearRecovery(); const result = session.close(); nativeMenu(); return result; });
 handler('editor:new', async (w, h) => { if (!(await canLeave())) return { canceled: true }; return projectRequest(() => Promise.resolve(session.create(w, h))); });
-handler('editor:edit', (id, revision, op) => { const result = session.edit(id, revision, op); nativeMenu(); return result; });
+function buildEdit(data,op) {
+  return new Promise((resolve,reject)=>{
+    const worker=new Worker(new URL('../../../packages/platform/edit-worker.mjs',import.meta.url),{workerData:{data:{manifest:data.manifest,resources:data.resources,sourceBytes:data.sourceBytes,name:data.name,preview:data.preview,analysis:data.analysis,selection:data.selection,locks:data.locks},op,codecPath:path.join(ROOT,'out/codecs/index.cjs')}});
+    const timer=setTimeout(()=>{worker.terminate();reject(new ProjectError('limit'));},30000);
+    worker.once('message',r=>{clearTimeout(timer);worker.terminate();if(r.error)reject(new ProjectError(r.error));else resolve(r.data);});worker.once('error',()=>{clearTimeout(timer);reject(new ProjectError('invalid'));});
+  });
+}
+handler('editor:edit', (id,revision,op)=>{
+  const heavy=o=>['stroke','fill','gradient','bucket','filter','imageSize','applyMask','selectionMask'].includes(o?.kind)||(o?.kind==='selection'&&o.action==='wand')||(o?.kind==='batch'&&Array.isArray(o.operations)&&o.operations.some(heavy));
+  return projectRequest(async()=>{const result=heavy(op)?await session.editAsync(id,revision,op,buildEdit):session.edit(id,revision,op);nativeMenu();return result;});
+});
+handler('editor:clipboard',async(id,revision,action,png)=>{
+  if(session.pending)return {error:'busy'};if(!session.current||session.current.id!==id||session.revision!==revision)return {error:'stale'};
+  try {if(action==='copy'){const resource=codecs.validatePNG(png);clipboard.writeImage(nativeImage.createFromBuffer(resource.bytes));return {copied:true};}
+    if(action!=='paste')return {error:'invalid'};const image=clipboard.readImage();if(image.isEmpty())return {error:'asset'};const size=image.getSize();if(size.width*size.height>16000000||size.width>30000||size.height>30000)return {error:'limit'};
+    const result=session.edit(id,revision,{kind:'importPixels',name:language==='en'?'Pasted image':'粘贴图像',png:new Uint8Array(image.toPNG())});nativeMenu();return result;
+  }catch(e){return {error:e.code??'invalid'};}
+});
+handler('editor:textClipboard',action=>{if(!['copy','cut','paste','selectAll'].includes(action))return;win.webContents[action]();});
 handler('editor:history', (id, revision, dir) => { const result = session.history(id, revision, dir); nativeMenu(); return result; });
 handler('editor:save', (id, revision, as) => projectRequest(() => session.save(id, revision, c => chooseSave(c, as === true))));
 handler('editor:image', async (id, revision) => {

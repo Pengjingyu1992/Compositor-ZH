@@ -15,13 +15,15 @@ export class ProjectSession {
     this.saved = null; this.revision = randomUUID();
   }
 
+  isDirty() { return !!this.current && (this.current.data.contentSnapshot??this.current.data)!==(this.saved?.contentSnapshot??this.saved); }
+
   view() {
     if (!this.current) return { canceled: true };
     const { id, data } = this.current;
     this.current.resources = [...data.resources.values()];
     const urls = Object.fromEntries([...data.resources.keys()].map((key, i) => [key, `compositor://app/project/${id}/${i}?revision=${this.revision}`]));
     return { project: { id, revision: this.revision, name: data.name, manifest: data.manifest, analysis: data.analysis, urls, preview: data.preview,
-      dirty: data !== this.saved, canUndo: !!this.undoStack.length, canRedo: !!this.redoStack.length, hasLocation: !!this.current.location } };
+      selection: data.selection, locks: data.locks??{}, dirty: this.isDirty(), canUndo: !!this.undoStack.length, canRedo: !!this.redoStack.length, hasLocation: !!this.current.location } };
   }
 
   install(data, location = null, saved = false) {
@@ -33,7 +35,7 @@ export class ProjectSession {
 
   create(w, h) {
     if (this.pending) return { error: 'busy' };
-    try { this.generation++; return this.install(newProject(w, h)); } catch (e) { return { error: e.code ?? 'invalid' }; }
+    try { this.generation++; return this.install(newProject(w, h)); } catch (e) { return { error: e.code ?? (['limit','selection','source'].includes(e.message)?e.message:'invalid') }; }
   }
 
   edit(id, revision, op) {
@@ -41,18 +43,35 @@ export class ProjectSession {
     if (!this.current || this.current.id !== id || revision !== this.revision) return { error: 'stale' };
     try {
       const before = this.current.data, after = editProject(before, op, this.options.codecs);
-      if (before.sourceBytes.equals(after.sourceBytes) && fingerprint(before) === fingerprint(after)) return this.view();
+      if (before.selection===after.selection && before.locks===after.locks && before.sourceBytes.equals(after.sourceBytes) && fingerprint(before) === fingerprint(after)) return this.view();
+      return this.commit(before,after);
+    } catch (e) { return { error: e.code ?? (['limit','selection','source'].includes(e.message)?e.message:'invalid') }; }
+  }
+
+  commit(before,after) {
       this.undoStack.push(before); this.redoStack = []; this.current.data = after; this.revision = randomUUID();
       // Count unique immutable buffers shared by snapshots, not logical copies.
       while (this.undoStack.length > 80 || this.historyBytes() > 256 * 1024 ** 2) { if (!this.undoStack.length) break; this.undoStack.shift(); }
       this.scheduleRecovery(); return this.view();
-    } catch (e) { return { error: e.code ?? 'invalid' }; }
+  }
+
+  async editAsync(id,revision,op,build) {
+    if(this.pending)return {error:'busy'};
+    if(!this.current||this.current.id!==id||this.revision!==revision)return {error:'stale'};
+    this.pending=true;const own=this.generation,current=this.current,before=current.data;
+    try {const after=await build(before,op);if(own!==this.generation||this.current!==current||this.revision!==revision)return {error:'stale'};
+      after.sourceBytes=Buffer.from(after.sourceBytes);for(const r of after.resources.values())r.bytes=Buffer.from(r.bytes);
+      const sameContent=before.sourceBytes.equals(after.sourceBytes)&&fingerprint(before)===fingerprint(after);
+      if(sameContent){after.contentSnapshot=before.contentSnapshot??before;after.locks=before.locks;if(!after.selection&&!before.selection)return this.view();}
+      return this.commit(before,after);
+    }catch(e){return {error:e.code??'invalid'};}finally{this.pending=false;}
   }
 
   historyBytes() {
     const seen = new Set(); let size = 0;
     for (const data of [this.current?.data, ...this.undoStack, ...this.redoStack].filter(Boolean)) {
       size += data.sourceBytes.length;
+      if(data.selection && !seen.has(data.selection.data)){seen.add(data.selection.data);size+=data.selection.data.byteLength;}
       for (const r of data.resources.values()) if (!seen.has(r.bytes)) { seen.add(r.bytes); size += r.bytes.length; }
     }
     return size;
@@ -69,7 +88,7 @@ export class ProjectSession {
 
   scheduleRecovery() {
     clearTimeout(this.recoveryTimer);
-    if (this.current && this.current.data !== this.saved && this.options.recovery) {
+    if (this.current && this.isDirty() && this.options.recovery) {
       const data = this.current.data, revision = this.revision;
       this.recoveryTimer = setTimeout(() => { this.options.recovery.write(data, revision).catch(() => { this.recoveryFailed = true; }); }, 800);
       this.recoveryTimer.unref?.();
@@ -77,7 +96,7 @@ export class ProjectSession {
   }
   async flushRecovery() {
     clearTimeout(this.recoveryTimer);
-    if (this.current && this.current.data !== this.saved && this.options.recovery) await this.options.recovery.write(this.current.data, this.revision);
+    if (this.current && this.isDirty() && this.options.recovery) await this.options.recovery.write(this.current.data, this.revision);
   }
 
   async save(id, revision, choose) {
@@ -123,7 +142,7 @@ export class ProjectSession {
   }
 
   close() {
-    if (this.pending && this.current && this.current.data !== this.saved) return { closed: false, error: 'busy' };
+    if (this.pending && this.current && this.isDirty()) return { closed: false, error: 'busy' };
     clearTimeout(this.recoveryTimer);
     this.generation++;
     this.current = null;

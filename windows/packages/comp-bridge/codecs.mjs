@@ -15,30 +15,34 @@ function bytes(v) {
   if (!(v instanceof Uint8Array) || v.byteLength > LIMITS.asset) throw new ProjectError('limit');
   return Buffer.from(v.buffer, v.byteOffset, v.byteLength);
 }
-function encoded(pixels, gray = false) {
+export function encodePixels(pixels, gray = false) {
   bound(pixels.width, pixels.height);
   const png = PNG.sync.write({ width: pixels.width, height: pixels.height, data: Buffer.from(pixels.data) }, { colorType: gray ? 0 : 6, inputColorType: 6, inputHasAlpha: true });
   if (png.length > LIMITS.asset) throw new ProjectError('limit');
   return { bytes: png, mime: 'image/png', width: pixels.width, height: pixels.height };
+}
+export function decodePNG(resource) {
+  const dim=pngDimensions(resource.bytes);bound(dim.width,dim.height);
+  const image=PNG.sync.read(resource.bytes,{checkCRC:true});return {...dim,data:new Uint8ClampedArray(image.data)};
 }
 export function validatePNG(value, mask = false) {
   const b = bytes(value), dim = pngDimensions(b); bound(dim.width, dim.height);
   const image = PNG.sync.read(b, { checkCRC: true });
   if (mask) {
     for (let i = 0; i < image.data.length; i += 4) image.data[i + 1] = image.data[i + 2] = image.data[i], image.data[i + 3] = 255;
-    return encoded(image, true);
+    return encodePixels(image, true);
   }
   return { bytes: Buffer.from(b), mime: 'image/png', ...dim };
 }
 export function blankPNG(w, h, mask, value = 0) {
   bound(w, h); const data = Buffer.alloc(w * h * 4);
   if (mask) for (let i = 0; i < data.length; i += 4) { data[i] = data[i + 1] = data[i + 2] = value; data[i + 3] = 255; }
-  return encoded({ width: w, height: h, data }, mask);
+  return encodePixels({ width: w, height: h, data }, mask);
 }
 export function invertMask(r) {
   const image = PNG.sync.read(r.bytes);
   for (let i = 0; i < image.data.length; i += 4) { image.data[i] = image.data[i + 1] = image.data[i + 2] = 255 - image.data[i]; image.data[i + 3] = 255; }
-  return encoded(image, true);
+  return encodePixels(image, true);
 }
 const PSD_MODES = ['normal', 'darken', 'multiply', 'color burn', 'linear burn', 'lighten', 'screen', 'color dodge', 'linear dodge', 'overlay', 'soft light', 'hard light', 'vivid light', 'linear light', 'pin light', 'hard mix', 'difference', 'exclusion', 'subtract', 'divide', 'hue', 'saturation', 'color', 'luminosity'];
 function inspectPsd(psd) {
@@ -82,7 +86,7 @@ export function importPSD(value, flatten = false) {
       const image = getLayerImageData(l);
       if (image && image.width > 0 && image.height > 0) {
         row.imageFile = `${id}.png`; row.transform = { ...placement(image.width, image.height), origin: [l.left ?? 0, l.top ?? 0] };
-        resources.set(`images/${row.imageFile}`, encoded(image));
+        resources.set(`images/${row.imageFile}`, encodePixels(image));
         if (l.text) warnings.push('textRasterized');
       } else if (l.text) throw new ProjectError('psdConversion');
       else { row.imageFile = `${id}.png`; row.transform = placement(1, 1); resources.set(`images/${row.imageFile}`, blankPNG(1, 1, false)); }
@@ -103,7 +107,7 @@ export function importPSD(value, flatten = false) {
         const at = (dy * m.width + dx) * 4; data[at] = data[at + 1] = data[at + 2] = image.data[(y * image.width + x) * 4];
       }
       row.maskFile = `${id}.mask.png`; row.maskEnabled = !l.mask.disabled; row.maskLinked = false; row.maskPlacement = placement(m.width, m.height);
-      resources.set(`images/${row.maskFile}`, encoded({ width: m.width, height: m.height, data }, true));
+      resources.set(`images/${row.maskFile}`, encodePixels({ width: m.width, height: m.height, data }, true));
     }
     return row;
   };
@@ -120,7 +124,7 @@ export function importPSD(value, flatten = false) {
     if (!image) throw new ProjectError('psdConversion');
     const id = randomUUID().toUpperCase(), imageFile = `${id}.png`;
     m.layers.push({ id, imageFile, name: 'PSD composite', isVisible: true, transform: placement(m.width, m.height) });
-    resources.set(`images/${imageFile}`, encoded(image)); warnings.push('psdFlattened');
+    resources.set(`images/${imageFile}`, encodePixels(image)); warnings.push('psdFlattened');
   } else visit(psd.children ?? []);
   if (!m.layers.length) throw new ProjectError('psdConversion');
   return { data: projectData(m, resources, 'Imported.comp'), warnings: [...new Set(warnings)] };

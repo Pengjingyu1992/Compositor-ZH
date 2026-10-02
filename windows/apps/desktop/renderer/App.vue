@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted, nextTick, watch } from 'vue';
+import { computed, ref, reactive, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import { messages } from '../../../packages/locales';
 import { createPreviewRenderer, pngBytes, exportPlaced, makeCanvas } from '../../../packages/editor-adapter/render';
 import { BLEND_MODES, ADJUSTMENT_KINDS as ADJUSTMENTS, EFFECT_KINDS as EFFECTS } from '../../../packages/comp-bridge/capabilities.mjs';
 import AdjustmentEditor from './AdjustmentEditor.vue';
 import EffectEditor from './EffectEditor.vue';
 import Icon from './Icon.vue';
+import CompleteControls from './CompleteControls.vue';
+import { useCompleteEditor, TOOL_LIST, TOOL_KEYS } from './useCompleteEditor';
 import { visibleLayers } from '../../../packages/editor-adapter/layer-list';
 import type { Language, ViewerProject, OpenResult, LayerRow } from './types';
 
@@ -19,20 +21,19 @@ const tool=ref('pan'),color=ref('#bae9d6'),brushSize=ref(24),brushOpacity=ref(10
 const newDialog=ref(false),newWidth=ref(1920),newHeight=ref(1080),psdDialog=ref(false),status=ref(''),painting=ref(false);
 const overlay=ref<HTMLCanvasElement>(),artboard=ref<HTMLDivElement>();
 const inspectorTab=ref('properties'), detailsDialog=ref(false), searchOpen=ref(false);
-const tools = ['move','brush','eraser','pan'] as const;
-const toolKeys = {move:'V',brush:'B',eraser:'E',pan:'H'};
+const tools=TOOL_LIST,toolKeys=TOOL_KEYS;
 const ui = computed(() => t.value.workspace);
 const thumbURL = (row: LayerRow, mask=false) => project.value?.urls[`images/${mask ? row.maskFile : row.imageFile}`];
-function selectLayer(row: LayerRow) { selected.value=row; inspectorTab.value=row.adjustment?'adjustments':'properties'; }
+function selectLayer(row: LayerRow,event?:MouseEvent) { full.select(row,event); inspectorTab.value=row.adjustment?'adjustments':'properties'; }
 function showEffects() { if(selected.value?.imageFile)inspectorTab.value='effects'; }
 function showDetails() { detailsDialog.value=true; }
 function toggleSearch() { searchOpen.value=!searchOpen.value; if(!searchOpen.value)query.value=''; }
 let returnFocus: HTMLElement | null = null;
-watch(() => newDialog.value || psdDialog.value || detailsDialog.value, async visible => {
+watch(() => newDialog.value || psdDialog.value || detailsDialog.value || full.modal, async visible => {
   if (visible) {
     returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     await nextTick();
-    if (newDialog.value || psdDialog.value || detailsDialog.value) document.querySelector<HTMLElement>('.modal-shade:last-of-type input, .modal-shade:last-of-type button')?.focus();
+    if (newDialog.value || psdDialog.value || detailsDialog.value || full.modal) document.querySelector<HTMLElement>('.modal-shade:last-of-type input, .modal-shade:last-of-type button')?.focus();
   } else if (returnFocus?.isConnected) returnFocus.focus();
 });
 function tabKey(event: KeyboardEvent) {
@@ -59,7 +60,7 @@ function fit() {
 }
 function scale(factor: number) { zoom.value = Math.max(.01, Math.min(8, zoom.value * factor)); }
 function labelIssue(key: string) { return t.value.issues[key as keyof typeof t.value.issues] ?? key; }
-function labelError(key: string) { return t.value.errors[key as keyof typeof t.value.errors] ?? t.value.errors.read; }
+function labelError(key: string) { if(['locked','selection','source','limit'].includes(key))return key==='selection'?full.labels.noSelection:key==='source'?full.labels.sourceNeeded:full.labels[key as 'locked'|'limit']; return t.value.errors[key as keyof typeof t.value.errors] ?? t.value.errors.read; }
 function kind(row: LayerRow) { return row.isGroup ? t.value.group : row.adjustment ? t.value.adjustment : row.text ? t.value.text : row.shape ? t.value.shape : t.value.raster; }
 function fallback() { renderer?.dispose(); renderer = undefined; source.value = project.value?.preview ? 'saved' : 'none'; }
 async function accept(result: OpenResult) {
@@ -166,12 +167,13 @@ async function changeLanguage(event: Event) {
   catch { settingError.value = true; }
 }
 function onKey(event: KeyboardEvent) {
-  if (event.key==='Tab' && (newDialog.value || psdDialog.value || detailsDialog.value)) {
+  if (event.key==='Tab' && (newDialog.value || psdDialog.value || detailsDialog.value || full.modal)) {
     const modal=[...document.querySelectorAll<HTMLElement>('.modal-shade')].at(-1);
     const fields=[...(modal?.querySelectorAll<HTMLElement>('button:not([disabled]),input:not([disabled]),select:not([disabled]),summary') ?? [])].filter(e=>e.getClientRects().length);
     const first=fields[0],last=fields.at(-1);
     if(first && ((!event.shiftKey && (document.activeElement===last || !modal?.contains(document.activeElement))) || (event.shiftKey && (document.activeElement===first || !modal?.contains(document.activeElement))))) { event.preventDefault(); (event.shiftKey?last:first)?.focus(); }
   }
+  full.key(event);
   const input=(event.target as HTMLElement)?.closest('input,textarea,select,[contenteditable]');
   if(!painting.value&&!input&&!event.ctrlKey&&!event.altKey&&!event.metaKey){const k=event.key.toLowerCase();if(['b','e','v','h'].includes(k))tool.value=({b:'brush',e:'eraser',v:'move',h:'pan'} as Record<string,string>)[k];}
   if(event.key==='Escape'){cancelStroke();newDialog.value=false;psdDialog.value=false;detailsDialog.value=false;}
@@ -182,53 +184,20 @@ function onKey(event: KeyboardEvent) {
 }
 function wheel(event: WheelEvent) { if (event.ctrlKey) { event.preventDefault(); scale(event.deltaY < 0 ? 1.1 : 1 / 1.1); } }
 let drag: { x: number; y: number; left: number; top: number } | undefined;
-let stroke:{project:ViewerProject;row:LayerRow;revision:string;target:string;pointer:number;asset?:HTMLCanvasElement;last?:[number,number];start:[number,number];current:[number,number];moved:boolean}|undefined;
-function point(e:PointerEvent):[number,number]{const box=artboard.value!.getBoundingClientRect();return [(e.clientX-box.left)/zoom.value,(e.clientY-box.top)/zoom.value];}
-function localPoint(p:[number,number],s:NonNullable<typeof stroke>):[number,number]{const transform=s.target==='mask'&&s.row.maskLinked===false&&s.row.maskPlacement?s.row.maskPlacement:s.row.transform,[x,y]=transform.origin,[w,h]=transform.size,angle=-transform.rotation*Math.PI/180,dx=p[0]-x-w/2,dy=p[1]-y-h/2;return [((Math.cos(angle)*dx-Math.sin(angle)*dy)*(transform.flipX?-1:1)+w/2)/w*s.asset!.width,((Math.sin(angle)*dx+Math.cos(angle)*dy)*(transform.flipY?-1:1)+h/2)/h*s.asset!.height];}
-function clearOverlay(){if(overlay.value){overlay.value.width=project.value?.manifest.width??1;overlay.value.height=project.value?.manifest.height??1;}}
-function cancelStroke(){if(stroke?.asset)stroke.asset.width=stroke.asset.height=1;stroke=undefined;painting.value=false;drag=undefined;clearOverlay();}
-function paint(e:PointerEvent){const s=stroke;if(!s?.asset)return;const doc=point(e),p=localPoint(doc,s),ctx=s.asset.getContext('2d')!;
-  const transform=s.target==='mask'&&s.row.maskLinked===false&&s.row.maskPlacement?s.row.maskPlacement:s.row.transform;
-  const size=Math.min(500,Math.max(1,Number(brushSize.value)||1));
-  ctx.globalAlpha=Math.min(100,Math.max(1,Number(brushOpacity.value)||1))/100;ctx.globalCompositeOperation=tool.value==='eraser'&&s.target!=='mask'?'destination-out':'source-over';ctx.strokeStyle=s.target==='mask'?(tool.value==='eraser'?'#000000':'#ffffff'):color.value;ctx.fillStyle=ctx.strokeStyle;ctx.lineWidth=size*s.asset.width/transform.size[0];ctx.lineCap=ctx.lineJoin='round';ctx.beginPath();ctx.moveTo(...(s.last??p));ctx.lineTo(...p);ctx.stroke();if(!s.last){ctx.beginPath();ctx.arc(p[0],p[1],ctx.lineWidth/2,0,Math.PI*2);ctx.fill();}s.last=p;s.current=doc;s.moved=true;
-  const preview=overlay.value?.getContext('2d');if(preview){preview.globalAlpha=.65;preview.strokeStyle=s.target==='mask'?'#ffffff':color.value;preview.lineWidth=size;preview.lineCap='round';preview.beginPath();preview.moveTo(...s.start);preview.lineTo(...doc);preview.stroke();s.start=doc;}
-}
-function panStart(event: PointerEvent) {
-  if (!stage.value || event.button !== 0 || !project.value) return;
-  if(tool.value!=='pan'&&editable.value&&artboard.value?.contains(event.target as Node)&&selected.value){
-    const row=selected.value;if(tool.value!=='move'&&((paintTarget.value==='mask'&&!row.maskFile)||(paintTarget.value==='content'&&!row.imageFile)))return;
-    const s=stroke={project:project.value,row,revision:project.value.revision,target:paintTarget.value,pointer:event.pointerId,start:point(event),current:point(event),moved:false} as NonNullable<typeof stroke>;
-    painting.value=true;clearOverlay();stage.value.setPointerCapture(event.pointerId);
-    if(tool.value!=='move'){
-      const file=s.target==='mask'?row.maskFile:row.imageFile;
-      fetch(project.value.urls[`images/${file}`]).then(r=>r.blob()).then(createImageBitmap).then(bitmap=>{if(stroke!==s){bitmap.close();return;}s.asset=makeCanvas(bitmap.width,bitmap.height);s.asset.getContext('2d')!.drawImage(bitmap,0,0);bitmap.close();paint(event);}).catch(()=>{error.value='asset';cancelStroke();});
-    }return;
-  }
-  drag = { x: event.clientX, y: event.clientY, left: stage.value.scrollLeft, top: stage.value.scrollTop };
-  stage.value.setPointerCapture(event.pointerId);
-}
-function panMove(event: PointerEvent) {
-  if(stroke){if(tool.value==='move'){stroke.current=point(event);stroke.moved=true;}else paint(event);return;}
-  if (!stage.value || !drag) return;
-  stage.value.scrollLeft = drag.left + drag.x - event.clientX;
-  stage.value.scrollTop = drag.top + drag.y - event.clientY;
-}
-async function panEnd(event:PointerEvent){
-  drag=undefined;const s=stroke;if(!s||s.pointer!==event.pointerId)return;
-  stroke=undefined;painting.value=false;clearOverlay();
-  if(!s.moved||project.value?.id!==s.project.id||project.value.revision!==s.revision){if(s.asset)s.asset.width=s.asset.height=1;return;}
-  if(tool.value==='move'){await request(()=>window.editor.edit(s.project.id,s.revision,{kind:'transform',id:s.row.id,field:'origin',value:s.row.transform.origin.map((v,i)=>v+s.current[i]-s.start[i])}));}
-  else if(s.asset){try{await request(async()=>{const png=await pngBytes(s.asset!);return window.editor.edit(s.project.id,s.revision,{kind:'pixels',id:s.row.id,target:s.target,png});});}catch{error.value='asset';}finally{s.asset.width=s.asset.height=1;}}
-}
+const full=reactive(useCompleteEditor({project,selected,tool,color,brushSize,brushOpacity,paintTarget,painting,editable,language,canvas,overlay,artboard,stage,zoom,error,execute:(op,p=project.value)=>{if(p)return request(()=>window.editor.edit(p.id,p.revision,{id:selected.value?.id,...op}));},receive:result=>request(()=>Promise.resolve(result)),history,scale}));
+function cancelStroke(){full.cancel();drag=undefined;}
+function panStart(event:PointerEvent){if(full.start(event))return;if(!stage.value||event.button!==0||!project.value)return;drag={x:event.clientX,y:event.clientY,left:stage.value.scrollLeft,top:stage.value.scrollTop};stage.value.setPointerCapture(event.pointerId);}
+function panMove(event:PointerEvent){if(full.move(event))return;if(!stage.value||!drag)return;stage.value.scrollLeft=drag.left+drag.x-event.clientX;stage.value.scrollTop=drag.top+drag.y-event.clientY;}
+async function panEnd(event:PointerEvent){drag=undefined;await full.end(event);}
 onMounted(async () => {
   const settings = await window.viewer.settings(); language.value = settings.language; version.value = settings.version;
   document.documentElement.lang = language.value;
   subscriptions.push(window.viewer.onOpen(open), window.viewer.onReload(reload), window.viewer.onClose(closeProject), window.viewer.onFit(fit), window.viewer.onActual(() => zoom.value = 1));
-  const commands: Record<string, () => unknown> = {new:()=>{newDialog.value=true;},image:importImage,importPSD,save:()=>save(),saveAs:()=>save(true),png:()=>exportImage('png'),exportPSD:()=>{psdDialog.value=true;},recover,undo:()=>history('undo'),redo:()=>history('redo'),addPixels:()=>add('pixels'),addGroup:()=>add('group'),addMask:()=>{if(selected.value)edit({kind:'mask',action:'add'});},details:showDetails,properties:()=>{inspectorTab.value='properties';},effects:showEffects};
-  for(const [name,action] of Object.entries(commands))subscriptions.push(window.editor.onCommand(name,()=>{if(!painting.value)action();}));
+  const commands: Record<string, () => unknown> = {...full.commands,new:()=>{newDialog.value=true;},image:importImage,importPSD,save:()=>save(),saveAs:()=>save(true),png:()=>exportImage('png'),exportPSD:()=>{psdDialog.value=true;},recover,undo:()=>history('undo'),redo:()=>history('redo'),addPixels:()=>add('pixels'),addGroup:()=>add('group'),addMask:()=>{if(selected.value)edit({kind:'mask',action:'add'});},details:showDetails,properties:()=>{inspectorTab.value='properties';},effects:showEffects};
+  for(const [name,action] of Object.entries(commands))subscriptions.push(window.editor.onCommand(name,()=>{if(painting.value)return;if(['copy','cut','paste','selectAll'].includes(name)&&document.activeElement?.closest('input,textarea,[contenteditable]')){void window.editor.textClipboard(name);return;}action();}));
   window.addEventListener('keydown', onKey); window.addEventListener('resize', fit);
 });
-onUnmounted(() => { operation++; epoch++; cancelStroke();renderer?.dispose(); subscriptions.forEach(stop => stop()); window.removeEventListener('keydown', onKey); window.removeEventListener('resize', fit); });
+onUnmounted(() => { operation++; epoch++; cancelStroke();renderer?.dispose(); full.closeModal(); subscriptions.forEach(stop => stop()); window.removeEventListener('keydown', onKey); window.removeEventListener('resize', fit); });
 </script>
 
 <template>
@@ -262,26 +231,24 @@ onUnmounted(() => { operation++; epoch++; cancelStroke();renderer?.dispose(); su
     <div v-if="error || settingError" class="error" role="alert">{{ settingError ? t.settingsError : t.errorTitle + ' · ' + labelError(error) }}<button class="icon-button" :aria-label="t.editor.cancel" @click="error='';settingError=false"><Icon name="close"/></button></div>
     <div class="optionsbar" data-testid="tool-options">
       <span class="tool-heading"><Icon :name="tool"/>{{ t.editor[tool as keyof typeof t.editor] }}</span>
-      <template v-if="tool==='brush' || tool==='eraser'">
-        <label>{{ t.editor.size }}<span class="unit-field"><input type="number" v-model.number="brushSize" min="1" max="500" :disabled="painting" data-testid="brush-size"><span>px</span></span></label>
-        <label>{{ t.editor.brushOpacity }}<span class="unit-field"><input type="number" v-model.number="brushOpacity" min="1" max="100" :disabled="painting"><span>%</span></span></label>
-        <label>{{ t.editor.maskTarget }}<select v-model="paintTarget" :disabled="painting"><option value="content">{{ t.editor.content }}</option><option value="mask">{{ t.editor.mask }}</option></select></label>
-        <span class="tool-hint">{{ ui.paintHint }}</span>
-      </template>
-      <template v-else-if="tool==='move' && selected">
+      <template v-if="tool==='move' && selected">
         <label v-for="(key,i) in ['X','Y']" :key="key">{{ key }}<input type="number" :value="selected.transform.origin[i]" :disabled="!editable" @change="transformPair('origin',i,$event)"></label>
         <label v-for="(key,i) in [t.editor.width,t.editor.height]" :key="key">{{ key }}<input type="number" min="1" max="300000" :value="selected.transform.size[i]" :disabled="!editable || selected.isGroup" @change="transformPair('size',i,$event)"></label>
         <label>{{ t.editor.rotation }}<span class="unit-field"><input type="number" :value="selected.transform.rotation" :disabled="!editable || selected.isGroup" @change="edit({kind:'transform',field:'rotation',value:numberEvent($event)})"><span>°</span></span></label>
         <button class="icon-button" :disabled="!editable || selected.isGroup" :title="t.editor.flipH" :aria-label="t.editor.flipH" @click="edit({kind:'transform',field:'flipX',value:!selected.transform.flipX})"><Icon name="flipH"/></button>
         <button class="icon-button" :disabled="!editable || selected.isGroup" :title="t.editor.flipV" :aria-label="t.editor.flipV" @click="edit({kind:'transform',field:'flipY',value:!selected.transform.flipY})"><Icon name="flipV"/></button>
       </template>
-      <span v-else class="tool-hint">{{ tool==='pan' ? ui.panHint : ui.moveHint }}</span>
+      <CompleteControls :e="full" mode="options" :tool="tool" :disabled="busy || painting" :selected="selected" :color="color" :size="brushSize" :opacity="brushOpacity" :target="paintTarget" @size="brushSize=$event" @opacity="brushOpacity=$event" @target="paintTarget=$event"/>
+      <span v-if="tool==='pan'" class="tool-hint">{{ tool==='pan' ? ui.panHint : ui.moveHint }}</span>
     </div>
     <main>
       <nav class="toolrail" :aria-label="ui.tools">
-        <button v-for="key in tools" :key="key" class="icon-button tool-button" :class="{active:tool===key}" :aria-pressed="tool===key" :disabled="painting || (key!=='pan' && !editable)" :title="t.editor[key] + ' (' + toolKeys[key] + ')'" :aria-label="t.editor[key]" @click="tool=key"><Icon :name="key"/></button>
+        <button v-for="key in tools" :key="key" class="icon-button tool-button" :class="{active:tool===key}" :aria-pressed="tool===key" :disabled="painting || (key!=='pan' && !editable)" :title="(full.labels[key as keyof typeof full.labels] ?? t.editor[key as keyof typeof t.editor]) + ' (' + toolKeys[key] + ')'" :aria-label="full.labels[key as keyof typeof full.labels] ?? t.editor[key as keyof typeof t.editor]" @click="tool=key"><Icon :name="key"/></button>
         <div class="rail-divider"></div>
-        <label class="color-swatch" :title="t.editor.color"><span :style="{background:color}"></span><input type="color" v-model="color" :aria-label="t.editor.color" :disabled="painting"></label>
+        <label class="color-swatch" :title="full.labels.foreground"><span :style="{background:color}"></span><input type="color" v-model="color" :aria-label="t.editor.color" :disabled="painting"></label>
+        <label class="color-swatch background-swatch" :title="full.labels.background"><span :style="{background:full.background}"></span><input type="color" v-model="full.background" :aria-label="full.labels.background" :disabled="painting"></label>
+        <button class="icon-button" :title="full.labels.swap+' (X)'" :aria-label="full.labels.swap" @click="[color,full.background]=[full.background,color]"><Icon name="swap"/></button>
+        <button class="icon-button" :title="full.labels.defaults+' (D)'" :aria-label="full.labels.defaults" @click="color='#000000';full.background='#ffffff'"><Icon name="defaults"/></button>
       </nav>
       <section class="workarea">
         <div v-if="issues.length" class="notice">{{ source==='saved' ? t.fallback : t.detailsOnly }} {{ issues.map(labelIssue).join(' · ') }}</div>
@@ -298,6 +265,15 @@ onUnmounted(() => { operation++; epoch++; cancelStroke();renderer?.dispose(); su
             <div ref="artboard" class="artboard" :class="'tool-'+tool" :style="{width:project.manifest.width * zoom + 'px',height:project.manifest.height * zoom + 'px'}">
               <canvas v-if="source==='engine'" ref="canvas" data-testid="rendered-canvas"></canvas>
               <canvas v-if="source==='engine'" ref="overlay" class="paint-overlay"></canvas>
+              <div v-if="source==='engine' && full.options.grid" class="grid-overlay" :style="{backgroundSize:10*zoom+'px '+10*zoom+'px'}"></div>
+              <svg v-if="source==='engine'" class="geometry-overlay" :viewBox="'0 0 '+project.manifest.width+' '+project.manifest.height" :style="{width:'100%',height:'100%'}">
+                <line v-for="g in project.manifest.guides??[]" :key="g.id" :x1="g.axis==='vertical'?g.position:0" :x2="g.axis==='vertical'?g.position:project.manifest.width" :y1="g.axis==='horizontal'?g.position:0" :y2="g.axis==='horizontal'?g.position:project.manifest.height" stroke="#71dfed" :stroke-width="1/zoom"/>
+                <g v-if="tool==='move' && selected && !selected.isGroup" :transform="'translate('+(selected.transform.origin[0]+selected.transform.size[0]/2)+','+(selected.transform.origin[1]+selected.transform.size[1]/2)+') rotate('+selected.transform.rotation+') translate('+(-selected.transform.size[0]/2)+','+(-selected.transform.size[1]/2)+')'">
+                  <rect x="0" y="0" :width="selected.transform.size[0]" :height="selected.transform.size[1]" fill="none" stroke="#99d7ed" :stroke-width="1/zoom"/>
+                  <rect data-handle="resize" :x="selected.transform.size[0]-5/zoom" :y="selected.transform.size[1]-5/zoom" :width="10/zoom" :height="10/zoom" class="transform-handle" :aria-label="full.labels.resize"/>
+                  <circle data-handle="rotate" :cx="selected.transform.size[0]/2" :cy="-20/zoom" :r="5/zoom" class="transform-handle" :aria-label="full.labels.rotate"/>
+                </g>
+              </svg>
               <img v-else :key="project.id" :src="previewURL" :alt="t.saved" draggable="false" data-testid="saved-preview" @error="savedPreviewFailed">
             </div>
           </div>
@@ -315,14 +291,14 @@ onUnmounted(() => { operation++; epoch++; cancelStroke();renderer?.dispose(); su
           <div v-if="project && searchOpen" class="layer-search"><Icon name="search"/><input v-model="query" :placeholder="t.search" :aria-label="t.search" maxlength="256" data-testid="layer-search"><button v-if="query" class="icon-button" :aria-label="t.clearSearch" @click="query=''"><Icon name="close"/></button></div>
           <div class="layer-list">
             <p v-if="!project" class="muted">{{ t.empty }}</p><p v-else-if="!rows.length" class="muted">{{ query ? t.noMatches : ui.noLayers }}</p>
-            <div v-for="row in rows" :key="row.id" class="layer-row" :class="{selected:selected?.id===row.id,hidden:!row.effectiveVisible}" :style="{paddingLeft:6 + row.depth * 12 + 'px'}">
+            <div v-for="row in rows" :key="row.id" class="layer-row" :class="{selected:full.ids.includes(row.id),hidden:!row.effectiveVisible}" :style="{paddingLeft:6 + row.depth * 12 + 'px'}">
               <button class="icon-button visibility-toggle" :disabled="!editable" :title="(row.isVisible ? ui.hideLayer : ui.showLayer) + ' · ' + row.name" :aria-label="(row.isVisible ? ui.hideLayer : ui.showLayer) + ' · ' + row.name" @click="edit({kind:'appearance',id:row.id,field:'isVisible',value:!row.isVisible})"><Icon :name="row.isVisible?'eye':'eyeOff'"/></button>
               <button v-if="row.isGroup" class="icon-button fold" :disabled="!!query.trim()" :aria-label="collapsed.has(row.id.toUpperCase()) && !query.trim() ? t.expand : t.collapse" :aria-expanded="!!query.trim() || !collapsed.has(row.id.toUpperCase())" @click="toggleGroup(row)"><Icon name="chevron"/></button><span v-else class="fold-spacer"></span>
-              <button class="layer-select" :disabled="painting" :aria-pressed="selected?.id===row.id" @click="selectLayer(row);paintTarget='content'">
+              <button class="layer-select" :disabled="painting" :aria-pressed="selected?.id===row.id" @click="selectLayer(row,$event);paintTarget='content'">
                 <span class="thumbnail"><img v-if="row.imageFile" :src="thumbURL(row)" alt="" loading="lazy" draggable="false"><Icon v-else :name="row.isGroup?'folder':'adjustment'"/></span>
                 <span class="layer-title">{{ row.name }}<small>{{ kind(row) }}<span v-if="row.maskSourceID"> · {{ t.editor.clip }}</span></small></span>
               </button>
-              <button v-if="row.maskFile" class="mask-thumbnail thumbnail" :class="{active:selected?.id===row.id && paintTarget==='mask'}" :title="ui.maskThumbnail + ' · ' + row.name" :aria-label="ui.maskThumbnail + ' · ' + row.name" :disabled="painting" @click="selectLayer(row);paintTarget='mask'"><img :src="thumbURL(row,true)" alt="" loading="lazy" draggable="false"></button>
+              <button v-if="row.maskFile" class="mask-thumbnail thumbnail" :class="{active:selected?.id===row.id && paintTarget==='mask'}" :title="ui.maskThumbnail + ' · ' + row.name" :aria-label="ui.maskThumbnail + ' · ' + row.name" :disabled="painting" @click="selectLayer(row,$event);paintTarget='mask'"><img :src="thumbURL(row,true)" alt="" loading="lazy" draggable="false"></button>
             </div>
           </div>
           <div class="layer-actions">
@@ -330,7 +306,7 @@ onUnmounted(() => { operation++; epoch++; cancelStroke();renderer?.dispose(); su
             <button class="icon-button" :disabled="!editable" :title="t.editor.addGroup" :aria-label="t.editor.addGroup" @click="add('group')"><Icon name="folder"/></button>
             <button class="icon-button" :disabled="!editable || !selected || !!selected.maskFile" :title="t.editor.addMask" :aria-label="t.editor.addMask" data-testid="add-mask" @click="edit({kind:'mask',action:'add'})"><Icon name="mask"/></button>
             <label class="adjustment-picker"><Icon name="adjustment"/><select :disabled="!editable" :aria-label="t.editor.addAdjustment" value="" @change="add('adjustment',($event.target as HTMLSelectElement).value)"><option value="">{{ t.editor.addAdjustment }}</option><option v-for="(kind,i) in ADJUSTMENTS" :key="kind" :value="kind">{{ t.adjustments[i] }}</option></select></label>
-            <button class="icon-button" :disabled="!editable || !selected" :title="t.editor.delete" :aria-label="t.editor.delete" data-testid="delete-layer" @click="edit({kind:'delete'})"><Icon name="trash"/></button>
+            <button class="icon-button" :disabled="!editable || !selected" :title="t.editor.delete" :aria-label="t.editor.delete" data-testid="delete-layer" @click="full.remove()"><Icon name="trash"/></button>
           </div>
         </section>
         <section class="inspector-panel">
@@ -350,10 +326,11 @@ onUnmounted(() => { operation++; epoch++; cancelStroke();renderer?.dispose(); su
                 <details class="property-section"><summary>{{ ui.structure }}</summary>
                   <label>{{ t.editor.parent }}<select :disabled="!editable" :value="selected.parentID ?? ''" @change="edit({kind:'parent',parentID:($event.target as HTMLSelectElement).value})"><option value="">{{ t.editor.root }}</option><option v-for="g in project?.analysis.rows.filter(l=>l.isGroup && l.id!==selected?.id)" :key="g.id" :value="g.id">{{ g.name }}</option></select></label>
                   <label v-if="!selected.isGroup">{{ t.editor.clip }}<select :disabled="!editable" :value="selected.maskSourceID ?? ''" data-testid="clip-source" @change="edit({kind:'clip',sourceID:($event.target as HTMLSelectElement).value})"><option value="">{{ t.editor.none }}</option><option v-for="l in project?.analysis.rows.filter(l=>!l.isGroup && l.imageFile && l.id!==selected?.id && l.parentID?.toUpperCase()===selected?.parentID?.toUpperCase())" :key="l.id" :value="l.id">{{ l.name }}</option></select></label>
-                  <div class="button-row"><button :disabled="!editable || selected.isGroup" @click="edit({kind:'duplicate'})"><Icon name="duplicate"/>{{ t.editor.duplicate }}</button><button class="icon-button" :disabled="!editable" :title="t.editor.up" :aria-label="t.editor.up" @click="edit({kind:'reorder',direction:1})"><Icon name="up"/></button><button class="icon-button" :disabled="!editable" :title="t.editor.down" :aria-label="t.editor.down" @click="edit({kind:'reorder',direction:-1})"><Icon name="down"/></button></div>
+                  <div class="button-row"><button :disabled="!editable" @click="full.duplicate()"><Icon name="duplicate"/>{{ t.editor.duplicate }}</button><button class="icon-button" :disabled="!editable" :title="t.editor.up" :aria-label="t.editor.up" @click="edit({kind:'reorder',direction:1})"><Icon name="up"/></button><button class="icon-button" :disabled="!editable" :title="t.editor.down" :aria-label="t.editor.down" @click="edit({kind:'reorder',direction:-1})"><Icon name="down"/></button></div>
                 </details>
                 <details v-if="selected.maskFile" class="property-section" open><summary>{{ ui.mask }}</summary><div class="mask-flags"><label><input type="checkbox" :checked="selected.maskEnabled!==false" :disabled="!editable" @change="edit({kind:'mask',action:'toggle'})">{{ t.editor.enableMask }}</label><label><input type="checkbox" :checked="selected.maskLinked!==false" :disabled="!editable" @change="edit({kind:'mask',action:'link',value:($event.target as HTMLInputElement).checked})">{{ t.editor.linkMask }}</label></div><div class="button-row"><button :disabled="!editable" data-testid="invert-mask" @click="edit({kind:'mask',action:'invert'})">{{ t.editor.invertMask }}</button><button :disabled="!editable" @click="edit({kind:'mask',action:'remove'})">{{ t.editor.removeMask }}</button></div></details>
               </div>
+              <CompleteControls :e="full" mode="panel" :tool="tool" :disabled="!editable" :selected="selected" :color="color" :size="brushSize" :opacity="brushOpacity" :target="paintTarget" @edit="edit($event)"/>
               <small v-if="selected.text || selected.shape" class="muted">{{ t.editor.rasterize }}</small>
               <p v-if="!editable && !busy" class="muted">{{ t.editor.readOnly }}</p>
             </template>
@@ -369,8 +346,10 @@ onUnmounted(() => { operation++; epoch++; cancelStroke();renderer?.dispose(); su
       <span v-if="project">{{ project.manifest.width.toLocaleString() }} × {{ project.manifest.height.toLocaleString() }} px · sRGB</span>
       <span class="preview-status" v-if="project">{{ source==='engine'?ui.livePreview:source==='saved'?ui.savedPreview:ui.metadataOnly }}</span>
       <span role="status">{{ status }}</span>
+      <span v-if="project?.selection">{{ full.labels.selection }}</span>
       <span class="badge">{{ t.readonly }} · {{ project?.dirty?t.editor.unsaved:t.editor.saved }} · {{ version }}</span>
     </div>
+    <CompleteControls :e="full" mode="dialogs" :tool="tool" :disabled="!editable" :selected="selected" :color="color" :size="brushSize" :opacity="brushOpacity" :target="paintTarget"/>
     <div v-if="newDialog" class="modal-shade" @click.self="newDialog=false"><form class="dialog" role="dialog" aria-modal="true" :aria-label="t.editor.newCanvas" @submit.prevent="create"><h2>{{ t.editor.newCanvas }}</h2><p>{{ ui.transparent }}</p><div class="new-dimensions"><label>{{ t.editor.width }}<input type="number" v-model.number="newWidth" min="1" max="30000" required></label><button class="icon-button" type="button" :aria-label="t.editor.swap" :title="t.editor.swap" @click="[newWidth,newHeight]=[newHeight,newWidth]"><Icon name="swap"/></button><label>{{ t.editor.height }}<input type="number" v-model.number="newHeight" min="1" max="30000" required></label></div><div class="button-row"><button type="button" @click="newDialog=false">{{ t.editor.cancel }}</button><button class="primary" type="submit">{{ t.editor.create }}</button></div></form></div>
     <div v-if="psdDialog" class="modal-shade" @click.self="psdDialog=false"><div class="dialog" role="dialog" aria-modal="true" :aria-label="t.editor.conversion"><h2>{{ t.editor.conversion }}</h2><p>{{ t.editor.conversionNote }}</p><div class="button-row"><button @click="psdDialog=false">{{ t.editor.cancel }}</button><button :disabled="!layeredPSD || !editable" @click="exportImage('psd')">{{ t.editor.layered }}</button><button :disabled="!editable" class="primary" @click="exportImage('psd',true)">{{ t.editor.flattened }}</button></div></div></div>
     <div v-if="detailsDialog" class="modal-shade" @click.self="detailsDialog=false"><section class="dialog details-dialog" role="dialog" aria-modal="true" :aria-label="ui.details"><div class="dialog-heading"><h2>{{ ui.details }}</h2><button class="icon-button" :aria-label="t.close" @click="detailsDialog=false"><Icon name="close"/></button></div><p>{{ t.sourceNote }}</p><p>{{ t.readonly }} · {{ version }}</p><template v-if="project"><p>{{ ui.source }}：{{ source==='engine'?t.engine:source==='saved'?t.saved:t.metadata }}</p><section class="coverage"><h3>{{ t.coverage }}</h3><dl><div><dt>{{ t.simple }}</dt><dd>{{ project.analysis.coverage.simple }}</dd></div><div><dt>{{ t.pixels }}</dt><dd>{{ project.analysis.coverage.pixelFallback }}</dd></div><div><dt>{{ t.preview }}</dt><dd>{{ project.analysis.coverage.previewOnly }}</dd></div></dl><p>{{ t.coverageNote }}</p><button :disabled="busy" data-testid="copy-report" @click="copyReport">{{ t.copyReport }}</button><small>{{ t.reportPrivacy }}</small><small v-if="reportState!=='idle'" role="status">{{ reportState==='copied'?t.reportCopied:t.reportError }}</small></section><details v-if="selected" class="raw-properties"><summary>{{ t.properties }}</summary><pre>{{ formattedProperties }}</pre></details></template><div class="button-row"><button class="primary" @click="detailsDialog=false">{{ t.close }}</button></div></section></div>

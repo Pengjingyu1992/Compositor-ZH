@@ -15,12 +15,14 @@ export interface LayerRow {
 }
 export interface ViewerProject {
   id: string; name: string; preview: boolean; urls: Record<string, string>;
+  selection?: {width:number;height:number;data:Uint8Array}|null;
+  locks?: Record<string,Record<string,boolean>>;
   revision: string; dirty: boolean; canUndo: boolean; canRedo: boolean; hasLocation: boolean;
-  manifest: { width: number; height: number; version: number; layers: LayerRow[]; resolution?: number };
+  manifest: { width: number; height: number; version: number; layers: LayerRow[]; resolution?: number; guides?:{id:string;axis:string;position:number}[] };
   analysis: { rows: LayerRow[]; issues: string[]; estimatedBytes: number;
     coverage: { simple: number; pixelFallback: number; previewOnly: number; total: number } };
 }
-export interface OpenResult { project?: ViewerProject; canceled?: boolean; error?: string; backup?: boolean; exported?: boolean; warnings?: string[] }
+export interface OpenResult { copied?:boolean; project?: ViewerProject; canceled?: boolean; error?: string; backup?: boolean; exported?: boolean; warnings?: string[] }
 declare global {
   interface Window {
     viewer: {
@@ -38,6 +40,8 @@ declare global {
       onActual(callback: () => void): () => void;
     };
     editor: {
+      textClipboard(action:string):Promise<void>;
+      clipboard(id:string,revision:string,action:string,png?:Uint8Array):Promise<OpenResult>;
       create(w: number, h: number): Promise<OpenResult>;
       edit(id: string, revision: string, op: Record<string, unknown>): Promise<OpenResult>;
       history(id: string, revision: string, direction: string): Promise<OpenResult>;

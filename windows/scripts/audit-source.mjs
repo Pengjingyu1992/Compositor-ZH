@@ -21,7 +21,8 @@ const source = await readFile(path.join(root, 'windows/packages/locales/index.ts
 // Catalogs are code-free constant objects. Import TypeScript using Node 24's type stripping.
 const { messages } = await import('../packages/locales/index.ts');
 function keys(v, prefix = '') { return Object.entries(v).flatMap(([key, value]) => typeof value === 'object' ? keys(value, `${prefix}${key}.`) : [`${prefix}${key}`]); }
-const en = keys(messages.en).sort(), zh = keys(messages['zh-Hans']).sort();
+const {fullEditor}=await import('../apps/desktop/renderer/editor-labels.ts');
+const en = [...keys(messages.en),...keys(fullEditor.en,'full.')].sort(), zh = [...keys(messages['zh-Hans']),...keys(fullEditor['zh-Hans'],'full.')].sort();
 if (JSON.stringify(en) !== JSON.stringify(zh)) findings.push('localization-key-mismatch');
 if (!source.includes('sourceNote')) findings.push('missing-credits');
 if (findings.length) { console.error('Review failures:', findings); process.exitCode = 1; }

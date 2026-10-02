@@ -21,8 +21,10 @@ contextBridge.exposeInMainWorld('viewer', Object.freeze({
   onFit: callback => subscribe('viewer:fit', callback),
   onActual: callback => subscribe('viewer:actual', callback)
 }));
-const commands = new Set(['new', 'image', 'importPSD', 'save', 'saveAs', 'png', 'exportPSD', 'recover', 'undo', 'redo', 'addPixels', 'addGroup', 'addMask', 'details', 'properties', 'effects']);
+const commands = new Set(['new', 'image', 'importPSD', 'save', 'saveAs', 'png', 'exportPSD', 'recover', 'undo', 'redo', 'addPixels', 'addGroup', 'addMask', 'details', 'properties', 'effects','selectAll','deselect','invertSelection','expandSelection','contractSelection','featherSelection','fill','clear','selectionMask','cropSelection','canvasSize','imageSize','trim','filter','group','ungroup','duplicate','delete','merge','flatten','rasterize','applyMask','text','shape','copy','copyMerged','cut','paste','flipCanvasH','flipCanvasV','grid','snap']);
 contextBridge.exposeInMainWorld('editor', Object.freeze({
+  clipboard: (id,revision,action,png) => ipcRenderer.invoke('editor:clipboard',id,revision,action,png),
+  textClipboard: action => ipcRenderer.invoke('editor:textClipboard',action),
   create: (w, h) => ipcRenderer.invoke('editor:new', w, h),
   edit: (id, revision, op) => ipcRenderer.invoke('editor:edit', id, revision, op),
   history: (id, revision, direction) => ipcRenderer.invoke('editor:history', id, revision, direction),

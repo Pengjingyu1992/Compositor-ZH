@@ -1,7 +1,7 @@
 {
   "name": "compositor-windows",
-  "version": "0.2.0-alpha.2",
-  "description": "Compositor / 叠绘 Windows layer editor, built with the Pentrado engine",
+  "version": "0.3.0-alpha.1",
+  "description": "Compositor / \u53e0\u7ed8 Windows layer editor, built with the Pentrado engine",
   "author": "Compositor-ZH contributors",
   "license": "MIT",
   "private": true,
@@ -46,6 +46,7 @@
       "apps/desktop/preload/**",
       "packages/comp-bridge/**",
       "packages/platform/**",
+      "packages/editor-adapter/*.mjs",
       "out/renderer/**",
       "out/codecs/**",
       "package.json"

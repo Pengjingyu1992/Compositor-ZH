@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { GLOBAL_OPS, selectionEdit, editorOperation, checkPermission } from './editor-ops.mjs';
 import { parseManifest, analyze, LIMITS, ProjectError } from './project.mjs';
 
 export const ADJUSTMENTS = ['Hue/Saturation', 'Levels', 'Curves', 'Exposure', 'Gradient Map', 'Grain', 'Invert', 'Black & White', 'Color Balance', 'Gaussian Blur', 'Motion Blur', 'Add Noise'];
@@ -29,13 +30,20 @@ export function newProject(w, h) {
 // cannot leave a partially edited document or consume redo history.
 export function editProject(data, op, codecs) {
   if (!op || typeof op !== 'object' || typeof op.kind !== 'string') fail('invalid');
+  checkPermission(data, op);
+  if(data.analysis.issues.length && op.kind==='selection' && op.action==='wand')fail('unsupported');
+  if (op.kind === 'selection') return selectionEdit(data, op, codecs);
+  if (op.kind === 'lock') {
+    if (!data.manifest.layers.some(l=>l.id===op.id) || !['content','position','appearance','alpha'].includes(op.field) || typeof op.value!=='boolean') fail('invalid');
+    return {...data, locks:{...data.locks,[op.id]:{...data.locks?.[op.id],[op.field]:op.value}},contentSnapshot:data.contentSnapshot??data};
+  }
   if (op.kind === 'batch') {
     if (!Array.isArray(op.operations) || !op.operations.length || op.operations.length > 32 || op.operations.some(v => v.kind === 'batch')) fail('invalid');
     return op.operations.reduce((candidate, operation) => editProject(candidate, operation, codecs), data);
   }
   const m = clone(data.manifest), resources = new Map(data.resources);
   const target = m.layers.find(l => l.id === op.id);
-  const needsTarget = !['add', 'importPixels'].includes(op.kind);
+  const needsTarget = !['add', 'importPixels', ...GLOBAL_OPS].includes(op.kind) && !(op.kind==='styled' && !op.id);
   if (needsTarget && !target) fail('stale');
   if (data.analysis.issues.length && !['rename'].includes(op.kind)) fail('unsupported');
   const descendants = id => {
@@ -63,7 +71,7 @@ export function editProject(data, op, codecs) {
     if (op.parentID) { if (!m.layers.some(p => p.id === op.parentID && p.isGroup)) fail('invalid'); l.parentID = op.parentID; }
     m.layers.push(l); m.activeLayerID = id;
   };
-  switch (op.kind) {
+  if (!editorOperation(data,m,resources,target,op,codecs,descendants)) switch (op.kind) {
     case 'add': add(op.type, op.name); break;
     case 'importPixels': add('pixels', op.name); break;
     case 'rename': if (typeof op.name !== 'string' || op.name.length > 256) fail('invalid'); target.name = op.name; break;
@@ -93,7 +101,7 @@ export function editProject(data, op, codecs) {
       break;
     }
     case 'duplicate': {
-      if (target.isGroup) fail('unsupported');
+      if (target.isGroup) return editProject(data,{...op,kind:'duplicateTree'},codecs);
       const l = clone(target), id = randomUUID().toUpperCase(); l.id = id; l.name += ' (copy)';
       for (const field of ['imageFile', 'maskFile']) if (l[field]) {
         const old = l[field]; l[field] = `${id}${field === 'maskFile' ? '.mask' : ''}.png`;
@@ -168,5 +176,7 @@ export function editProject(data, op, codecs) {
   if (op.kind !== 'rename') { resources.delete('QuickLook/Preview.jpg'); resources.delete('QuickLook/Thumbnail.png'); }
   const result = projectData(m, resources, data.name);
   if (op.kind !== 'rename' && result.analysis.issues.length) fail(result.analysis.issues.includes('memory') ? 'limit' : 'unsupported');
+  result.locks=data.locks;
+  result.selection=['canvas','imageSize'].includes(op.kind)?null:data.selection;
   return result;
 }

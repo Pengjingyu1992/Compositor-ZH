@@ -22,7 +22,8 @@ test.beforeEach(async()=>{
   before=await readFile(path.join(project,'manifest.json'));
   instance=await _electron.launch({timeout:30000,executablePath:path.join(root,'release/win-unpacked/Compositor.exe'),args:['--use-angle=swiftshader','--enable-unsafe-swiftshader'],env:{...process.env,APPDATA:temp}});
   await instance.evaluate(({dialog,BrowserWindow},p)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[p]});BrowserWindow.getAllWindows()[0].setContentSize(1280,800);},project);
-  page=await instance.firstWindow();await page.getByTestId('open-project').click();await expect(page.getByTestId('rendered-canvas')).toBeVisible();
+  page=await instance.firstWindow();await page.getByTestId('language').selectOption('zh-Hans');await expect(page.getByTestId('language')).toHaveValue('zh-Hans');
+  await page.getByTestId('open-project').click();await expect(page.getByTestId('rendered-canvas')).toBeVisible();
   await page.locator('.layer-select').filter({hasText:'色彩 / Color'}).click();await expect(page.getByTestId('layer-opacity')).toBeEnabled();
 });
 test.afterEach(async()=>{await instance?.close();await rm(temp,{recursive:true,force:true});});

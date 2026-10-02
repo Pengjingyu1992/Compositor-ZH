@@ -39,6 +39,7 @@ test('inherited visibility and pass-through opacity follow group ancestors', () 
   assert.equal(r.effectiveVisible, false); assert.equal(r.effectiveOpacity, .2);
 });
 test('large canvases are reported, not silently downscaled', () => { const m = manifest(); m.width = 8192; m.height = 8192; assert.ok(analyze(m).issues.includes('memory')); assert.equal(m.width, 8192); });
+test('placed full-canvas inputs count toward the memory budget', () => { const m = manifest(); m.width = 4000; m.height = 4000; assert.ok(analyze(m).issues.includes('memory')); });
 test('PNG dimensions and mask bit depth validated before decoding', () => { assert.deepEqual(pngDimensions(png(2, 3, [255], true), true), { width: 2, height: 3 }); assert.throws(() => pngDimensions(png(2, 3, [0, 0, 0, 255]), true)); });
 test('round trip preserves manifest bytes and ALL resources, refusing overwrite', async t => {
   const temp = await mkdtemp(path.join(os.tmpdir(), 'comp-roundtrip-')); t.after(() => rm(temp, { recursive: true, force: true }));

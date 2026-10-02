@@ -13,12 +13,16 @@ export function createPreviewRenderer() {
     if (!live || !output) return;
     engine.beginFrame?.();
     engine.composite(inputs);
-    const presented = engine.presentCanvas();
-    if (!presented) throw new Error('gpu');
+    const surface = engine.getCanvas();
+    const gpu = surface?.getContext('webgl2') as WebGL2RenderingContext | null;
+    if (!gpu || gpu.isContextLost()) throw new Error('gpu');
+    // Published Pentrado 0.1.1 presents during readback (no presentCanvas API).
+    const pixels = engine.readback();
+    if (gpu.isContextLost()) throw new Error('gpu');
     const context = output.getContext('2d');
     if (!context) throw new Error('gpu');
     context.clearRect(0, 0, output.width, output.height);
-    context.drawImage(presented, 0, 0);
+    context.putImageData(pixels, 0, 0);
   }
   async function source(url: string, placement: Placement) {
     const response = await fetch(url);
@@ -26,14 +30,19 @@ export function createPreviewRenderer() {
     const bitmap = await createImageBitmap(await response.blob());
     if (!live) { bitmap.close(); throw new Error('stale'); }
     const canvas = document.createElement('canvas');
-    canvas.width = bitmap.width; canvas.height = bitmap.height;
+    if (!output) { bitmap.close(); throw new Error('stale'); }
+    canvas.width = output.width; canvas.height = output.height;
     const ctx = canvas.getContext('2d');
     if (!ctx) { bitmap.close(); throw new Error('gpu'); }
-    ctx.translate(placement.flipX ? canvas.width : 0, placement.flipY ? canvas.height : 0);
-    ctx.scale(placement.flipX ? -1 : 1, placement.flipY ? -1 : 1);
-    ctx.drawImage(bitmap, 0, 0); bitmap.close(); canvases.push(canvas);
+    // The published engine samples full-canvas inputs. Bake placement into a
+    // bounded derivative without modifying the original resource or record.
     const [x, y] = placement.origin, [w, h] = placement.size;
-    return { source: canvas, rect: { x, y, w, h }, quad: { x, y, w, h, rotation: placement.rotation * Math.PI / 180 } };
+    ctx.imageSmoothingQuality = 'high';
+    ctx.translate(x + w / 2, y + h / 2);
+    ctx.rotate(placement.rotation * Math.PI / 180);
+    ctx.scale(placement.flipX ? -1 : 1, placement.flipY ? -1 : 1);
+    ctx.drawImage(bitmap, -w / 2, -h / 2, w, h); bitmap.close(); canvases.push(canvas);
+    return { source: canvas, rect: { x: 0, y: 0, w: canvas.width, h: canvas.height } };
   }
   return {
     async render(project: ViewerProject, canvas: HTMLCanvasElement, failed: () => void) {

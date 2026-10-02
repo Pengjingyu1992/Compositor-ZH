@@ -182,7 +182,10 @@ export function analyze(manifest, sourcePixels = 0, maskPixels = 0) {
   const canvasPixels = manifest.width * manifest.height;
   // Conservative peak estimate: three float targets, presentation/readback,
   // encoded resources, source canvases, uploaded textures, and flip copies.
-  const estimatedBytes = canvasPixels * 40 + sourcePixels * 16 + maskPixels * 12;
+  const placedInputs = rows.filter(l => l.effectiveVisible && l.effectiveOpacity > 0 && l.imageFile && !l.isGroup).reduce((n, l) => n + 1 + (l.maskFile && l.maskEnabled !== false ? 1 : 0), 0);
+  // npm Pentrado 0.1.1 consumes full-canvas placed textures (unlike the newer
+  // repository quad API). Include CPU and GPU copies of each placed input.
+  const estimatedBytes = canvasPixels * (40 + placedInputs * 8) + sourcePixels * 8 + maskPixels * 8;
   if (canvasPixels > 16_000_000 || estimatedBytes > 768 * 1024 ** 2) issues.add('memory');
   return { rows, issues: [...issues], estimatedBytes, coverage: { simple, pixelFallback, previewOnly, total: rows.length } };
 }

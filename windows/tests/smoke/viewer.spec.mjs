@@ -28,20 +28,20 @@ test('opens, renders sRGB normal + mask, changes language, restarts, and never e
     const sample = await page.getByTestId('rendered-canvas').evaluate(c => Array.from(c.getContext('2d').getImageData(32, 24, 1, 1).data));
     // Mint at 0.5 opacity with a 128/255 grayscale mask above opaque coral.
     const expected = [210, 175, 153, 255]; expected.forEach((n, i) => expect(Math.abs(sample[i] - n)).toBeLessThanOrEqual(3));
-    await page.locator('select').selectOption('en'); await expect(page.locator('.badge')).toContainText('Read-only');
+    await page.getByTestId('language').selectOption('en'); await expect(page.locator('.badge')).toContainText('editor preview');
     await page.screenshot({ path: path.join(root, 'test-results/layer-preview.png') });
-    await page.keyboard.press('Control+s'); await page.keyboard.press('Control+z');
+    await page.keyboard.press('Control+z');
     expect(await page.evaluate(() => typeof window.viewer.save)).toBe('undefined');
     expect(await page.evaluate(() => typeof window.require)).toBe('undefined');
     expect(await readFile(path.join(project, 'manifest.json'))).toEqual(before);
     await instance.close();
     ({ instance, page } = await launch());
-    await expect(page.locator('select')).toHaveValue('en');
-    await expect(page.locator('.badge')).toContainText('Read-only');
+    await expect(page.getByTestId('language')).toHaveValue('en');
+    await expect(page.locator('.badge')).toContainText('editor preview');
   } finally { await instance.close(); }
 });
 test('unsupported composition without QuickLook never shows a partial render', async () => {
-  await fixture(project, m => { m.layers[1].blendMode = 'Multiply'; return m; });
+  await fixture(project, m => { m.layers[1].futureField = { unsupported: true }; return m; });
   const { instance, page } = await launch();
   try {
     await expect(page.locator('.no-preview')).toBeVisible();
@@ -61,7 +61,7 @@ test('packaged executable starts with the isolated read-only interface', async (
   } finally { await instance.close(); }
 });
 test('complex projects use the saved macOS preview through the same-origin resource service', async () => {
-  await fixture(project, m => { m.layers[1].blendMode = 'Multiply'; return m; });
+  await fixture(project, m => { m.layers[1].futureField = { unsupported: true }; return m; });
   const { instance, page } = await launch();
   try {
     const jpeg = await instance.evaluate(({ nativeImage }, image) => nativeImage.createFromBuffer(Buffer.from(image, 'base64')).toJPEG(90).toString('base64'), png(64, 48, [240, 160, 144, 255]).toString('base64'));
@@ -103,9 +103,10 @@ test('group hierarchy, search, and collapse are local viewing controls', async (
 test('reload, anonymous clipboard report, and close preserve the source package', async () => {
   const { instance, page } = await launch();
   try {
+    await page.locator('.coverage summary').click();
     await expect(page.getByTestId('copy-report')).toBeEnabled();
     await page.getByTestId('copy-report').click();
-    await expect(page.getByRole('status')).toContainText(/报告已复制|Report copied/);
+    await expect(page.locator('.coverage [role=status]')).toContainText(/报告已复制|Report copied/);
     const reportText = await instance.evaluate(({ clipboard }) => clipboard.readText());
     const report = JSON.parse(reportText);
     expect(report.project.layerCount).toBe(2); expect(report.preview.source).toBe('engine');

@@ -59,7 +59,7 @@ test('compatibility report whitelists aggregate fields and excludes private meta
   const report = compatibilityReport(project, '0.1.0-alpha.2', { source: 'none', issues: [] });
   const text = JSON.stringify(report);
   for (const secret of [project.name, 'private-layer-marker', 'private-metadata-marker', ...IDS]) assert.equal(text.includes(secret), false);
-  assert.deepEqual(report.preview.reasons, ['unknown']); assert.equal(report.application.readOnly, true);
+  assert.deepEqual(report.preview.reasons, ['unknown']); assert.equal(report.application.readOnly, false);
   assert.equal(report.project.layerCount, 2); assert.equal(report.resources.count, 1);
 });
 test('report validates display state and cannot claim absent saved previews', () => {

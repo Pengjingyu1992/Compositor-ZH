@@ -21,3 +21,15 @@ contextBridge.exposeInMainWorld('viewer', Object.freeze({
   onFit: callback => subscribe('viewer:fit', callback),
   onActual: callback => subscribe('viewer:actual', callback)
 }));
+const commands = new Set(['new', 'image', 'importPSD', 'save', 'saveAs', 'png', 'exportPSD', 'recover', 'undo', 'redo']);
+contextBridge.exposeInMainWorld('editor', Object.freeze({
+  create: (w, h) => ipcRenderer.invoke('editor:new', w, h),
+  edit: (id, revision, op) => ipcRenderer.invoke('editor:edit', id, revision, op),
+  history: (id, revision, direction) => ipcRenderer.invoke('editor:history', id, revision, direction),
+  save: (id, revision, as = false) => ipcRenderer.invoke('editor:save', id, revision, as),
+  importImage: (id, revision) => ipcRenderer.invoke('editor:image', id, revision),
+  importPSD: () => ipcRenderer.invoke('editor:importPSD'),
+  export: (id, revision, type, payload) => ipcRenderer.invoke('editor:export', id, revision, type, payload),
+  recover: () => ipcRenderer.invoke('editor:recover'),
+  onCommand: (name, callback) => { if (!commands.has(name)) throw new Error('Invalid command'); return subscribe(`editor:${name}`, callback); }
+}));

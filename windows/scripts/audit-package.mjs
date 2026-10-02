@@ -15,7 +15,7 @@ for (const entry of entries.filter(p => /\.(?:js|mjs|cjs|json|html|css)$/.test(p
 }
 for (const license of ['LICENSE.electron.txt', 'LICENSES.chromium.html']) await readFile(path.join(unpacked, license));
 const notices = await readdir(path.join(unpacked, 'resources/licenses'));
-for (const name of ['Compositor-LICENSE.txt', 'pentrado-LICENSE', 'Typr-LICENSE.txt', 'DEPENDENCIES.json', 'THIRD_PARTY_NOTICES.md']) {
+for (const name of ['Compositor-LICENSE.txt', 'pentrado-LICENSE', 'ag-psd-LICENSE', 'pngjs-LICENSE', 'Typr-LICENSE.txt', 'DEPENDENCIES.json', 'THIRD_PARTY_NOTICES.md']) {
   if (!notices.includes(name)) throw new Error(`Missing notice: ${name}`);
 }
 const artifacts = (await readdir(directory)).filter(p => /^Compositor-Windows-.*\.(?:exe|zip)$/.test(p));
@@ -23,5 +23,5 @@ if (artifacts.length !== 2) throw new Error('Expected NSIS installer and ZIP');
 const checksums = [];
 for (const name of artifacts) checksums.push(`${createHash('sha256').update(await readFile(path.join(directory, name))).digest('hex')}  ${name}`);
 await writeFile(path.join(directory, 'SHA256SUMS.txt'), checksums.join('\n') + '\n');
-await writeFile(path.join(directory, 'PACKAGE-REVIEW.json'), JSON.stringify({ platform: 'Windows x64', sourceCommit: process.env.GITHUB_SHA ?? 'manual build', readOnly: true, packagedEntries: entries.length, sourceMaps: false, privatePatternMatches: 0, bundledNotices: notices.sort(), artifacts, realWindows10And11Acceptance: 'pending', localTests: 'not run; cloud checks only' }, null, 2) + '\n');
+await writeFile(path.join(directory, 'PACKAGE-REVIEW.json'), JSON.stringify({ platform: 'Windows x64', sourceCommit: process.env.GITHUB_SHA ?? 'manual build', readOnly: false, editing: 'revision-bound operations; staged save with backup and journal', packagedEntries: entries.length, sourceMaps: false, privatePatternMatches: 0, bundledNotices: notices.sort(), artifacts, realWindows10And11Acceptance: 'pending', localTests: 'not run; cloud checks only' }, null, 2) + '\n');
 console.log('Packaged source and license review passed. SHA256SUMS.txt written.');

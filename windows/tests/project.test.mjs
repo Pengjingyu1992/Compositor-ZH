@@ -28,10 +28,9 @@ test('missing parents and cycles rejected', () => { rejects(m => m.layers[1].par
 test('live mask references must exist and be acyclic', () => { rejects(m => m.layers[0].maskSourceID = IDS[2]); rejects(m => { m.layers[0].maskSourceID = IDS[1]; m.layers[1].maskSourceID = IDS[0]; }); });
 test('invalid dimensions, opacity, color space and transform rejected', () => { rejects(m => m.width = 30001); rejects(m => m.width = 2.2); rejects(m => m.layers[0].opacity = -1); rejects(m => m.layers[0].transform.size = [0, 10]); rejects(m => m.colorSpace = 'Display P3', 'colorSpace'); });
 test('version gates on masks and text runs', () => { rejects(m => m.version = 3); rejects(m => { m.version = 9; m.layers[0].text = { colorRuns: [] }; }); });
-test('non-Normal modes, adjustments, effects and clipping require an explicit fallback', () => {
-  for (const [key, value, reason] of [['blendMode', 'Multiply', 'blend'], ['effects', { shadow: {} }, 'effects'], ['maskSourceID', IDS[1], 'clipping']]) {
-    const m = manifest(); m.layers[0][key] = value; assert.ok(analyze(m).issues.includes(reason));
-  }
+test('supported blends and clipping are renderable; malformed effects need fallback', () => {
+  for (const mode of BLEND_MODES) { const m = manifest(); m.layers[0].blendMode = mode; assert.ok(!analyze(m).issues.includes('blend')); }
+  const m = manifest(); m.layers[0].effects = { shadow: { unknownContour: 123 } }; assert.ok(analyze(m).issues.includes('effects'));
 });
 test('inherited visibility and pass-through opacity follow group ancestors', () => {
   const m = manifest(); m.layers.unshift({ id: IDS[2], name: 'Group', isVisible: false, isGroup: true, opacity: .4, transform: m.layers[0].transform });

@@ -12,11 +12,11 @@
 - Author: **Terry Jia / jtydhr88**; copyright **2026 Terry Jia**.
 - Source: <https://github.com/jtydhr88/pentrado>
 - License: **MIT**, retained verbatim in [Pentrado-LICENSE.txt](Compositor/Resources/Pentrado-LICENSE.txt) and included in the app.
-- `Compositor/Document/LayerArrange.swift` adapts geometry from `src/engine/arrange.ts`. Pentrado also informed the feature comparison and implementation planning. The **macOS app** does not bundle the Pentrado web editor or its full dependency tree. The separate **Windows viewer** bundles code from `pentrado/engine` with a read-only Vue interface; see [Windows notices](windows/THIRD_PARTY_NOTICES.md).
+- `Compositor/Document/LayerArrange.swift` adapts geometry from `src/engine/arrange.ts`. Pentrado also informed the feature comparison and implementation planning. The **macOS app** does not bundle the Pentrado web editor or its full dependency tree. The separate **Windows editor preview** bundles code from `pentrado/engine` with a separate Vue interface; see [Windows notices](windows/THIRD_PARTY_NOTICES.md).
 
 ## Other materials
 
-- macOS PSD serialization is an original implementation following Adobe's public file-format specification. `ag-psd` was used as an independent local validation reader and is not distributed in the macOS app. The first Windows viewer does not include PSD editing or `ag-psd`.
+- macOS PSD serialization is an original implementation following Adobe's public file-format specification. `ag-psd` was used as an independent local validation reader and is not distributed in the macOS app. The Windows editor preview includes MIT-licensed `ag-psd` and `pngjs` for bounded PSD/PNG conversion; see its separate notices.
 - The app icon was generated for this edition and is included as an asset. The personal reference photograph used for its color palette is not distributed.
 - Apple's frameworks and system SDKs are supplied by macOS/Xcode and are not included in the source package.
 - This edition uses manual release downloads and does not distribute Sparkle or use the upstream update feed.

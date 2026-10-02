@@ -10,7 +10,7 @@ export function compatibilityReport(project, appVersion, display) {
   const source = display.source === 'engine' && issues.length ? 'none' : display.source === 'saved' && !project.preview ? 'none' : display.source;
   return {
     reportVersion: 1,
-    application: { name: 'Compositor Windows', version: appVersion, readOnly: true },
+    application: { name: 'Compositor Windows', version: appVersion, readOnly: false },
     project: { formatVersion: manifest.version, width: manifest.width, height: manifest.height, colorSpace: manifest.colorSpace,
       layerCount: manifest.layers.length, groupCount: manifest.layers.filter(l => l.isGroup).length },
     resources: { count: resources.size, encodedBytes: project.sourceBytes.length + [...resources.values()].reduce((n, r) => n + r.bytes.length, 0), savedPreviewAvailable: project.preview },

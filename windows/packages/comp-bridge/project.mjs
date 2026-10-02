@@ -2,6 +2,7 @@ import { open, lstat, readdir, realpath, mkdir, writeFile } from 'node:fs/promis
 import { constants } from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
+import { supportsAdjustment, supportsEffects } from './capabilities.mjs';
 
 export const LIMITS = Object.freeze({ manifest: 4 * 1024 ** 2, asset: 64 * 1024 ** 2, encoded: 256 * 1024 ** 2, pixels: 100_000_000, layers: 10_000, side: 30_000 });
 export const BLEND_MODES = Object.freeze(['Normal', 'Darken', 'Multiply', 'Color Burn', 'Linear Burn', 'Lighten', 'Screen', 'Color Dodge', 'Linear Dodge (Add)', 'Overlay', 'Soft Light', 'Hard Light', 'Vivid Light', 'Linear Light', 'Pin Light', 'Hard Mix', 'Difference', 'Exclusion', 'Subtract', 'Divide', 'Hue', 'Saturation', 'Color', 'Luminosity']);
@@ -99,7 +100,7 @@ export function pngDimensions(b, mask = false) {
   requireValue(w >= 1 && h >= 1 && w <= LIMITS.side && h <= LIMITS.side && b[24] === 8 && (mask ? b[25] === 0 : [2, 6].includes(b[25])) && b[26] === 0 && b[27] === 0 && b[28] <= 1, 'asset');
   return { width: w, height: h };
 }
-function jpegDimensions(b) {
+export function jpegDimensions(b) {
   requireValue(b[0] === 255 && b[1] === 216, 'asset');
   let p = 2;
   while (p + 4 < b.length) {
@@ -119,7 +120,7 @@ function jpegDimensions(b) {
   }
   throw new ProjectError('asset');
 }
-async function safeDirectory(p) {
+export async function safeDirectory(p) {
   // Windows TEMP may use an 8.3 short name. Validate ancestors as directory
   // entries, then canonicalize; string equality would reject legitimate paths.
   let current = path.resolve(p);
@@ -132,7 +133,7 @@ async function safeDirectory(p) {
   }
   return realpath(p);
 }
-async function safeRead(p, limit) {
+export async function safeRead(p, limit) {
   const st = await lstat(p);
   requireValue(st.isFile() && !st.isSymbolicLink(), 'path');
   requireValue(st.size <= limit, 'limit');
@@ -171,14 +172,14 @@ export function analyze(manifest, sourcePixels = 0, maskPixels = 0) {
       const unknown = Object.keys(l).some(k => !KNOWN_LAYER.has(k)) || Object.keys(l.transform).some(k => !KNOWN_TRANSFORM.has(k));
       const reasons = [];
       if (unknown) reasons.push('unknown');
-      if (l.adjustment) reasons.push('adjustment');
-      if (l.effects && Object.values(l.effects).some(v => record(v) && v.enabled !== false)) reasons.push('effects');
-      if (l.maskSourceID) reasons.push('clipping');
-      if (l.isGroup && l.maskFile && l.maskEnabled !== false) reasons.push('groupMask');
-      if (l.maskFile && l.maskEnabled !== false && l.maskLinked === false) reasons.push('unlinkedMask');
-      if ((l.blendMode ?? 'Normal') !== 'Normal') reasons.push('blend');
-      // Pentrado uses linear sampling. Nearest-neighbor fidelity is not claimed.
-      if (l.transform.sampling === 'Nearest') reasons.push('sampling');
+      if (l.adjustment && !supportsAdjustment(l.adjustment)) reasons.push('adjustment');
+      if (l.effects && (!supportsEffects(l.effects) || l.isGroup || l.adjustment)) reasons.push('effects');
+      // Adjustments and effects are now explicitly evaluated by the adapter.
+      // Complex, noncontiguous live-alpha relationships require a saved preview.
+      if (l.maskSourceID) {
+        const siblings = children.get(parent) ?? [], index = siblings.indexOf(l), source = manifest.layers.find(s => s.id.toUpperCase() === l.maskSourceID.toUpperCase());
+        if (!source || source.parentID?.toUpperCase() !== l.parentID?.toUpperCase() || !siblings.slice(0, index).some(s => s.id === source.id)) reasons.push('clipping');
+      }
       if (shown && alpha > 0) reasons.forEach(r => issues.add(r));
       const category = reasons.length ? 'preview' : l.text || l.shape ? 'pixels' : 'simple';
       if (category === 'preview') previewOnly++; else if (category === 'pixels') pixelFallback++; else simple++;
@@ -193,7 +194,8 @@ export function analyze(manifest, sourcePixels = 0, maskPixels = 0) {
   const placedInputs = rows.filter(l => l.effectiveVisible && l.effectiveOpacity > 0 && l.imageFile && !l.isGroup).reduce((n, l) => n + 1 + (l.maskFile && l.maskEnabled !== false ? 1 : 0), 0);
   // npm Pentrado 0.1.1 consumes full-canvas placed textures (unlike the newer
   // repository quad API). Include CPU and GPU copies of each placed input.
-  const estimatedBytes = canvasPixels * (40 + placedInputs * 8) + sourcePixels * 8 + maskPixels * 8;
+  const placedMasks = rows.filter(l => l.maskFile).length;
+  const estimatedBytes = canvasPixels * (192 + placedInputs * 12 + placedMasks * 4) + sourcePixels * 8 + maskPixels * 8;
   if (canvasPixels > 16_000_000 || estimatedBytes > 768 * 1024 ** 2) issues.add('memory');
   return { rows, issues: [...issues], estimatedBytes, coverage: { simple, pixelFallback, previewOnly, total: rows.length } };
 }

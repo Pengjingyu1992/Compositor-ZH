@@ -39,6 +39,10 @@ jobs:
         run: npm run typecheck
       - name: Project validation and preservation checks
         run: npm test
+      - name: Independent PSD reader (cloud only)
+        run: |
+          python -m pip install psd-tools==1.23.0
+          python tests/independent-psd.py
       - name: Build Windows installer and ZIP
         run: npm run package:win
         env:

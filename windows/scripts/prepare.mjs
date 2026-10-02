@@ -1,6 +1,7 @@
 import { readFile, writeFile, mkdir, readdir, copyFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { build } from 'esbuild';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const icon = await readFile(path.join(root, '../Compositor/Assets.xcassets/AppIcon.appiconset/app-icon-256.png'));
 await mkdir(path.join(root, 'assets'), { recursive: true });
@@ -29,4 +30,6 @@ async function license(name) {
 }
 // Runtime libraries are compiled into the renderer; record their dependency notices.
 await license('pentrado'); await license('vue');
+await license('ag-psd'); await license('pngjs');
 await writeFile(path.join(destination, 'DEPENDENCIES.json'), JSON.stringify(index.sort((a, b) => a.name.localeCompare(b.name)), null, 2) + '\n');
+await build({ entryPoints: [path.join(root, 'packages/comp-bridge/codecs.mjs')], outfile: path.join(root, 'out/codecs/index.cjs'), platform: 'node', format: 'cjs', bundle: true, sourcemap: false, minify: true, target: 'node24' });

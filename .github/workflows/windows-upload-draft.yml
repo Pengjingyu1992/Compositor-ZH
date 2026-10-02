@@ -46,7 +46,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          jq -e --arg sha "$(jq -r .head_sha run.json)" '.sourceCommit == $sha and .privatePatternMatches == 0 and .readOnly == true' candidate/release/PACKAGE-REVIEW.json
+          jq -e --arg sha "$(jq -r .head_sha run.json)" '.sourceCommit == $sha and .privatePatternMatches == 0 and .readOnly == false and (.editing | startswith("revision-bound"))' candidate/release/PACKAGE-REVIEW.json
           cd candidate/release
           sha256sum --check SHA256SUMS.txt
           for asset in Compositor-Windows-*.exe Compositor-Windows-*.zip SHA256SUMS.txt PACKAGE-REVIEW.json; do

@@ -1,59 +1,64 @@
-# 叠绘 / Compositor Windows 安装说明
+# 叠绘 / Compositor Windows 安装与使用
 
 ## 下载和安装
 
-1. 打开 [Windows 预览版发行页](https://github.com/Pengjingyu1992/Compositor-ZH/releases/tag/windows-v0.1.0-alpha.2)。不要使用仓库的 `releases/latest`，那个入口保留给 macOS。
-2. **Windows 10 22H2 或 Windows 11，64 位 Intel/AMD（x64）**：下载 `Compositor-Windows-0.1.0-alpha.2-x64.exe`，运行后按安装向导选择目录。不需要 Node.js、npm、Xcode 或 API Key。当前不提供 Windows ARM64/32 位原生包。
-3. 或下载同名 `.zip`，**完整解压**到一个目录，运行其中的 `Compositor.exe`。不要只复制 EXE；`resources`、DLL、语言资源和许可证必须一起保留。
-4. 当前为未签名社区预览版，Windows 可能显示发布者未知。先核对下载来源和下方校验和，仅在确认来源后按系统提供的选项打开；不要关闭 Defender。
-5. 第一次启动默认简体中文。右上角选择 **English / 简体中文** 即时切换，关闭后重新打开仍保留。
+1. 打开 [Windows 编辑预览版发行页](https://github.com/Pengjingyu1992/Compositor-ZH/releases/tag/windows-v0.2.0-alpha.1)。`releases/latest` 保留给 macOS。
+2. 目标系统：**Windows 10 22H2 / Windows 11，Intel/AMD x64**。下载 `Compositor-Windows-0.2.0-alpha.1-x64.exe`，运行安装向导。无需 Node.js、Xcode 或 API Key；暂无 ARM64/32 位包。
+3. 便携版下载同名 ZIP，**完整解压**，运行 `Compositor.exe`。保留 resources、DLL、语言资源和许可证。
+4. 社区包未签名。核对来源和 SHA-256 后按系统提供的选项打开；无需关闭 Defender。
+5. 右上角切换简体中文 / English，即时生效并保留到下次启动。
 
-安装版和 ZIP 版都使用 `%APPDATA%\Compositor-Windows\preferences.json` 保存语言设置。设置只存语言，不存项目路径、不上传项目。它们共享 Windows 语言设置；与 macOS 设置完全独立。卸载保留设置，想重置时先退出再删除该文件。
+真实 Win10/11 设备、中文输入法、高 DPI、多显示器、实际显卡与 Photoshop/Photopea 人工打开验收仍待完成。云端 Windows Server 的通过结果不等于这些项目已通过。本版保留为预发布，不替换 macOS 安装包或更新入口。
 
-最低目标系统来自 Electron 的 Windows 10+ 支持范围；本版只发布 x64，**真实 Windows 10/11 设备验收尚未完成**，不能将云端 Windows Server 构建视为设备兼容性保证。
+## 打开与编辑
 
-## 打开 macOS 项目
+- 将 macOS 保存的**整个 `.comp` 文件夹**复制到 Windows；保留 manifest.json、images 和全部资源。Ctrl+O 选择项目文件夹，也可拖入一个完整文件夹。
+- 新建画布支持互换宽高。导入 PNG/JPEG，建立像素层/组/调整层；现有文字和形状使用保存的像素。画笔改动文字/形状像素会移除其可编辑元数据，撤销可恢复。
+- 左侧工具：移动（V）、画笔（B）、橡皮擦（E）、抓手（H）。选中图层后绘画；目标选择“蒙版”可绘制白色显露、橡皮擦绘制黑色隐藏。Escape 取消当前笔画。
+- 右侧编辑名称、可见性、不透明度、24 种混合、位置/大小/旋转/翻转、所属组和剪贴源；组移动带动全部后代。删除剪贴源会解除引用，组删除包含后代。复制像素层保留原始资源并生成新 UUID。
+- 可添加/移除/反转/启停蒙版，切换链接状态。支持独立蒙版位置的渲染；本版没有独立蒙版变换控件。
+- 12 类调整：色相/饱和度、色阶、曲线、曝光、渐变映射、颗粒、反相、黑白、色彩平衡、高斯模糊、动感模糊、添加杂色。曲线点击添加点并可重置。6 类效果：描边、投影、颜色叠加、内阴影、外发光、内发光。
+- Ctrl+Z 撤销、Ctrl+Shift+Z 重做；每个完整操作/笔画一个历史步骤。历史最多 80 步，按共享图像缓冲计入 256 MiB 预算。超预算时丢弃最旧历史。
+- Ctrl+0 适合窗口、Ctrl+1 原始大小、Ctrl+滚轮缩放；抓手平移。搜索和折叠图层不会更改项目。
 
-1. 在 macOS 版保存项目后，把**整个 `作品.comp` 文件夹**复制到 Windows。必要时先在 Mac 上压缩整个项目，再在 Windows 解压。
-2. 项目内应包含 `manifest.json`、`images/` 及所有图层 PNG；`QuickLook/Preview.jpg` 是可选的已保存预览。
-3. 点击“打开项目”或 `Ctrl+O`，在文件夹选择器中直接选中 `.comp` 文件夹，然后确认“打开项目”。不要只选择 manifest，也不要选择快捷方式或目录链接。
-4. 也可以把**单个完整 `.comp` 文件夹**拖到窗口中打开；拖入多个文件夹会提示重新选择。
-5. “适合窗口” / `Ctrl+0` 适合显示，`Ctrl+1` 显示 100%；`Ctrl+滚轮` 或工具栏 `+ / −` 缩放，拖动画布区域平移。右侧点击图层查看原始属性。
+Windows 渲染仍是**候选实现**：所有混合空间显式设为 sRGB；尚未完成 macOS 黄金图定标。空间滤镜、描边及发光采用有界近似，不能据功能名称宣称逐像素一致。高级 HSV 分色范围、未知属性和不能准确映射的剪贴关系会明确回退到保存的预览并禁止视觉编辑；仅允许改名及无损保存副本。没有预览时只显示图层/属性，不展示缺层的残缺合成图。
 
-本版**没有编辑、保存或覆盖源文件的入口**，`Ctrl+S` 也不会保存。文字和形状显示项目已有的 PNG，不需要重新匹配中文字体。原始 metadata 中的英文枚举/字段名按源文件保留，不是可编辑表单。
+## 保存与恢复
 
-## 项目查看与反馈
+- Ctrl+S 保存，Ctrl+Shift+S 另存为；首次保存选择 `.comp` 文件夹目标。保存沿用 macOS 的 v11 已定义字段，没有改变 macOS 文件格式或代码。
+- 先写同卷临时完整包、逐文件刷新并回读验证，再提交。覆盖保存检查磁盘指纹；项目被其他程序修改时拒绝覆盖，需另存或重新打开。
+- 覆盖时保留完整原项目备份 `.compositor-<UUID>.backup.comp`。Windows 的两次目录重命名不是整体原子操作；保存日志与备份支持中断恢复。启动后尝试恢复，无法自动处理时提示人工检查。确认新项目与备份可用后可以手动删除旧备份。
+- 文件占用会有限退避重试，然后显示错误并保留项目/备份。OneDrive/同步盘可能占用或同步每个文件；首次建议保存到本机目录，完成后复制整个项目包。
+- 每次编辑后延迟写恢复副本到 `%APPDATA%\Compositor-Windows\recovery`；每个文档保留最近两份，包含项目格式版本与修订号。恢复写入不会标记项目已保存，也不会覆盖源项目。支持格式 1–11 的可读取恢复包；没有因“版本不同”而直接丢弃。
+- 文件菜单“恢复未保存项目”恢复最近副本，恢复后需另存。正常保存或明确放弃关闭后清理该文档的恢复副本。退出/打开其他项目有保存、放弃、取消提示。
+- 未改动的图像/未知资源按原始字节保留，未知嵌套字段保留。视觉编辑删除过期 QuickLook 预览，不会把旧预览当作新图；Mac 打开并保存后会重新生成预览。
+- 不上传项目、无遥测/账号/自动更新。恢复副本含作品内容，仅存在本机；共享电脑请自行管理该目录。语言设置仍只存语言，不记录项目路径。
 
-- **重新加载**：工具栏 ↻ 或 `Ctrl+R`，读取源文件当前内容。读取失败保留已打开快照并显示错误；应用不会自动改写项目。
-- **关闭项目**：工具栏 × 或 `Ctrl+W`，回到欢迎页并释放项目和渲染资源；加载中的旧结果会被丢弃。退出程序仍可用 `Alt+F4` 或文件菜单。
-- 右侧可以按名称搜索图层（中文/英文均可），点击组名前的箭头折叠或展开。搜索时临时显示匹配层的父组，清除搜索恢复原折叠状态。
-- 点击“复制兼容性报告”后，可粘贴到问题反馈。报告只含应用/格式版本、尺寸、图层及资源数量、预览来源、兼容性原因和内存估计，不含项目名、路径、图层名/ID或原始元数据。**不会自动发送**；分享前仍可查看剪贴板内容。
-- 打开路径仅在当前会话内用于重载，关闭后释放；不会添加最近文件列表或写入语言设置。
+## PSD 与 PNG
 
-## 预览边界
+- 导入预算内的 **8 位 RGB PSD**（不支持 PSB）。基础像素层、组、顺序、位移、不透明度、混合和栅格蒙版进行分层转换；文字使用保存的像素。复杂效果、矢量/智能对象等无法准确转换时，先提示，用户可取消或选择“导入保存的合成图”（一个像素层）。
+- PSD 导出说明明确显示文字/形状转换为像素。分层导出保留像素层、组、顺序、位移、不透明度、混合和蒙版；位置/旋转会烘焙到有边界的像素区域。剪贴要求连续同级层；无法表示时拒绝分层导出。
+- 当前含调整层或启用效果的项目需选择扁平 PSD，保留新渲染合成图但不保留可编辑层。PSD 转换不是 `.comp` 的无损替代。
+- PNG 导出当前完整画布。只有完成的新渲染可导出，不导出过期 QuickLook 图。
+- 云端用独立 `psd-tools` 读取器校验 PSD 层数/顺序/偏移/透明度/混合/蒙版/像素；真实 Photoshop/Photopea 打开仍待人工完成。
 
-- 支持 `.comp` 格式版本 1–11、sRGB；读取并检查图层、目录关系、资源及大小限制。
-- Pentrado 合成基础像素层、正常混合、可见性、不透明度、位置/缩放/旋转/翻转、组内继承不透明度和图层联动栅格蒙版。**macOS 黄金图比对尚未完成**，此模式标为“图层预览”，不宣称像素完全一致。
-- 其他 23 种混合、调整层、效果、剪贴关系、组蒙版、独立蒙版位置、最近邻采样和未知字段：显示明确原因并使用 `QuickLook/Preview.jpg`。这只是 **macOS 上次保存的预览**，可能过时或尺寸较小；不是在 Windows 新渲染出来的完整作品。
-- 没有可用的保存预览时，显示说明及图层/属性；**不显示删掉复杂层后的残缺合成图**。
-- 读取限额：manifest 4 MiB、每个资源 64 MiB、累计编码资源 256 MiB、图层 10,000 个、画布边长 30,000 px。图像/蒙版像素各不超过 1 亿。独立合成还受 1600 万画布像素、768 MiB 估算工作预算和实际 GPU 纹理上限限制；超过时使用保存预览，不缩小原始项目数据。
-- 必须能用 WebGL2 与 `EXT_color_buffer_float`；不满足时尝试保存预览。本版没有 CPU 编辑渲染器，也没有导出大画布功能。
-- 固定使用 npm `pentrado@0.1.1`，其接口早于当前作者仓库的 quad/presentCanvas 实现。适配层先生成整画布位置缓冲，再由 Pentrado 合成；每层/蒙版的 CPU、GPU 副本均计入预算。多层大画布因此可能提前回退，不宣称已有作者仓库最新的分块性能。
-- 右侧“后续编辑范围评估”按图层显示基础、PNG 回退、复杂只读三类；**当前全部只读**。这些数字只是这个项目的结构分类，不是经过实机验证的可编辑比例。
+## 预算与兼容性反馈
+
+读取限额：manifest 4 MiB、单个资源 64 MiB、累计编码资源 256 MiB、画布边长 30,000 px、图层 10,000 个、源图像/蒙版各 1 亿像素。新像素资源和 PSD 单层不超过 1600 万像素；PSD 导入累计解码估算 512 MiB，层数不超过 1000。
+
+合成上限另受 **768 MiB 保守工作预算**及 GPU 纹理上限限制。估算包含工作线程滤镜、合成目标、全尺寸读回、CPU/GPU 位置副本及蒙版；超过时不分配大工作面，明确回退。大画布可能只能查看，不能按此说明推断已有分块性能。需要 WebGL2 与 EXT_color_buffer_float；上下文丢失中断渲染并回退。Pentrado 固定 0.1.1，其接口早于作者仓库新的 quad/presentCanvas。
+
+“复制兼容性报告”仅复制聚合尺寸/数量/版本/预算/兼容性状态，不含项目名、路径、图层名/ID 或原始元数据，不自动发送。报告标明黄金图与真实设备验收尚未完成。
 
 ## 校验下载
 
-发行页同时提供 `SHA256SUMS.txt`。在 PowerShell 中执行：
-
 ```powershell
-Get-FileHash .\Compositor-Windows-0.1.0-alpha.2-x64.exe -Algorithm SHA256
+Get-FileHash .\Compositor-Windows-0.2.0-alpha.1-x64.exe -Algorithm SHA256
 ```
 
-与校验文件中对应文件的 SHA-256 相同再安装。ZIP 同样可以校验。
+与发行页 SHA256SUMS.txt 比较；ZIP 同样校验。
 
 ## 开发构建（Windows）
-
-安装 Node.js 24 LTS 和 Git，克隆仓库后：
 
 ```powershell
 git clone https://github.com/Pengjingyu1992/Compositor-ZH.git
@@ -61,31 +66,19 @@ cd Compositor-ZH\windows
 npm ci
 npm run build
 npm start
-```
-
-生成 x64 安装向导和 ZIP：
-
-```powershell
 npm run package:win
 ```
 
-输出在 `windows/release/`。无需 macOS SDK。应用入口 `windows/` 独立于 `Compositor/` 的原生 Swift 应用。
+需要 Node.js 24 和 Git。输出在 windows/release。云端工作流做源码/本地化审查、类型检查、编辑/保存故障注入、独立 PSD 读取、软件 GPU 打包 GUI 检查与许可证/包审查。按要求开发者本机不运行测试、应用或构建。
 
-云端工作流 `Windows verify and package` 在 Windows Server 2025 上执行源码审查、本地化键检查、类型检查、项目协议/往返检查、打包、软件 GPU Electron 启动/预览/语言持久化检查和许可证/包内容审查。按照本次要求，**开发者本机不运行测试或应用构建**。
+Windows 使用 windows-v* 标签、预发布、make_latest=false。下载审核候选产物、创建绑定确切 SHA 的草稿，再用 Windows upload reviewed draft assets 上传已通过云端产物；发布后验证 `/releases/latest` 仍为 macOS。原生 macOS 代码、安装包和设置不参与本批改动。
 
-## 发布与 macOS 更新隔离
+## English summary
 
-- 使用 `windows-v*` 标签，不使用 macOS 的 `v*` 标签。`Windows release candidate` 构建候选产物，不自动公开发行。
-- 下载云端产物、检查内容/许可证/校验和后创建草稿，绑定确切构建提交。发布时使用 **prerelease** 和 **make_latest=false**；创建和草稿转公开时都明确指定。
-- 发布前记录 macOS latest 的 release ID/tag，发布后再请求 `/repos/Pengjingyu1992/Compositor-ZH/releases/latest` 校验它未改变。异常时恢复原 macOS latest，并再次核对。未来 Windows 稳定发行也遵守这个纪律。
-- 不改动 macOS 更新代码或安装包，不复用其设置目录。本阶段没有 Windows 自动更新器。
+Install the x64 EXE or fully extract the ZIP from the [Windows editor prerelease](https://github.com/Pengjingyu1992/Compositor-ZH/releases/tag/windows-v0.2.0-alpha.1). No Node.js or API key is required. Verify SHA-256; packages are unsigned. Target: Windows 10 22H2 / Windows 11 x64; hardware, IME, high-DPI and real Photoshop acceptance remain pending.
 
-## English installation summary
+Edit layers, paint pixels/masks, adjust appearance and effects, undo/redo, Save/Save As, restore local snapshots, and convert PSD/PNG. Unknown data is retained. Text/shapes use saved pixels and are rasterized by painting. Unsupported compositions remain read-only with explicit saved-preview fallback. All 24 blends are candidates, with macOS golden-image calibration pending; spatial filters/effects use bounded approximations.
 
-Download the x64 EXE or ZIP from the [Windows prerelease](https://github.com/Pengjingyu1992/Compositor-ZH/releases/tag/windows-v0.1.0-alpha.2). Run the installer, or extract the entire ZIP and launch `Compositor.exe`. Node.js is not required. Packages are unsigned; verify their SHA-256 before opening. Target: Windows 10 22H2 / Windows 11 x64; actual hardware acceptance remains pending.
+Overwrite saves stage and validate a complete package, reject external changes, retain a complete backup, and use a durable journal for interruption recovery. Two directory renames are not one atomic operation. Recovery copies never mark the project saved. PSD layers preserve core structure/masks; text/shapes rasterize and adjustment/effect projects require explicit flattened PSD export. No telemetry or project upload. Windows settings, releases and binaries are independent of macOS.
 
-Copy the **entire `.comp` folder** from macOS and select it with **Open project / Ctrl+O**. You can also drop one complete `.comp` folder into the window. Use Ctrl+0 to fit, Ctrl+1 for actual size, Ctrl+wheel to zoom, and drag to pan. Ctrl+R reloads the source; Ctrl+W closes the project. Search layer names and collapse groups in the sidebar. Copy compatibility report explicitly copies aggregate data to the clipboard; it contains no project names, paths, layer names/IDs, or raw metadata and is never sent automatically. The top-right selector changes English/Simplified Chinese immediately and persists under `%APPDATA%\Compositor-Windows`.
-
-This is a read-only preview, not the full editor. Basic Normal layers use the Pentrado compositor with explicit sRGB spaces; macOS golden-image fidelity is not yet certified. Unsupported properties use the preview last saved by macOS, which may be stale. Without that preview, only layers/properties are shown. There is no save, painting, PSD, project upload, or telemetry.
-
-Thank you to [Robbie Tilton, Compositor](https://github.com/robbietilton/Compositor) and [Terry Jia, Pentrado](https://github.com/jtydhr88/pentrado). License details are in [Windows notices](../windows/THIRD_PARTY_NOTICES.md).
+Thank you to [Robbie Tilton, Compositor](https://github.com/robbietilton/Compositor) and [Terry Jia, Pentrado](https://github.com/jtydhr88/pentrado). See [Windows notices](../windows/THIRD_PARTY_NOTICES.md).

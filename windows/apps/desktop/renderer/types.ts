@@ -6,19 +6,21 @@ export interface Placement {
 export interface LayerRow {
   id: string; name: string; isVisible: boolean; isGroup?: boolean; parentID?: string;
   imageFile?: string; maskFile?: string; maskEnabled?: boolean;
+  maskSourceID?: string; maskLinked?: boolean; maskPlacement?: Placement;
   transform: Placement; opacity?: number; blendMode?: string;
   text?: Record<string, unknown>; shape?: Record<string, unknown>;
-  adjustment?: Record<string, unknown>; depth: number;
+  adjustment?: Record<string, any>; effects?: Record<string, Record<string, any>>; depth: number;
   effectiveVisible: boolean; effectiveOpacity: number;
   category: 'simple' | 'pixels' | 'preview';
 }
 export interface ViewerProject {
   id: string; name: string; preview: boolean; urls: Record<string, string>;
+  revision: string; dirty: boolean; canUndo: boolean; canRedo: boolean; hasLocation: boolean;
   manifest: { width: number; height: number; version: number; layers: LayerRow[]; resolution?: number };
   analysis: { rows: LayerRow[]; issues: string[]; estimatedBytes: number;
     coverage: { simple: number; pixelFallback: number; previewOnly: number; total: number } };
 }
-export interface OpenResult { project?: ViewerProject; canceled?: boolean; error?: string }
+export interface OpenResult { project?: ViewerProject; canceled?: boolean; error?: string; backup?: boolean; exported?: boolean; warnings?: string[] }
 declare global {
   interface Window {
     viewer: {
@@ -27,13 +29,24 @@ declare global {
       open(): Promise<OpenResult>;
       drop(file: File): Promise<OpenResult>;
       reload(id: string): Promise<OpenResult>;
-      close(): Promise<{ closed: boolean }>;
+      close(): Promise<{ closed: boolean; error?: string }>;
       copyReport(id: string, display: { source: 'engine' | 'saved' | 'none'; issues: string[] }): Promise<{ copied?: boolean; error?: string }>;
       onOpen(callback: () => void): () => void;
       onReload(callback: () => void): () => void;
       onClose(callback: () => void): () => void;
       onFit(callback: () => void): () => void;
       onActual(callback: () => void): () => void;
+    };
+    editor: {
+      create(w: number, h: number): Promise<OpenResult>;
+      edit(id: string, revision: string, op: Record<string, unknown>): Promise<OpenResult>;
+      history(id: string, revision: string, direction: string): Promise<OpenResult>;
+      save(id: string, revision: string, as?: boolean): Promise<OpenResult>;
+      importImage(id: string, revision: string): Promise<OpenResult>;
+      importPSD(): Promise<OpenResult>;
+      export(id: string, revision: string, type: string, payload: Record<string, unknown>): Promise<OpenResult>;
+      recover(): Promise<OpenResult>;
+      onCommand(name: string, callback: () => void): () => void;
     };
   }
 }

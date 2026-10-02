@@ -65,6 +65,8 @@ test('asynchronous old owner cannot publish into a replacement document',async()
 test('worker snapshots preserve clean selection state and share unchanged resource buffers',async()=>{
  const {data,id}=setup(),s=new ProjectSession(undefined,{codecs});s.install(data,null,true);const original=s.current.data.resources.get(`images/${id}.png`);
  const result=await s.editAsync(s.current.id,s.revision,{kind:'selection',action:'all'},before=>Promise.resolve(structuredClone(change(before,{kind:'selection',action:'all'}))));assert.equal(result.project.dirty,false);assert.equal(s.current.data.resources.get(`images/${id}.png`),original);assert.equal(s.current.data.selection.data.length,768);
+ const revision=s.revision,count=s.undoStack.length;await s.editAsync(s.current.id,s.revision,{kind:'stroke',id,settings:{points:[[-100,-100]]}},(before,op)=>Promise.resolve(structuredClone(change(before,op))));assert.equal(s.revision,revision);assert.equal(s.undoStack.length,count);
+ const batch={kind:'batch',operations:[{kind:'selection',action:'invert'},{kind:'lock',id,field:'alpha',value:true}]};await s.editAsync(s.current.id,s.revision,batch,(before,op)=>Promise.resolve(structuredClone(change(before,op))));assert.equal(s.current.data.locks[id].alpha,true);assert.ok(s.current.data.selection.data.every(v=>v===0));assert.equal(s.isDirty(),false);
 });
 test('alpha locks inherit from groups and independent mask transform survives validation',()=>{
  const {data,id}=setup();let a=change(data,{kind:'group',ids:[id],name:'Group'});const group=a.manifest.activeLayerID;a=change(a,{kind:'lock',id:group,field:'alpha',value:true});a=change(a,{kind:'fill',id,settings:{color:[255,0,0]}});assert.ok(codecs.decodePNG(a.resources.get(`images/${id}.png`)).data.every((v,i)=>i%4!==3||v===0));
@@ -80,7 +82,7 @@ test('reactive tool parameters cross IPC without proxies or corrupting PNG array
  const source=ref([4,5]),op=reactive({ids:['one','two'],settings:{source:source.value},png:new Uint8Array([1,2,3]),id:undefined});const copied=structuredClone(ipcData(op));assert.deepEqual(copied.ids,['one','two']);assert.deepEqual(copied.settings.source,[4,5]);assert.ok(copied.png instanceof Uint8Array);assert.equal(copied.id,undefined);
 });
 test('empty strokes and alpha-locked fill retain editable metadata and save identity',()=>{
- const {data,id}=setup();data.manifest.layers[0].shape={kind:'Rectangle',red:0,green:0,blue:0,cornerRadius:0,lineWidth:0,start:[0,0],end:[1,1]};
+ const initial=setup(),id=initial.id,data=change(initial.data,{kind:'styled',id,type:'shape',origin:[0,0],style:{kind:'Rectangle',red:0,green:0,blue:0,cornerRadius:0,lineWidth:0,start:[0,0],end:[1,1]},png:new Uint8Array(initial.data.resources.get(`images/${id}.png`).bytes)});
  const before=data.resources.get(`images/${id}.png`);assert.equal(change(data,{kind:'stroke',id,settings:{points:[[-100,-100]],size:4,color:[255,0,0]}}),data);
  const locked=change(data,{kind:'lock',id,field:'alpha',value:true}),after=change(locked,{kind:'fill',id,settings:{color:[255,0,0]}});assert.equal(after,locked);assert.equal(after.resources.get(`images/${id}.png`),before);assert.ok(after.manifest.layers[0].shape);
 });

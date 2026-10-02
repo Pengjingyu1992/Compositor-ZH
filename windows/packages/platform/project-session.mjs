@@ -61,9 +61,12 @@ export class ProjectSession {
     this.pending=true;const own=this.generation,current=this.current,before=current.data;
     try {const after=await build(before,op);if(own!==this.generation||this.current!==current||this.revision!==revision)return {error:'stale'};
       after.sourceBytes=Buffer.from(after.sourceBytes);for(const [key,r] of after.resources){r.bytes=Buffer.from(r.bytes);const old=before.resources.get(key);if(old?.bytes.equals(r.bytes))after.resources.set(key,old);}
-      if(op.kind!=='selection'&&!['canvas','imageSize'].includes(op.kind))after.selection=before.selection;after.locks=before.locks;
+      const changesSelection=o=>['selection','canvas','imageSize'].includes(o.kind)||(o.kind==='batch'&&o.operations.some(changesSelection));
+      if(!changesSelection(op))after.selection=before.selection;
+      if(after.selection&&before.selection&&after.selection.width===before.selection.width&&after.selection.height===before.selection.height&&after.selection.data.every((v,i)=>v===before.selection.data[i]))after.selection=before.selection;
+      if(JSON.stringify(after.locks)===JSON.stringify(before.locks))after.locks=before.locks;
       const sameContent=before.sourceBytes.equals(after.sourceBytes)&&fingerprint(before)===fingerprint(after);
-      if(sameContent){after.contentSnapshot=before.contentSnapshot??before;after.manifest=before.manifest;after.sourceBytes=before.sourceBytes;after.resources=before.resources;after.analysis=before.analysis;if(!after.selection&&!before.selection)return this.view();}
+      if(sameContent){after.contentSnapshot=before.contentSnapshot??before;after.manifest=before.manifest;after.sourceBytes=before.sourceBytes;after.resources=before.resources;after.analysis=before.analysis;if(after.selection===before.selection&&after.locks===before.locks)return this.view();}
       return this.commit(before,after);
     }catch(e){return {error:e.code??'invalid'};}finally{this.pending=false;}
   }

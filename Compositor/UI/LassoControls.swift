@@ -6,6 +6,9 @@ struct LassoControls: View {
     var body: some View {
         HStack(spacing: 12) {
             Text(L10n.text(session.tool == .marquee ? "Marquee" : session.tool == .wand ? "Magic" : "Lasso")).font(ToolHeaderStyle.titleFont)
+            Button("Color Range…") { session.beginColorRange() }
+                .disabled(!session.canSelectColorRange)
+                .accessibilityIdentifier("openColorRange")
             if session.tool == .marquee {
                 Picker("Shape", selection: Binding(get: { session.marqueeKind }, set: { kind in
                     session.cancelLasso()

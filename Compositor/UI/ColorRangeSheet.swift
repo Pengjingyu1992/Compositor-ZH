@@ -16,6 +16,7 @@ struct ColorRangeSheet: View {
                                     in: RoundedRectangle(cornerRadius: 4))
                         .help(L10n.text(help(mode)))
                         .accessibilityLabel(L10n.format("%@ color", L10n.text(mode.rawValue)))
+                        .accessibilityIdentifier("colorRangeSample-\(mode.rawValue)")
                 }
                 Spacer()
             }
@@ -29,6 +30,7 @@ struct ColorRangeSheet: View {
                 Slider(value: fuzziness, in: ColorRangeEdit.fuzzinessRange)
                 TextField("Fuzziness", value: fuzziness, format: .number.precision(.fractionLength(0)))
                     .frame(width: 48).textFieldStyle(.roundedBorder).multilineTextAlignment(.trailing)
+                    .accessibilityIdentifier("colorRangeFuzziness")
             }
             .help("How far a color may be from the picked ones and still be selected")
             Toggle("Invert", isOn: Binding(get: { edit?.invert ?? false }, set: { edit?.invert = $0; session.updateColorRange() }))
@@ -39,9 +41,11 @@ struct ColorRangeSheet: View {
             Divider()
             HStack {
                 Button("Cancel") { session.cancelColorRange() }.configuredNativeShortcut(.escape)
+                    .accessibilityIdentifier("cancelColorRange")
                 Spacer()
                 Button("OK") { session.commitColorRange() }
                     .configuredNativeShortcut(.return).buttonStyle(.borderedProminent)
+                    .accessibilityIdentifier("applyColorRange")
             }
         }
         .padding(24).frame(width: 340).fixedSize()

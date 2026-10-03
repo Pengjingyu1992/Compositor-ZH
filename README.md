@@ -6,11 +6,31 @@
 
 本项目基于 **[Robbie Tilton](https://github.com/robbietilton)** 的 **[Compositor](https://github.com/robbietilton/Compositor)**，参考和借鉴 **[Terry Jia / jtydhr88](https://github.com/jtydhr88)** 的 **[Pentrado](https://github.com/jtydhr88/pentrado)**。感谢两位作者及各自项目的贡献者开放源码，让中文本地化与后续完善成为可能。
 
-这是社区维护的中文完善版。原生 macOS 应用与基础编辑能力来自 Compositor；Pentrado 为功能规划、编辑操作设计及对齐/分布算法提供参考。我们希望改进成果也能帮助原项目。
+这是社区维护的中文完善版。macOS 版在 Compositor 原生代码上进行本地化和功能完善；Windows 版使用 Pentrado 的合成引擎，重新实现桌面界面、编辑操作及 `.comp` 项目读写。Pentrado 也为对齐/分布、对称绘画和编辑操作设计提供参考。我们希望改进成果也能帮助原项目。
 
 **Chinese localization and ongoing improvements for Compositor.**
 
-Built on **[Compositor](https://github.com/robbietilton/Compositor)** by **[Robbie Tilton](https://github.com/robbietilton)**, with ideas and adapted alignment/distribution geometry from **[Pentrado](https://github.com/jtydhr88/pentrado)** by **[Terry Jia / jtydhr88](https://github.com/jtydhr88)**. Thank you to both authors and their contributors for sharing their work. This community edition focuses on a Chinese interface, fixes, and practical improvements, with the hope that useful changes can benefit the upstream projects too.
+The macOS edition localizes and extends **[Compositor](https://github.com/robbietilton/Compositor)** by **[Robbie Tilton](https://github.com/robbietilton)**. The Windows edition uses the compositing engine from **[Pentrado](https://github.com/jtydhr88/pentrado)** by **[Terry Jia / jtydhr88](https://github.com/jtydhr88)**, with a new desktop interface, editing operations and `.comp` project bridge. Pentrado also informs arrangement, symmetry and editing design. Thank you to both authors and their contributors for sharing their work. This community edition focuses on Chinese localization, fixes and practical improvements, with the hope that useful changes can benefit the upstream projects too.
+
+## macOS 与 Windows 的区别 / macOS and Windows differences
+
+两版面向图层绘画与图像编辑，采用不同的界面、渲染及编辑实现。下表说明当前版本的实际差异。
+
+Both editions support painting and image editing with layers, with different UI, rendering and editing implementations. The table describes the current versions.
+
+| 项目 / Area | macOS | Windows |
+| --- | --- | --- |
+| 技术路线 / Stack | Swift + SwiftUI / AppKit，部分像素算法使用 C；在 Compositor 原生代码上完善。 / Extends Compositor's native Swift app, with SwiftUI/AppKit and some C pixel algorithms. | TypeScript / JavaScript + Vue 3 + Electron；自行实现界面、编辑事务及项目桥接。 / A new Vue/Electron desktop interface, editing transactions and project bridge. |
+| 渲染 / Rendering | Metal + Core Image + Core Graphics，使用系统图像与 GPU 接口。 / Uses Apple's image and GPU APIs. | Pentrado WebGL2 合成引擎；Canvas 2D 绘制文字/形状，工作线程执行像素处理。 / Pentrado WebGL2 compositing, Canvas 2D text/shapes and pixel processing in workers. |
+| 文字编辑 / Text editing | 画布内原生文字编辑，使用 AppKit 文本系统。 / Native inline editing on the canvas with AppKit. | 在文字编辑面板中输入和设置样式，以 Canvas 2D 排版并生成像素。 / Text and styles are edited in a panel, then laid out and rasterized with Canvas 2D. |
+| 背景移除 / Background removal | Apple Vision 主体识别，结果保存为可调整的图层蒙版。 / Apple Vision subject recognition produces an editable layer mask. | 从图像边缘按颜色容差清除相近背景像素，适合较简单背景。 / Clears similar background pixels from the edges using color tolerance; suited to simpler backgrounds. |
+| 图层锁定与对称 / Locks and symmetry | 当前尚未提供图层锁定和对称画笔。 / Layer locks and symmetric painting are not currently available. | 内容/位置/外观/透明度会话锁；双轴及 2–16 份径向对称绘画。 / Session locks for content, position, appearance and alpha; symmetry across both axes and radial symmetry with 2–16 sectors. |
+| 语言切换 / Language switching | 保存语言选择后重启生效。 / The saved language choice takes effect after restarting. | 简体中文 / English 即时切换，选择保留到下次启动。 / Chinese/English switching is immediate and persists. |
+| 安装包 / Packages | `.app` 压缩包。 / A ZIP containing the app. | EXE 安装向导或便携 ZIP。 / An EXE installer or portable ZIP. |
+
+**项目兼容性：**两版使用 `.comp` 项目格式，目前支持读取 v1–11，保存为 v11。交换项目时需复制整个 `.comp` 文件夹。两套渲染器及系统字体可能产生不同的文字排版、滤镜或效果结果；Windows 的画质基准定标仍待完成。Windows 遇到不能准确编辑的可见属性时，会明确使用项目保存的预览并限制编辑，同时保留未知字段和未改动资源。功能同名也可能采用不同算法，具体使用范围见各版说明。安装包均可直接使用，无需编译或安装开发工具。
+
+**Project compatibility:** Both editions read `.comp` versions 1–11 and save version 11. Transfer the entire project folder. Different renderers and system fonts can produce different text layouts, filter results and effects; Windows image-quality calibration remains pending. When Windows cannot accurately edit a visible property, it explicitly uses the saved preview and restricts editing while preserving unknown fields and unchanged resources. Similarly named features can use different algorithms; consult each edition's documentation. Downloaded packages run directly without compilation or developer tools.
 
 ## 下载与使用 / Download and use
 
@@ -31,7 +51,7 @@ Built on **[Compositor](https://github.com/robbietilton/Compositor)** by **[Robb
 
 当前安装包采用临时签名，未经 Apple Developer ID 公证；macOS 可能要求在“隐私与安全性”中确认打开。 / The current package is ad hoc signed and is not Apple notarized; macOS may require approval in Privacy & Security.
 
-## 本版改进 / Changes in this edition
+## macOS 版改进 / Changes in the macOS edition
 
 | 功能 / Feature | 说明 / Notes |
 | --- | --- |
@@ -45,16 +65,16 @@ Built on **[Compositor](https://github.com/robbietilton/Compositor)** by **[Robb
 | 稳定性 / Reliability | 编辑许可与异步提交检查；修复尺寸调整时效果丢失等问题。 / Edit permissions, guarded asynchronous commits, and fixes including effects preservation during resizing. |
 | 新图标 / New icon | 薄荷绿、珊瑚粉、柔黄与淡紫的叠层图标。 / A layered icon in mint, coral, soft yellow, and lavender. |
 
-基础图层、蒙版、画笔、文字、形状、选区、调整层、Camera Raw、PSD 导入及多项目标签等能力来自 Compositor。
+macOS 版的基础图层、蒙版、画笔、文字、形状、选区、调整层、Camera Raw、PSD 导入及多项目标签等能力来自 Compositor。
 
-Core layers, masks, brushes, text, shapes, selections, adjustments, Camera Raw, PSD import, and project tabs come from Compositor.
+The macOS edition's core layers, masks, brushes, text, shapes, selections, adjustments, Camera Raw, PSD import and project tabs come from Compositor.
 
 ### 当前边界 / Current limits
 
 - PSD 分层导出将文字和形状栅格化；调整层、图层效果及不支持的剪贴关系需要合成导出。详见 [PSD 导出说明](docs/psd-export.md)。 / Text and shapes are rasterized; adjustments, effects, and unsupported clipping relationships require flattened export.
 - 恢复副本延迟 2 秒写入，最后的改动可能尚未落盘。详见 [恢复说明](docs/recovery.md)。 / Recovery writes are delayed by two seconds; the latest edits may not have reached disk.
 - 更新菜单打开本仓库的下载页，手动安装新版本。 / The update command opens this edition's releases for manual installation.
-- macOS 版尚未实现图层锁定和对称画笔；Windows 版提供会话锁定和对称绘画。任意矢量路径持久化仍未实现。 / Layer locks and symmetric painting are pending on macOS; Windows provides session locks and symmetry. Persistent arbitrary vector paths remain unimplemented.
+- 任意矢量路径持久化仍未实现。 / Persistent arbitrary vector paths remain unimplemented.
 
 ## 构建 / Build
 

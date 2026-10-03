@@ -14,17 +14,18 @@ Built on **[Compositor](https://github.com/robbietilton/Compositor)** by **[Robb
 
 ## 下载与使用 / Download and use
 
-### Windows 10 / 11（独立预览版 / Separate preview）
+### Windows 10 / 11
 
 - **[Windows 下载 / Windows downloads](https://github.com/Pengjingyu1992/Compositor-ZH/releases/tag/windows-v0.3.0-alpha.1)** · **[安装说明 / Installation guide](docs/windows-install.md)** · **[工具与快捷键 / Tools and shortcuts](docs/windows-full-editor.md)**
-- Windows 10 22H2 / Windows 11，x64。0.3.0 编辑器预发布版提供 17 类工具：选区、裁剪、中文文字、可编辑形状、绘画/蒙版、渐变/油漆桶、仿制/修复/涂抹、取色与导航；另有多层变换、对齐/分布、编组/合并、21 项滤镜、调整/效果、剪贴板、撤销、保存、恢复和 PSD/PNG 转换，中英文即时切换。 / Windows 10 22H2 / Windows 11, x64. The 0.3.0 editor prerelease provides 17 tools for selections, crop, Chinese text, editable shapes, painting/masks, gradients/fill, clone/healing/smear, eyedropper and navigation, plus multi-layer transforms, arrangement, groups/merge, 21 filters, adjustments/effects, clipboard, undo, saving, recovery, PSD/PNG conversion, and Chinese/English switching.
-- 基于 Pentrado 引擎，拥有独立安装包、设置和发行标签；不会替换 macOS 版。复杂项目会明确使用 macOS 保存的预览图。真实 Windows 10/11 显卡与用户项目验收仍待完成。 / Built with Pentrado, with separate packages, settings, and release tags. Complex projects explicitly use the preview saved by macOS. Real Windows GPU and user-project acceptance is pending.
+- Windows 10 22H2 / Windows 11，x64。0.3.0 编辑器提供 17 类工具：选区、裁剪、中文文字、可编辑形状、绘画/蒙版、渐变/油漆桶、仿制/修复/涂抹、取色与导航；另有多层变换、对齐/分布、编组/合并、21 项滤镜、调整/效果、剪贴板、撤销、保存、恢复和 PSD/PNG 转换，中英文即时切换。 / Windows 10 22H2 / Windows 11, x64. The 0.3.0 editor provides 17 tools for selections, crop, Chinese text, editable shapes, painting/masks, gradients/fill, clone/healing/smear, eyedropper and navigation, plus multi-layer transforms, arrangement, groups/merge, 21 filters, adjustments/effects, clipboard, undo, saving, recovery, PSD/PNG conversion, and Chinese/English switching.
+- 基于 Pentrado 引擎，提供 EXE 安装包和便携 ZIP，无需 Node.js 或 API Key。 / Built with the Pentrado engine; available as an EXE installer or portable ZIP. No Node.js or API key is required.
 
 ### macOS
 
 - [下载最新版本 / Download the latest release](https://github.com/Pengjingyu1992/Compositor-ZH/releases/latest)
 - **macOS 26 或更高版本，Apple Silicon。 / macOS 26 or later, Apple silicon.**
 - 解压后将 `Compositor.app` 拖到“应用程序”目录。 / Unzip and drag `Compositor.app` into Applications.
+- 安装包直接使用，无需编译或安装开发工具。 / Use the downloaded app directly; no compilation or developer tools are needed.
 - **叠绘 → 设置… → 界面语言**：选择简体中文或 English，保存项目后退出并重新打开应用。选择会保留；中文应用名为“叠绘”，英文为“Compositor”。
 - **Compositor → Settings… → Interface language**: choose Simplified Chinese or English, save your work, then quit and reopen. Your choice persists.
 
@@ -57,24 +58,13 @@ Core layers, masks, brushes, text, shapes, selections, adjustments, Camera Raw, 
 
 ## 构建 / Build
 
-Windows 构建、云端验证与发布纪律见 [Windows 安装和开发说明](docs/windows-install.md)。macOS 构建保持以下流程。 / For the separate Windows build and cloud checks, see [Windows installation and development](docs/windows-install.md).
-
-### Xcode
-
-安装 Xcode 26 或更高版本，打开 `Compositor.xcodeproj`，运行 **Compositor** scheme。默认使用临时签名，不需要作者的开发者账号。
-
-With Xcode 26 or later, open `Compositor.xcodeproj` and run the **Compositor** scheme. The project defaults to ad hoc signing and does not require the original author's developer account.
-
-```sh
-xcodebuild -project Compositor.xcodeproj -scheme Compositor \
-  -destination 'platform=macOS,arch=arm64' build
-```
+Windows 构建与云端验证见 [Windows 安装和开发说明](docs/windows-install.md)。macOS 构建保持以下流程。 / For Windows builds and cloud checks, see [Windows installation and development](docs/windows-install.md).
 
 ### Command Line Tools
 
 使用带 macOS 26 SDK 的 Command Line Tools，可独立构建完整应用。macOS 27 的独立 CLT SDK 可能缺少 SwiftUI 宏插件，脚本优先选择已安装的 macOS 26 SDK；可用 `COMPOSITOR_SDK_PATH` 指定 SDK。
 
-Command Line Tools with a macOS 26 SDK can build the app without full Xcode. The standalone macOS 27 SDK may lack SwiftUI macro plugins, so the script prefers an installed macOS 26 SDK. Override it with `COMPOSITOR_SDK_PATH` if needed.
+Command Line Tools with a macOS 26 SDK can build the app. The standalone macOS 27 SDK may lack SwiftUI macro plugins, so the script prefers an installed macOS 26 SDK. Override it with `COMPOSITOR_SDK_PATH` if needed.
 
 ```sh
 ./scripts/check-localization.zsh
@@ -83,14 +73,6 @@ Command Line Tools with a macOS 26 SDK can build the app without full Xcode. The
 ```
 
 输出：`build/clt/Compositor.app`、`dist/` 中的 ZIP 和 SHA-256。 / Outputs: `build/clt/Compositor.app`, plus a ZIP and SHA-256 checksum in `dist/`.
-
-单元测试需要完整 Xcode；在中文环境运行本地化断言： / Unit tests require full Xcode; use Chinese for the localization assertions:
-
-```sh
-xcodebuild -project Compositor.xcodeproj -scheme Compositor \
-  -destination 'platform=macOS,arch=arm64' \
-  -testLanguage zh-Hans -testRegion CN test -only-testing:CompositorTests
-```
 
 ## 来源、致谢与许可 / Credits and license
 

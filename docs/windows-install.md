@@ -2,13 +2,13 @@
 
 ## 下载和安装
 
-1. 打开 [Windows 编辑器预发布页](https://github.com/Pengjingyu1992/Compositor-ZH/releases/tag/windows-v0.3.0-alpha.1)。`releases/latest` 保留给 macOS。
-2. 目标系统：**Windows 10 22H2 / Windows 11，Intel/AMD x64**。下载 `Compositor-Windows-0.3.0-alpha.1-x64.exe`，运行安装向导。无需 Node.js、Xcode 或 API Key；暂无 ARM64/32 位包。
+1. 打开 [Windows 编辑器下载页](https://github.com/Pengjingyu1992/Compositor-ZH/releases/tag/windows-v0.3.0-alpha.1)。
+2. 目标系统：**Windows 10 22H2 / Windows 11，Intel/AMD x64**。下载 `Compositor-Windows-0.3.0-alpha.1-x64.exe`，运行安装向导。无需 Node.js 或 API Key；暂无 ARM64/32 位包。
 3. 便携版下载同名 ZIP，**完整解压**，运行 `Compositor.exe`。保留 resources、DLL、语言资源和许可证。
 4. 社区包未签名。核对来源和 SHA-256 后按系统提供的选项打开；无需关闭 Defender。
 5. 右上角切换简体中文 / English，即时生效并保留到下次启动。
 
-真实 Win10/11 设备、中文输入法、高 DPI、多显示器、实际显卡与 Photoshop/Photopea 人工打开验收仍待完成。云端 Windows Server 的通过结果不等于这些项目已通过。本版保留为预发布，不替换 macOS 安装包或更新入口。
+真实 Win10/11 设备、中文输入法、高 DPI、多显示器、实际显卡与 Photoshop/Photopea 人工打开验收仍待完成。云端 Windows Server 的通过结果不等于这些项目已通过。
 
 ## 界面布局
 
@@ -20,7 +20,7 @@
 
 ## 打开与编辑
 
-- 将 macOS 保存的**整个 `.comp` 文件夹**复制到 Windows；保留 manifest.json、images 和全部资源。Ctrl+O 选择项目文件夹，也可拖入一个完整文件夹。
+- 打开项目时选择**整个 `.comp` 文件夹**；保留 manifest.json、images 和全部资源。Ctrl+O 选择项目文件夹，也可拖入一个完整文件夹。
 - 新建画布支持互换宽高。导入 PNG/JPEG，建立像素层/组/调整层、中文文字及矩形/椭圆/直线形状；文字和形状同时保存参数与像素，支持重新编辑。画笔改动文字/形状像素会移除其可编辑元数据，撤销可恢复。
 - 左侧工具：移动、选框、套索、魔棒、裁剪、画笔、橡皮擦、修复、仿制、涂抹、渐变、油漆桶、形状、文字、取色、抓手、缩放。选中图层后绘画；目标选择“蒙版”可绘制白色显露、橡皮擦绘制黑色隐藏。Escape 取消当前笔画。
 - 右侧编辑名称、可见性、不透明度、24 种混合、位置/大小/旋转/翻转、所属组和剪贴源；组移动带动全部后代。删除剪贴源会解除引用，组删除包含后代。Ctrl/Shift 多选，对齐/分布、编组、组树复制、合并/拼合共用事务；复制保留原始资源并生成新 UUID。
@@ -29,19 +29,19 @@
 - Ctrl+Z 撤销、Ctrl+Shift+Z 重做；每个完整操作/笔画一个历史步骤。历史最多 80 步，按共享图像缓冲计入 256 MiB 预算。超预算时丢弃最旧历史。
 - Ctrl+0 适合窗口、Ctrl+1 原始大小、Ctrl+滚轮缩放；抓手平移。搜索和折叠图层不会更改项目。
 
-Windows 渲染仍是**候选实现**：所有混合空间显式设为 sRGB；尚未完成 macOS 黄金图定标。空间滤镜、描边及发光采用有界近似，不能据功能名称宣称逐像素一致。高级 HSV 分色范围、未知属性和不能准确映射的剪贴关系会明确回退到保存的预览并禁止视觉编辑；仅允许改名及无损保存副本。没有预览时只显示图层/属性，不展示缺层的残缺合成图。
+所有混合空间显式设为 sRGB；画质基准定标尚未完成。空间滤镜、描边及发光采用有界近似。高级 HSV 分色范围、未知属性和不能准确映射的剪贴关系会明确回退到保存的预览并禁止视觉编辑；仅允许改名及无损保存副本。没有预览时只显示图层/属性，不展示缺层的残缺合成图。
 
 工具、选区、文字、滤镜、锁定与快捷键完整说明见 [Windows 编辑器工具补全](windows-full-editor.md)。
 
 ## 保存与恢复
 
-- Ctrl+S 保存，Ctrl+Shift+S 另存为；首次保存选择 `.comp` 文件夹目标。保存沿用 macOS 的 v11 已定义字段，没有改变 macOS 文件格式或代码。
+- Ctrl+S 保存，Ctrl+Shift+S 另存为；首次保存选择 `.comp` 文件夹目标。项目按 `.comp` v11 格式保存。
 - 先写同卷临时完整包、逐文件刷新并回读验证，再提交。覆盖保存检查磁盘指纹；项目被其他程序修改时拒绝覆盖，需另存或重新打开。
 - 覆盖时保留完整原项目备份 `.compositor-<UUID>.backup.comp`。Windows 的两次目录重命名不是整体原子操作；保存日志与备份支持中断恢复。启动后尝试恢复，无法自动处理时提示人工检查。确认新项目与备份可用后可以手动删除旧备份。
 - 文件占用会有限退避重试，然后显示错误并保留项目/备份。OneDrive/同步盘可能占用或同步每个文件；首次建议保存到本机目录，完成后复制整个项目包。
 - 每次编辑后延迟写恢复副本到 `%APPDATA%\Compositor-Windows\recovery`；每个文档保留最近两份，包含项目格式版本与修订号。恢复写入不会标记项目已保存，也不会覆盖源项目。支持格式 1–11 的可读取恢复包；没有因“版本不同”而直接丢弃。
 - 文件菜单“恢复未保存项目”恢复最近副本，恢复后需另存。正常保存或明确放弃关闭后清理该文档的恢复副本。退出/打开其他项目有保存、放弃、取消提示。
-- 未改动的图像/未知资源按原始字节保留，未知嵌套字段保留。视觉编辑删除过期 QuickLook 预览，不会把旧预览当作新图；Mac 打开并保存后会重新生成预览。
+- 未改动的图像/未知资源按原始字节保留，未知嵌套字段保留。视觉编辑删除过期 QuickLook 预览，不会把旧预览当作新图。
 - 不上传项目、无遥测/账号/自动更新。恢复副本含作品内容，仅存在本机；共享电脑请自行管理该目录。语言设置仍只存语言，不记录项目路径。
 
 ## PSD 与 PNG
@@ -81,14 +81,12 @@ npm run package:win
 
 需要 Node.js 24 和 Git。输出在 windows/release。云端工作流做源码/本地化审查、类型检查、编辑/保存故障注入、独立 PSD 读取、软件 GPU 打包 GUI 检查与许可证/包审查。按要求开发者本机不运行测试、应用或构建。
 
-Windows 使用 windows-v* 标签、预发布、make_latest=false。下载审核候选产物、创建绑定确切 SHA 的草稿，再用 Windows upload reviewed draft assets 上传已通过云端产物；发布后验证 `/releases/latest` 仍为 macOS。原生 macOS 代码、安装包和设置不参与本批改动。
-
 ## English summary
 
-Install the x64 EXE or fully extract the ZIP from the [Windows editor prerelease](https://github.com/Pengjingyu1992/Compositor-ZH/releases/tag/windows-v0.3.0-alpha.1). No Node.js or API key is required. Verify SHA-256; packages are unsigned. Target: Windows 10 22H2 / Windows 11 x64; hardware, IME, high-DPI and real Photoshop acceptance remain pending.
+Install the x64 EXE or fully extract the ZIP from the [Windows editor download page](https://github.com/Pengjingyu1992/Compositor-ZH/releases/tag/windows-v0.3.0-alpha.1). No Node.js or API key is required. Verify SHA-256; packages are unsigned. Target: Windows 10 22H2 / Windows 11 x64; hardware, IME, high-DPI and real Photoshop acceptance remain pending.
 
-Use 17 tools: selections, crop/resize, Chinese text, editable shapes, gradients/bucket, painting/masks, clone/healing/smear, navigation and eyedropper. Multi-select, align/distribute, group/duplicate/merge, 21 filters, adjustments/effects, clipboard, undo/redo, Save/Save As, recovery and PSD/PNG conversion are available. Unknown data is retained. Text/shapes save parameters with pixels; painting rasterizes them. Locks are session-only. Unsupported compositions remain read-only with explicit saved-preview fallback. All 24 blends are candidates, with macOS golden-image calibration pending; spatial filters/effects use bounded approximations.
+Use 17 tools: selections, crop/resize, Chinese text, editable shapes, gradients/bucket, painting/masks, clone/healing/smear, navigation and eyedropper. Multi-select, align/distribute, group/duplicate/merge, 21 filters, adjustments/effects, clipboard, undo/redo, Save/Save As, recovery and PSD/PNG conversion are available. Unknown data is retained. Text/shapes save parameters with pixels; painting rasterizes them. Locks are session-only. Unsupported compositions remain read-only with explicit saved-preview fallback. All 24 blends use sRGB, with image-quality calibration pending; spatial filters/effects use bounded approximations.
 
-Overwrite saves stage and validate a complete package, reject external changes, retain a complete backup, and use a durable journal for interruption recovery. Two directory renames are not one atomic operation. Recovery copies never mark the project saved. PSD layers preserve core structure/masks; text/shapes rasterize and adjustment/effect projects require explicit flattened PSD export. No telemetry or project upload. Windows settings, releases and binaries are independent of macOS.
+Overwrite saves stage and validate a complete package, reject external changes, retain a complete backup, and use a durable journal for interruption recovery. Two directory renames are not one atomic operation. Recovery copies never mark the project saved. PSD layers preserve core structure/masks; text/shapes rasterize and adjustment/effect projects require explicit flattened PSD export. No telemetry or project upload.
 
 Thank you to [Robbie Tilton, Compositor](https://github.com/robbietilton/Compositor) and [Terry Jia, Pentrado](https://github.com/jtydhr88/pentrado). See [Windows notices](../windows/THIRD_PARTY_NOTICES.md).

@@ -196,7 +196,8 @@ extension EditorSession {
             guard let acquired = beginOwnedEdit() else { return false }
             lease = acquired
         }
-        defer { releaseEdit(lease) }
+        // A supplied owner belongs to the caller's larger operation.
+        defer { if owner == nil { releaseEdit(lease) } }
         guard stroke.committedTransform.isValid else { throw ProjectError.tooLarge }
         let input = stroke.commitInput()
         let result = try await BrushCommit.shared.render(input)

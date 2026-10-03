@@ -3741,6 +3741,17 @@
         }
       }
     },
+    "Disable Mask": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "停用蒙版"
+          }
+        }
+      }
+    },
     "Dissolve": {
       "extractionState": "manual",
       "localizations": {
@@ -4760,6 +4771,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "启用镜头配置文件校正"
+          }
+        }
+      }
+    },
+    "Enable Mask": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "启用蒙版"
           }
         }
       }
@@ -7642,6 +7664,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "链接图层蒙版"
+          }
+        }
+      }
+    },
+    "Link Mask": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "链接蒙版"
           }
         }
       }
@@ -13670,6 +13703,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "取消链接图层蒙版"
+          }
+        }
+      }
+    },
+    "Unlink Mask": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消链接蒙版"
           }
         }
       }

@@ -27,32 +27,34 @@ extension EditorSession {
     func beginSelectionTransform() async {
         guard canTransformSelection, let document, let source = activeLayer else { NSSound.beep(); return }
         let lifted: (image: CGImage, region: CGRect)
+        let thumbnail: CGImage
         do {
             guard let pixels = try renderSelectedPixels(from: source, mask: false) else { NSSound.beep(); return }
             lifted = pixels
+            thumbnail = try PixelInvert.thumbnail(of: pixels.image)
         } catch { brushError = error.localizedDescription; return }
+        finishOpacityEdit()
+        guard let owner = beginOwnedEdit() else { NSSound.beep(); return }
+        defer { releaseEdit(owner) }
         let before = document, beforeActive = activeLayerID
-        // Outer edit: closed by commitTransform (merge) or cancelTransform (restore).
-        beginEdit("Transform Selection")
-        await clearSelectedPixels()
-        guard let index = self.document?.layers.firstIndex(where: { $0.id == source.id }),
-              let thumbnail = try? PixelInvert.thumbnail(of: lifted.image) else {
-            self.document = before
-            endEdit()
-            return
-        }
         var floating = ImageLayer(asset: ImportedImage(image: lifted.image, thumbnail: thumbnail, name: "Floating Selection"),
                                   origin: lifted.region.origin)
         floating.name = "Floating Selection"
         floating.parentID = source.parentID
         floating.opacity = source.opacity
         floating.blendMode = source.blendMode
-        self.document?.layers.insert(floating, at: index + 1)
-        activeLayerID = floating.id
-        tool = .move
-        transformEdit = TransformEdit(layerID: floating.id, draft: floating.transform, persistent: true,
-            floating: FloatingTransform(sourceID: source.id, before: before, beforeActive: beforeActive,
-                                        original: floating.transform, pixelSize: lifted.region.size))
+        await applyPixelEdit(to: source, name: "Transform Selection", owner: owner, alsoApply: {
+            guard let index = self.document?.layers.firstIndex(where: { $0.id == source.id }) else { return }
+            // The raster commit has revalidated the source and opened the undo step.
+            // Keep it open for the preview; commitTransform or cancelTransform closes it.
+            self.beginEdit("Transform Selection")
+            self.document?.layers.insert(floating, at: index + 1)
+            self.activeLayerID = floating.id
+            self.tool = .move
+            self.transformEdit = TransformEdit(layerID: floating.id, draft: floating.transform, persistent: true,
+                floating: FloatingTransform(sourceID: source.id, before: before, beforeActive: beforeActive,
+                                            original: floating.transform, pixelSize: lifted.region.size))
+        }) { try $0.clearPixels() }
     }
 
     /// Maps the original selection to where the floating pixels are now.

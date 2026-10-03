@@ -219,15 +219,16 @@ extension EditorSession {
     }
 
     @discardableResult
-    private func applyPixelEdit(to layer: ImageLayer, name: String, coverage: SelectionClip? = nil,
-                                owner: EditOwner? = nil, _ paint: (BrushStroke) throws -> Void) async -> Bool {
+    func applyPixelEdit(to layer: ImageLayer, name: String, coverage: SelectionClip? = nil,
+                        owner: EditOwner? = nil, alsoApply: (() -> Void)? = nil,
+                        _ paint: (BrushStroke) throws -> Void) async -> Bool {
         finishOpacityEdit()
         do {
             // On a mask, a fill covers the whole canvas, past the mask's own area, as the brush can.
             let edit = try makeRasterEdit(for: layer, growsMask: true, coverage: coverage)
             try paint(edit)
             guard !edit.patches.isEmpty else { return false }
-            let committed = try await commitRasterEdit(edit, name: name, owner: owner)
+            let committed = try await commitRasterEdit(edit, name: name, owner: owner, alsoApply: alsoApply)
             brushRevision += 1
             return committed
         } catch { brushError = error.localizedDescription; return false }

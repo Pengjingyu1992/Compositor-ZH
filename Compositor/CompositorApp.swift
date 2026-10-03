@@ -245,7 +245,6 @@ struct CompositorApp: App {
                         .disabled(!session.canSelectSubject)
                     Button("Color Range…") { session.beginColorRange() }
                         .disabled(!session.canSelectColorRange)
-                        .accessibilityIdentifier("selectColorRange")
                     Button("Mask's Black Areas") {
                         if let id = session.activeLayerID { session.loadMaskSelection(layerID: id) }
                     }

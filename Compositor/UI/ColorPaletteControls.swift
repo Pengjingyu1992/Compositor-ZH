@@ -21,7 +21,7 @@ struct ColorPaletteControls: View {
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
             .offset(x: swatchSize + 3, y: -3)
-            .help("Swap foreground and background (X)")
+            .help(L10n.format("Swap foreground and background (%@)", ShortcutSettings.shared.keyLabel("x")))
             .accessibilityLabel("Swap colors")
             Button { session.resetPaletteColors() } label: {
                 Image(systemName: "arrow.counterclockwise")
@@ -32,7 +32,7 @@ struct ColorPaletteControls: View {
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
             .offset(x: -1, y: swatchSize + 3)
-            .help("Default colors (D)")
+            .help(L10n.format("Default colors (%@)", ShortcutSettings.shared.keyLabel("d")))
             .accessibilityLabel("Default colors")
         }
         .frame(width: swatchSize + swatchOffset, height: swatchSize + swatchOffset, alignment: .topLeading)

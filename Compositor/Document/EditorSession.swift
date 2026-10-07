@@ -96,7 +96,33 @@ enum NavigationTool: String, CaseIterable {
     /// Tools that draw and edit selections, sharing modifiers, moving, and nudging.
     var isSelectionTool: Bool { self == .marquee || self == .lasso || self == .wand }
     var symbol: String { self == .bucket ? "drop.fill" : self == .type ? "character.cursor.ibeam" : self == .eyedropper ? "eyedropper" : self == .marquee ? "rectangle.dashed" : self == .lasso ? "lasso" : self == .wand ? "wand.and.stars" : self == .brush ? "paintbrush.pointed" : self == .spotHealing ? "bandage" : self == .cloneStamp ? "seal" : self == .blur ? "drop" : self == .gradient ? "square.bottomhalf.filled" : self == .shape ? "square.on.circle" : self == .crop ? "crop" : self == .move ? "arrow.up.left.and.arrow.down.right" : self == .hand ? "hand.draw" : "magnifyingglass" }
-    var label: String { self == .bucket ? "Paint Bucket (K)" : self == .type ? "Type (T)" : self == .eyedropper ? "Eyedropper (I)" : self == .marquee ? "Marquee (M)" : self == .lasso ? "Lasso (L)" : self == .wand ? "Magic (W) · Tab switches Wand and Object" : self == .brush ? "Brush (B) · Eraser (E)" : self == .spotHealing ? "Spot Healing Brush (J)" : self == .cloneStamp ? "Clone Stamp (S) · Option-click sets the source" : self == .blur ? "Smear (R)" : self == .gradient ? "Gradient (G)" : self == .shape ? "Shape (U) · Shift-U switches Rectangle/Ellipse" : self == .crop ? "Crop (C)" : self == .move ? "Move / Transform (V)" : self == .hand ? "Hand (H)" : "Zoom (Z)" }
+    var label: String {
+        let keys = ShortcutSettings.shared
+        switch self {
+        case .brush: return L10n.format("Brush (%@) · Eraser (%@)", keys.keyLabel("b"), keys.keyLabel("e"))
+        case .wand: return L10n.format("Magic (%@) · %@ switches Wand and Object", keys.keyLabel("w"), keys.keyLabel("\t"))
+        case .shape: return L10n.format("Shape (%@) · %@ switches Rectangle/Ellipse/Line", keys.keyLabel("u"), keys.keyLabel("u", 8))
+        case .cloneStamp: return L10n.format("Clone Stamp (%@) · Option-click sets the source", keys.keyLabel("s"))
+        default:
+            let (title, key): (String, String)
+            switch self {
+            case .bucket: (title, key) = ("Paint Bucket", "k")
+            case .type: (title, key) = ("Type", "t")
+            case .eyedropper: (title, key) = ("Eyedropper", "i")
+            case .marquee: (title, key) = ("Marquee", "m")
+            case .lasso: (title, key) = ("Lasso", "l")
+            case .spotHealing: (title, key) = ("Spot Healing Brush", "j")
+            case .blur: (title, key) = ("Smear", "r")
+            case .gradient: (title, key) = ("Gradient", "g")
+            case .crop: (title, key) = ("Crop", "c")
+            case .move: (title, key) = ("Move / Transform", "v")
+            case .hand: (title, key) = ("Hand", "h")
+            case .idle: (title, key) = ("Select", "a")
+            default: (title, key) = ("Zoom", "z")
+            }
+            return L10n.format("%@ (%@)", L10n.text(title), keys.keyLabel(key))
+        }
+    }
 }
 
 @Observable
@@ -657,10 +683,7 @@ final class EditorSession {
 
     func addBlankLayer() {
         guard canEditLayers, let document else { return }
-        let names = Set(document.layers.map(\.name))
-        var number = 1
-        while names.contains("Layer \(number)") { number += 1 }
-        var layer = ImageLayer(name: "Layer \(number)", blankSize: document.size)
+        var layer = ImageLayer(name: nextLayerName(), blankSize: document.size)
         layer.parentID = activeLayer?.isGroup == true ? activeLayerID : activeLayer?.parentID
         if let parent = layer.parentID { collapsedGroupIDs.remove(parent) }
         var insertion = document.layers.firstIndex { $0.id == activeLayerID }.map { $0 + 1 } ?? document.layers.count
@@ -962,7 +985,7 @@ final class EditorSession {
         beginEdit("New Canvas")
         defer { endEdit() }
         var document = CanvasDocument(width: width, height: height)
-        let layer = emptyLayer ? ImageLayer(name: "Layer 1", blankSize: document.size) : nil
+        let layer = emptyLayer ? ImageLayer(name: L10n.format("Layer %lld", 1), blankSize: document.size) : nil
         if let layer { document.layers = [layer] }
         self.document = document
         activeLayerID = layer?.id

@@ -392,7 +392,7 @@ struct NewProjectDropTarget: ViewModifier {
     func body(content: Content) -> some View {
         content
             .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(targeted ? Color.accentColor : .clear, lineWidth: 2))
-            .help(L10n.text(targeted ? "Open in a new project tab" : "New canvas (⌘N) · Drop images here for new tabs"))
+            .help(targeted ? L10n.text("Open in a new project tab") : L10n.format("New canvas (%@) · Drop images here for new tabs", ShortcutSettings.shared.keyLabel("n", 1, menu: true)))
             .onDrop(of: [UTType.fileURL.identifier, UTType.image.identifier, ProjectWorkspace.layerType], delegate:
                 ProjectTabDropDelegate(workspace: workspace, destination: nil, targeted: $targeted))
     }

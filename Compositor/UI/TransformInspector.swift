@@ -16,7 +16,7 @@ struct TransformInspector: View {
               .help("Select layers by clicking the canvas. Hold Command to turn it the other way while you click.")
               .accessibilityIdentifier("transformAutoSelect")
           Toggle("Show Controls", isOn: $session.showsTransformControls)
-              .help("Show the transform box and handles (⌘H). When hidden, drag anywhere to move the layer.")
+              .help(L10n.format("Show the transform box and handles (%@). When hidden, drag anywhere to move the layer.", ShortcutSettings.shared.keyLabel("h", 1, menu: true)))
           ScrollView(.horizontal) {
             HStack(spacing: 12) {
                 field("X", value: value.origin.x) { $0.origin.x = $1 }.frame(width: 85)

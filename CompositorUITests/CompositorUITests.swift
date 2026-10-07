@@ -7,7 +7,7 @@ final class CompositorUITests: XCTestCase {
     func testCreateCanvasAndNavigation() throws {
         let app = XCUIApplication()
         app.launch()
-        app.buttons["newCanvasWelcome"].click()
+        XCTAssertTrue(app.textFields["widthInput"].waitForExistence(timeout: 5))
         let width = app.textFields["widthInput"]
         width.click()
         width.typeKey("a", modifierFlags: .command)
@@ -20,11 +20,11 @@ final class CompositorUITests: XCTestCase {
         height.typeKey("a", modifierFlags: .command)
         height.typeText("800")
         app.buttons["createCanvas"].click()
-        XCTAssertEqual(app.staticTexts["canvasDimensions"].value as? String, "1,200 × 800 px")
+        XCTAssertTrue((app.staticTexts["zoomStatus"].value as? String ?? "").contains("1,200 × 800"))
         app.buttons["actualPixels"].click()
-        XCTAssertEqual(app.staticTexts["zoomStatus"].value as? String, "100%")
+        XCTAssertTrue((app.staticTexts["zoomStatus"].value as? String ?? "").hasPrefix("100%"))
         app.typeKey("=", modifierFlags: .command)
-        XCTAssertEqual(app.staticTexts["zoomStatus"].value as? String, "125%")
+        XCTAssertTrue((app.staticTexts["zoomStatus"].value as? String ?? "").hasPrefix("125%"))
         app.buttons["fitCanvas"].click()
         let screenshot = XCTAttachment(screenshot: app.screenshot())
         screenshot.name = "Editor foundation"
@@ -32,7 +32,7 @@ final class CompositorUITests: XCTestCase {
         add(screenshot)
         app.typeKey("n", modifierFlags: .command)
         app.typeKey(.escape, modifierFlags: [])
-        XCTAssertEqual(app.staticTexts["canvasDimensions"].value as? String, "1,200 × 800 px")
+        XCTAssertTrue((app.staticTexts["zoomStatus"].value as? String ?? "").contains("1,200 × 800"))
     }
 
     @MainActor
@@ -44,7 +44,7 @@ final class CompositorUITests: XCTestCase {
             app.terminate()
             let start = ProcessInfo.processInfo.systemUptime
             app.launch()
-            XCTAssertTrue(app.buttons["newCanvasWelcome"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.textFields["widthInput"].waitForExistence(timeout: 5))
             samples.append(ProcessInfo.processInfo.systemUptime - start)
         }
         print("LAUNCH_TO_READY_SECONDS: \(samples)")

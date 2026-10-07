@@ -33,10 +33,10 @@ struct LayersPanel: View {
             // No spacing: each button's hit area supplies it (8 pt either side makes the 16 pt gap).
             HStack(spacing: 0) {
                 Button { session.addBlankLayer() } label: { Image(systemName: "plus.square").footerHitArea() }
-                    .help("New blank layer (⇧⌘N)").accessibilityLabel("New blank layer")
+                    .help(L10n.format("New blank layer (%@)", ShortcutSettings.shared.keyLabel("n", 9, menu: true))).accessibilityLabel("New blank layer")
                     .accessibilityIdentifier("addBlankLayer").disabled(!session.canEditLayers)
                 Button { session.groupSelectedLayers() } label: { Image(systemName: "folder.badge.plus").footerHitArea() }
-                    .help("Group selected layers (⌘G)").accessibilityLabel("New folder").disabled(!session.canEditLayers)
+                    .help(L10n.format("Group selected layers (%@)", ShortcutSettings.shared.keyLabel("g", 1, menu: true))).accessibilityLabel("New folder").disabled(!session.canEditLayers)
                 LayerMaskMenu(session: session)
                 Menu {
                     ForEach(LayerEffectKind.allCases, id: \.self) { kind in

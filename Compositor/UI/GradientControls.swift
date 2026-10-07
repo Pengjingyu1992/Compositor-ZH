@@ -25,7 +25,7 @@ struct GradientControls: View {
                 .frame(width: 42).textFieldStyle(.roundedBorder)
                 .arrowSteps(value: { Double(session.gradientSettings.opacity * 100) },
                             change: { session.gradientSettings.opacity = CGFloat(min(100, max(1, $0)) / 100) })
-                .help("Press 1–9 for 10–90%, 0 for 100%")
+                .help(ShortcutSettings.shared.opacityHelp)
                 .unitSuffix("%")
             Spacer(minLength: 0)
             if session.isMaskSelected { Text("Mask").foregroundStyle(.secondary) }

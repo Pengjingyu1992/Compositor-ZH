@@ -13,7 +13,7 @@ struct ShapeControls: View {
                 ForEach(ShapeKind.allCases, id: \.self) { Text(L10n.text($0.rawValue)).tag($0) }
             }
             .pickerStyle(.segmented).labelsHidden().fixedSize()
-            .help("Shift-U (or Tab) steps through Rectangle, Ellipse and Line")
+            .help(L10n.format("%@ (or %@) steps through Rectangle, Ellipse and Line", ShortcutSettings.shared.keyLabel("u", 8), ShortcutSettings.shared.keyLabel("\t")))
             if session.shapeKind == .line {
                 HStack(spacing: 6) {
                     Text("Width").scrubbable(sensitivity: 1, value: $session.shapeLineWidth, range: 1...5000)

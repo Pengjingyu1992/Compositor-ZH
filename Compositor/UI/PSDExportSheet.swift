@@ -25,8 +25,8 @@ struct PSDExportSheet: View {
             }
             HStack {
                 Spacer()
-                Button("Cancel") { complete(nil) }.keyboardShortcut(.cancelAction)
-                Button("Continue") { complete(mode) }.keyboardShortcut(.defaultAction)
+                Button("Cancel") { complete(nil) }.configuredNativeShortcut(.escape)
+                Button("Continue") { complete(mode) }.configuredNativeShortcut(.return)
             }
         }.padding(20).frame(width: 560)
     }

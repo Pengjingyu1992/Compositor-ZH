@@ -27,7 +27,7 @@ extension EditorSession {
             return "“\(layer.name)” is an adjustment layer, with no pixels to paint. Paint on its mask instead."
         }
         if selection?.isEmpty == true {
-            return "Nothing is selected, so there’s nowhere to paint. Choose Select › Deselect (⌘D) to paint anywhere."
+            return L10n.format("Nothing is selected, so there’s nowhere to paint. Choose Select › Deselect (%@) to paint anywhere.", ShortcutSettings.shared.keyLabel("d", 1, menu: true))
         }
         return nil
     }

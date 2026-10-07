@@ -719,25 +719,14 @@ final class LayerTableView: NSTableView {
             session?.cancelTransform()
         } else if [36, 76].contains(event.keyCode), session?.transformEdit != nil {
             session?.commitTransform()
-        } else if plain, event.keyCode == 48 {
-            session?.cycleToolMode()
-        } else if plain, event.charactersIgnoringModifiers?.lowercased() == "x" {
-            session?.swapPaletteColors()
-        } else if plain, event.charactersIgnoringModifiers?.lowercased() == "d" {
-            session?.resetPaletteColors()
-        } else if plain, event.charactersIgnoringModifiers?.lowercased() == "t" {
-            session?.selectTool(.type)
-        } else if plain, ["a", "v", "h", "z", "b", "e", "g", "k", "l", "m", "w", "j", "s", "u", "r", "i", "c"].contains(event.charactersIgnoringModifiers?.lowercased() ?? "") {
-            let key = event.charactersIgnoringModifiers?.lowercased()
-            if key == "m" { if !event.isARepeat { session?.pressMarqueeKey() } }
-            else if key == "l" { if !event.isARepeat { session?.pressLassoKey() } }
-            else if key == "b" || key == "e" {
-                session?.selectTool(.brush)
-                session?.brushMode = key == "e" ? .erase : .paint
-            }
-            else if key == "w" { if !event.isARepeat { session?.pressWandKey() } }
-            else if key == "k" { session?.selectTool(.bucket) }
-            else { session?.selectTool(key == "a" ? .idle : key == "i" ? .eyedropper : key == "c" ? .crop : key == "r" ? .blur : key == "b" ? .brush : key == "g" ? .gradient : key == "l" ? .lasso : key == "m" ? .marquee : key == "j" ? .spotHealing : key == "s" ? .cloneStamp : key == "u" ? .shape : key == "v" ? .move : key == "h" ? .hand : .zoom) }
+        } else if [51, 117].contains(event.keyCode),
+                  event.modifierFlags.intersection([.command, .control, .option, .shift]) == .shift {
+            if session?.canContentAwareFill == true { session?.beginFilter(.contentAwareFill) }
+        } else if let session, let offset = session.selectedPixelNudge(for: event) {
+            let documentID = session.document?.id
+            Task { await session.nudgePixels(offset, in: documentID) }
+        } else if session?.handleToolShortcut(event) == true {
+            return
         } else if plain, let digit = Int(event.charactersIgnoringModifiers ?? ""), session?.usesOpacityKeys == true {
             session?.typeOpacityDigit(digit)
         // With the Move tool the arrows move the layer, as on the canvas, rather than changing the row selection.

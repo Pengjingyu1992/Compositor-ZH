@@ -22,7 +22,10 @@ struct ShortcutChord: Codable, Equatable, Hashable {
         case 126: key = "\u{f700}"
         default:
             let typed = event.charactersIgnoringModifiers?.lowercased() ?? ""
-            key = ["{": "[", "}": "]", "+": "=", "_": "-" ][typed] ?? typed
+            key = ["{": "[", "}": "]", "+": "=", "_": "-",
+                   "【": "[", "】": "]", "「": "[", "」": "]", "『": "[", "』": "]",
+                   "［": "[", "］": "]", "｛": "[", "｝": "]",
+                   "＝": "=", "＋": "=", "－": "-", "＿": "-"][typed] ?? typed
         }
     }
     var eventModifiers: EventModifiers {
@@ -51,7 +54,7 @@ struct ShortcutChord: Codable, Equatable, Hashable {
     func event(like event: NSEvent) -> NSEvent? {
         let codes: [String: UInt16] = ["\u{7f}": 51, "\r": 36, "\u{1b}": 53, "\t": 48, " ": 49,
                                        "\u{f702}": 123, "\u{f703}": 124, "\u{f701}": 125, "\u{f700}": 126,
-                                       "=": 24, "-": 27]
+                                       "=": 24, "-": 27, "[": 33, "]": 30]
         let shifted = modifiers & 8 != 0 ? (["[": "{", "]": "}", "=": "+", "-": "_"][key] ?? key) : key
         return NSEvent.keyEvent(with: event.type, location: event.locationInWindow, modifierFlags: cocoaModifiers,
             timestamp: event.timestamp, windowNumber: event.windowNumber, context: nil,
@@ -79,7 +82,7 @@ struct ShortcutDefinition: Identifiable {
             entry("Close Project", "w", 1, menu: true), entry("Fit Canvas", "0", 1, menu: true),
             entry("Actual Pixels", "1", 1, menu: true), entry("Zoom In", "=", 1, menu: true),
             entry("Zoom Out", "-", 1, menu: true), entry("Show Transform Controls", "h", 1, menu: true),
-            entry("Hide Compositor", "h", 3, menu: true), entry("Cut", "x", 1, menu: true),
+            entry("Hide Others", "h", 3, menu: true), entry("Cut", "x", 1, menu: true),
             entry("Copy", "c", 1, menu: true), entry("Copy Merged", "c", 9, menu: true),
             entry("Paste", "v", 1, menu: true), entry("Fill with Foreground", "\u{7f}", 2, menu: true),
             entry("Fill with Background", "\u{7f}", 1, menu: true), entry("Content-Aware Fill", "\u{7f}", 8, menu: true),
@@ -132,11 +135,24 @@ final class ShortcutSettings {
     static let shared = ShortcutSettings()
     private(set) var overrides: [String: ShortcutChord] = [:]
     @ObservationIgnored private let panel = FloatingPanelController(name: "keyboardShortcuts")
+    @ObservationIgnored private let defaults: UserDefaults
     private static let storageKey = "keyboardShortcuts.v1"
-    private init() {
-        if let data = UserDefaults.standard.data(forKey: Self.storageKey),
-           let saved = try? JSONDecoder().decode([String: ShortcutChord].self, from: data),
-           Self.problem(in: saved) == nil { overrides = saved }
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        if let data = defaults.data(forKey: Self.storageKey),
+           let saved = try? JSONDecoder().decode([String: ShortcutChord].self, from: data) {
+            let migrated = Self.migrate(saved)
+            if Self.problem(in: migrated) == nil { overrides = migrated }
+        }
+    }
+    static func migrate(_ saved: [String: ShortcutChord]) -> [String: ShortcutChord] {
+        var result = saved
+        if let legacy = result.removeValue(forKey: "Menus:Hide Compositor"), result["Menus:Hide Others"] == nil {
+            result["Menus:Hide Others"] = legacy
+        }
+        // Older versions allowed the system full-screen key. Keep other assignments.
+        for id in result.keys where result[id] == ShortcutChord("f", 5) { result.removeValue(forKey: id) }
+        return result
     }
     func chord(_ definition: ShortcutDefinition) -> ShortcutChord { overrides[definition.id] ?? definition.original }
     func menu(_ key: KeyEquivalent, modifiers: EventModifiers) -> ShortcutChord {
@@ -153,6 +169,16 @@ final class ShortcutSettings {
         guard let definition = ShortcutDefinition.all.first(where: { !$0.isMenu && $0.original == original }) else { return original }
         return chord(definition)
     }
+    func keyLabel(_ key: String, _ modifiers: Int = 0, menu: Bool = false) -> String {
+        let original = ShortcutChord(key, modifiers)
+        return ShortcutDefinition.all.first(where: { $0.isMenu == menu && $0.original == original })
+            .map { chord($0).label } ?? original.label
+    }
+    var opacityHelp: String {
+        let digits = (1...9).map { keyLabel(String($0)) }
+        let range = digits == (1...9).map(String.init) ? "1–9" : digits.joined(separator: "/")
+        return L10n.format("%@ for 10–90%%, %@ for 100%%", range, keyLabel("0"))
+    }
     func show() {
         panel.show(title: "Keyboard Shortcuts", content: KeyboardShortcutsSheet(settings: self))
     }
@@ -160,7 +186,7 @@ final class ShortcutSettings {
     func save(_ values: [String: ShortcutChord]) {
         guard Self.problem(in: values) == nil, let data = try? JSONEncoder().encode(values) else { return }
         overrides = values
-        UserDefaults.standard.set(data, forKey: Self.storageKey)
+        defaults.set(data, forKey: Self.storageKey)
         close()
     }
     static func problem(in values: [String: ShortcutChord]) -> String? {
@@ -171,7 +197,7 @@ final class ShortcutSettings {
             if definition.group == "Text Editing", chord.modifiers & 7 == 0 {
                 return L10n.text("Text-editing shortcuts need Command, Option, or Control so they do not replace normal typing.")
             }
-            if [ShortcutChord("q", 1), ShortcutChord(",", 1), ShortcutChord("m", 3)].contains(chord) {
+            if [ShortcutChord("q", 1), ShortcutChord(",", 1), ShortcutChord("m", 3), ShortcutChord("f", 5)].contains(chord) {
                 return L10n.format("%@ is reserved by macOS.", chord.label)
             }
             if let other = assigned[chord] { return L10n.format("%@ is assigned to both %@ and %@.", chord.label, L10n.text(other), L10n.text(definition.title)) }
@@ -183,10 +209,11 @@ final class ShortcutSettings {
     /// Translate only at the existing canvas/layer responder boundary. Native text
     /// fields and dialog controls retain their normal typing and navigation behavior.
     func canvasEvent(_ event: NSEvent) -> NSEvent? {
-        guard !overrides.isEmpty else { return event }
         let input = ShortcutChord(event)
         if let definition = ShortcutDefinition.all.first(where: { $0.group == "Canvas & Layers" && chord($0) == input }) {
-            return definition.original == input ? event : definition.original.event(like: event)
+            // Rebuild even a default assignment: a Chinese input source can send
+            // full-width punctuation, and Shift must still select brush hardness.
+            return definition.original.event(like: event)
         }
         if ShortcutDefinition.all.contains(where: { $0.group != "Text Editing" && $0.original == input && chord($0) != input }) { return nil }
         // Letter tool shortcuts traditionally also accept Shift. Follow the base

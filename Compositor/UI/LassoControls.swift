@@ -17,7 +17,7 @@ struct LassoControls: View {
                     ForEach(LassoKind.marqueeChoices, id: \.self) { Text(L10n.text($0.rawValue)).tag($0) }
                 }
                 .pickerStyle(.segmented).labelsHidden().fixedSize()
-                .help("Press M to switch between Rectangle and Ellipse")
+                .help(L10n.format("Press %@ to switch between Rectangle and Ellipse", ShortcutSettings.shared.keyLabel("\t")))
             }
             if session.tool == .wand {
                 Picker("Mode", selection: Binding(get: { session.wandMode }, set: { mode in
@@ -27,7 +27,7 @@ struct LassoControls: View {
                     ForEach(WandMode.allCases, id: \.self) { Text(L10n.text($0.rawValue)).tag($0) }
                 }
                 .pickerStyle(.segmented).labelsHidden().fixedSize()
-                .help("Press Tab to switch between Wand and Object")
+                .help(L10n.format("Press %@ to switch between Wand and Object", ShortcutSettings.shared.keyLabel("\t")))
             }
             if session.tool == .lasso {
                 Picker("Lasso", selection: Binding(get: { session.lassoKind }, set: { kind in
@@ -37,7 +37,7 @@ struct LassoControls: View {
                     ForEach(LassoKind.lassoChoices, id: \.self) { Text(L10n.text($0.rawValue)).tag($0) }
                 }
                 .pickerStyle(.segmented).labelsHidden().fixedSize()
-                .help("Press L to switch between Freehand and Polygonal")
+                .help(L10n.format("Press %@ to switch between Freehand and Polygonal", ShortcutSettings.shared.keyLabel("\t")))
             }
             // Shows held Shift/Option (or an outline's mode) live; clicking sets the choice.
             Picker("Mode", selection: Binding(get: { session.displayedSelectionMode },

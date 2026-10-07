@@ -39,7 +39,7 @@ struct RecoverySheet: View {
             HStack {
                 Text("Up to 32 documents and 4 GB. Existing copies are kept when storage is full.").font(.caption).foregroundStyle(.secondary)
                 Spacer()
-                Button("Close", action: close).keyboardShortcut(.cancelAction)
+                Button("Close", action: close).configuredNativeShortcut(.escape)
             }
         }
         .padding(20).frame(width: 620).disabled(busy)

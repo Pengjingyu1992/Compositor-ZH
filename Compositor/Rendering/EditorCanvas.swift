@@ -2182,13 +2182,9 @@ final class CanvasView: NSView {
         } else if [36, 76].contains(event.keyCode), session.transformEdit != nil {
             transformDrag = nil
             session.commitTransform()
-        } else if session.selection?.isEmpty == false, session.lassoDraft == nil, [123, 124, 125, 126].contains(event.keyCode),
-                  event.modifierFlags.contains(.command), event.modifierFlags.intersection([.control, .option]).isEmpty {
-            // Cmd-arrow moves the selected pixels in any tool; Shift for 10 px.
-            let step: CGFloat = event.modifierFlags.contains(.shift) ? 10 : 1
-            let dx: CGFloat = event.keyCode == 123 ? -step : event.keyCode == 124 ? step : 0
-            let dy: CGFloat = event.keyCode == 126 ? -step : event.keyCode == 125 ? step : 0
-            Task { await session.nudgePixels(dx: dx, dy: dy); synchronizeDisplay() }
+        } else if let offset = session.selectedPixelNudge(for: event) {
+            let documentID = session.document?.id
+            Task { await session.nudgePixels(offset, in: documentID); synchronizeDisplay() }
         } else if session.tool.isSelectionTool, session.lassoDraft == nil, session.selection?.isEmpty == false,
                   [123, 124, 125, 126].contains(event.keyCode),
                   event.modifierFlags.intersection([.command, .control, .option]).isEmpty {
@@ -2203,9 +2199,7 @@ final class CanvasView: NSView {
         } else if (event.keyCode == 51 || event.keyCode == 117),
            event.modifierFlags.intersection([.command, .control, .option]).isEmpty {
             session.deleteKeyPressed()
-        } else if event.keyCode == 48, session.textDraft == nil, event.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty {
-            // Tab switches the current tool's mode (Rectangle/Ellipse, Paint/Erase, and so on).
-            session.cycleToolMode()
+        } else if session.handleToolShortcut(event) {
             refreshLassoCursor()
             updateBrushCursor()
         } else if event.keyCode == 49 {
@@ -2215,25 +2209,6 @@ final class CanvasView: NSView {
             window?.invalidateCursorRects(for: self)
         } else if event.modifierFlags.intersection([.command, .control, .option]).isEmpty {
             switch event.charactersIgnoringModifiers?.lowercased() {
-            case "x": session.swapPaletteColors()
-            case "d": session.resetPaletteColors()
-            case "b": session.selectTool(.brush); session.brushMode = .paint
-            case "e": session.selectTool(.brush); session.brushMode = .erase
-            case "j": session.selectTool(.spotHealing)
-            case "s": session.selectTool(.cloneStamp)
-            case "t": session.selectTool(.type)
-            case "g": session.selectTool(.gradient)
-            case "k": session.selectTool(.bucket)
-            case "u":
-                if event.modifierFlags.contains(.shift), session.tool == .shape { session.toggleShapeKind() }
-                else { session.selectTool(.shape) }
-            case "i": session.selectTool(.eyedropper)
-            // M chooses the Marquee in whichever shape it was last set to; the shape is switched in the tool
-            // bar. Ignoring a repeat keeps holding the key from doing anything odd.
-            case "m": if !event.isARepeat { session.pressMarqueeKey(); refreshLassoCursor() }
-            case "w": if !event.isARepeat { session.pressWandKey(); refreshLassoCursor() }
-            // L chooses the Lasso the same way; Freehand/Polygonal is switched in the tool bar.
-            case "l": if !event.isARepeat { session.pressLassoKey(); refreshLassoCursor() }
             case let key? where Int(key) != nil && session.usesOpacityKeys:
                 session.typeOpacityDigit(Int(key) ?? 0)
             case "[" where session.tool.isBrushTool: session.changeBrushSize(increase: false)
@@ -2241,12 +2216,6 @@ final class CanvasView: NSView {
             // Shift turns [ and ] into { and }.
             case "{" where session.tool.isBrushTool: session.changeBrushHardness(increase: false)
             case "}" where session.tool.isBrushTool: session.changeBrushHardness(increase: true)
-            case "a": session.selectTool(.idle)
-            case "r": session.selectTool(.blur)
-            case "c": session.selectTool(.crop)
-            case "v": session.selectTool(.move)
-            case "h": session.selectTool(.hand)
-            case "z": session.selectTool(.zoom)
             default: super.keyDown(with: event)
             }
         } else { super.keyDown(with: event) }

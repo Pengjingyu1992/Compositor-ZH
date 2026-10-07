@@ -164,7 +164,7 @@ struct ContentView: View {
         .toolbar {
             ToolbarItem(placement: .navigation) {
                 Button { requestNewCanvas() } label: { Label("New canvas", systemImage: "plus") }
-                    .help("New canvas (⌘N)").accessibilityIdentifier("newCanvasToolbar")
+                    .help(L10n.format("New canvas (%@)", ShortcutSettings.shared.keyLabel("n", 1, menu: true))).accessibilityIdentifier("newCanvasToolbar")
                     .disabled(session.isImporting || session.showsBusy || session.levels != nil)
                     .modifier(NewProjectDropTarget(workspace: applicationDelegate?.workspace))
             }
@@ -183,12 +183,12 @@ struct ContentView: View {
             // Without this spacer, the growing tab strip pushes the primary actions left.
             ToolbarSpacer(.flexible, placement: .navigation)
             ToolbarItem(placement: .primaryAction) {
-                Button("Fit") { session.fit() }.help("Fit canvas in window (⌘0)")
+                Button("Fit") { session.fit() }.help(L10n.format("Fit canvas in window (%@)", ShortcutSettings.shared.keyLabel("0", 1, menu: true)))
                     .accessibilityIdentifier("fitCanvas").disabled(session.document == nil)
                     .padding(.horizontal, 4)
             }
             ToolbarItem(placement: .primaryAction) {
-                Button("100%") { session.zoom(to: 1) }.help("Actual pixels (⌘1)")
+                Button("100%") { session.zoom(to: 1) }.help(L10n.format("Actual pixels (%@)", ShortcutSettings.shared.keyLabel("1", 1, menu: true)))
                     .accessibilityIdentifier("actualPixels").disabled(session.document == nil)
                     .padding(.horizontal, 4)
             }
@@ -196,10 +196,10 @@ struct ContentView: View {
                 HStack(spacing: 0) {
                     Button { session.zoomKeyboard(by: 1) } label: {
                         Image(systemName: "plus.magnifyingglass")
-                    }.help("Zoom in (⌘+)").disabled(session.document == nil)
+                    }.help(L10n.format("Zoom in (%@)", ShortcutSettings.shared.keyLabel("=", 1, menu: true))).disabled(session.document == nil)
                     Button { session.zoomKeyboard(by: -1) } label: {
                         Image(systemName: "minus.magnifyingglass")
-                    }.help("Zoom out (⌘−)").disabled(session.document == nil)
+                    }.help(L10n.format("Zoom out (%@)", ShortcutSettings.shared.keyLabel("-", 1, menu: true))).disabled(session.document == nil)
                 }
                 .padding(.horizontal, 4)
             }
@@ -323,7 +323,7 @@ struct ContentView: View {
                         }
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain).help(L10n.text(tool.label)).accessibilityLabel(L10n.text(tool.label))
+                .buttonStyle(.plain).help(tool.label).accessibilityLabel(tool.label)
                 .foregroundStyle(.primary)
                 .accessibilityAddTraits(session.tool == tool ? .isSelected : [])
             }
@@ -364,53 +364,46 @@ struct ContentView: View {
     }
 
     private var toolHelp: String {
+        let keys = ShortcutSettings.shared
+        let pan = L10n.format("Hold %@ to pan", keys.keyLabel(" "))
+        let cancel = L10n.format("%@ cancel", keys.keyLabel("\u{1b}"))
+        let apply = L10n.format("%@ apply", keys.keyLabel("\r"))
+        let brush = L10n.format("%@ / %@ size · %@ / %@ hardness", keys.keyLabel("["), keys.keyLabel("]"), keys.keyLabel("[", 8), keys.keyLabel("]", 8))
+        let selection = L10n.format("Shift add · Option subtract · Drag inside to move · %@ clears · %@ deselect", keys.keyLabel("\u{7f}"), keys.keyLabel("d", 1, menu: true))
+        let mode = L10n.format("%@ for the next mode", keys.keyLabel("\t"))
+        let parts: [String]
         switch session.tool {
         case .marquee:
-            return L10n.text(session.marqueeKind == .ellipse
-                ? "Drag an ellipse · Shift add · Option subtract · Shift again mid-drag circle · Drag inside to move · Delete clears · ⌘D deselect"
-                : "Drag a rectangle · Shift add · Option subtract · Shift again mid-drag square · Drag inside to move · ⌘-drag moves pixels · Delete clears · ⌘D deselect")
+            parts = [L10n.text(session.marqueeKind == .ellipse ? "Drag an ellipse · Shift again mid-drag for a circle" : "Drag a rectangle · Shift again mid-drag for a square"), selection]
         case .wand:
-            return L10n.text(session.wandMode == .object
-                ? "Click an object to select its outline · Tab for Wand · Shift add · Option subtract · Drag inside to move · ⌘-drag moves pixels · Delete clears · ⌘D deselect"
-                : "Click to select similar colors · Tab for Object · Shift add · Option subtract · Drag inside to move · ⌘-drag moves pixels · Delete clears · ⌘D deselect")
+            parts = [L10n.text(session.wandMode == .object ? "Click an object to select its outline" : "Click to select similar colors"), mode, selection]
         case .lasso:
-            return L10n.text(session.lassoKind == .freehand
-                ? "Drag to select · Drag inside to move · Shift add · Option subtract · Delete clears · ⌥⌫/⌘⌫ fill · ⌘D deselect"
-                : "Click corners · Click start, double-click or Enter to close · Delete removes corner · Escape cancel")
+            parts = session.lassoKind == .freehand
+                ? [L10n.text("Drag to select"), selection, L10n.format("%@ / %@ fill", keys.keyLabel("\u{7f}", 2, menu: true), keys.keyLabel("\u{7f}", 1, menu: true))]
+                : [L10n.format("Click corners · Click start, double-click or %@ to close · %@ removes corner", keys.keyLabel("\r"), keys.keyLabel("\u{7f}")), cancel]
         case .brush:
-            return L10n.text(session.brushMode == .erase
-                ? "Drag to erase · [ ] size · Shift-[ ] hardness · 1–0 opacity · Escape cancel · Space to pan"
-                : "Drag to paint · [ ] size · Shift-[ ] hardness · 1–0 opacity · Escape cancel · Space to pan")
+            parts = [L10n.text(session.brushMode == .erase ? "Drag to erase" : "Drag to paint"), brush, keys.opacityHelp, cancel, pan]
         case .blur:
-            return L10n.text(session.blurMode == .blur
-                ? "Drag to soften · [ ] size · Shift-[ ] hardness · 1–0 strength · Space to pan"
-                : session.blurMode == .smudge
-                    ? "Drag to smudge · [ ] size · Shift-[ ] hardness · 1–0 strength · Space to pan"
-                    : "Drag to push pixels · [ ] size · Shift-[ ] hardness · 1–0 strength · Space to pan")
+            parts = [L10n.text(session.blurMode == .blur ? "Drag to soften" : session.blurMode == .smudge ? "Drag to smudge" : "Drag to push pixels"), brush, keys.opacityHelp, pan]
         case .cloneStamp:
-            return L10n.text("Option-click to set the source · Drag to clone · [ ] size · Shift-[ ] hardness · 1–0 opacity · Space to pan")
+            parts = [L10n.text("Option-click to set the source · Drag to clone"), brush, keys.opacityHelp, pan]
         case .spotHealing:
-            return L10n.text("Drag over blemishes to heal · [ ] size · Shift-[ ] hardness · Escape cancel · Space to pan")
+            parts = [L10n.text("Drag over blemishes to heal"), brush, cancel, pan]
         case .type:
-            return L10n.text("Drag a text box · Click text to edit · Drag box handles to resize · ⌘Return finish · Escape cancel")
+            parts = [L10n.format("Drag a text box · Click text to edit · Drag box handles to resize · %@ finish", keys.keyLabel("\r", 1)), cancel]
         case .shape:
-            return L10n.format("Drag to draw a shape on a new layer · Shift %@ · Option from center · Shift-U or Tab for the next shape · Escape cancel · Space to pan",
-                L10n.text(session.shapeKind == .line ? "45°" : session.shapeKind == .rectangle ? "square" : "circle"))
+            parts = [L10n.format("Drag to draw a shape on a new layer · Shift %@ · Option from center · %@ or %@ for the next shape", L10n.text(session.shapeKind == .line ? "45°" : session.shapeKind == .rectangle ? "square" : "circle"), keys.keyLabel("u", 8), keys.keyLabel("\t")), cancel, pan]
         case .bucket:
-            return L10n.text("Click to fill similar colors · Option uses background color · K selects Paint Bucket")
+            parts = [L10n.format("Click to fill similar colors · Option uses background color · %@ selects Paint Bucket", keys.keyLabel("k"))]
         case .gradient:
-            return L10n.text("Drag to draw · Drag ends to adjust · Shift 45° · 1–0 opacity · Enter apply · Escape cancel")
-        case .crop:
-            return L10n.text("Drag to crop · Enter apply · Escape cancel · Space to pan")
-        case .move:
-            return L10n.text("Drag to move · Handles to resize · Circle to rotate · 1–0 layer opacity · Space to pan")
-        case .hand:
-            return L10n.text("Drag to pan · Pinch to zoom")
-        case .idle:
-            return L10n.text("No tool selected · Press a tool's key to pick one · Space to pan")
-        default:
-            return L10n.text("Click to zoom in · Option-click to zoom out · Drag right or left to zoom smoothly · Space to pan")
+            parts = [L10n.text("Drag to draw · Drag ends to adjust · Shift 45°"), keys.opacityHelp, apply, cancel]
+        case .crop: parts = [L10n.text("Drag to crop"), apply, cancel, pan]
+        case .move: parts = [L10n.text("Drag to move · Handles to resize · Circle to rotate"), keys.opacityHelp, pan]
+        case .hand: parts = [L10n.text("Drag to pan · Pinch to zoom")]
+        case .idle: parts = [L10n.text("No tool selected · Press a tool's key to pick one"), pan]
+        default: parts = [L10n.text("Click to zoom in · Option-click to zoom out · Drag right or left to zoom smoothly"), pan]
         }
+        return parts.joined(separator: " · ")
     }
 }
 

@@ -10,7 +10,7 @@ struct BrushControls: View {
                     ForEach(BrushToolMode.allCases, id: \.self) { Text(L10n.text($0.rawValue)).tag($0) }
                 }
                 .pickerStyle(.segmented).labelsHidden().fixedSize()
-                .help("Paint with the foreground color (B), or erase pixels away (E)")
+                .help(L10n.format("Paint with the foreground color (%@), or erase pixels away (%@)", ShortcutSettings.shared.keyLabel("b"), ShortcutSettings.shared.keyLabel("e")))
             }
             if session.tool == .blur {
                 Picker("Mode", selection: $session.blurMode) {
@@ -65,7 +65,7 @@ struct BrushControls: View {
                 .frame(width: 42).textFieldStyle(.roundedBorder)
                 .arrowSteps(value: { Double(session.brushSettings.opacity * 100) },
                             change: { session.brushSettings.opacity = CGFloat(min(100, max(1, $0)) / 100) })
-                .help("Press 1–9 for 10–90%, 0 for 100%")
+                .help(ShortcutSettings.shared.opacityHelp)
                 .unitSuffix("%")
             // Blur softens by a radius of its own, apart from how strongly it lays the softening down.
             if session.tool == .blur, session.blurMode == .blur {

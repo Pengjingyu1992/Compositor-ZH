@@ -20,11 +20,16 @@ final class ColorRangeEdit {
     var include: [UInt8] = []
     var exclude: [UInt8] = []
     var error: String?
+    var isComputing = false
+    var commitRequested = false
     /// The image as shown, at document size: what the colors are matched against.
     @ObservationIgnored let image: CGImage
     @ObservationIgnored let original: DocumentSelection?
+    @ObservationIgnored let documentID: UUID
     @ObservationIgnored var generation = 0
-    init(image: CGImage, original: DocumentSelection?) { self.image = image; self.original = original }
+    init(image: CGImage, original: DocumentSelection?, documentID: UUID) {
+        self.image = image; self.original = original; self.documentID = documentID
+    }
     var hasColors: Bool { !include.isEmpty }
 }
 
@@ -45,13 +50,13 @@ extension EditorSession {
 
     func beginColorRange() {
         guard canSelectColorRange, let document, let image = selectionSample(document, sampleAllLayers: true) else { return }
-        colorRange = ColorRangeEdit(image: image, original: selection)
+        colorRange = ColorRangeEdit(image: image, original: selection, documentID: document.id)
     }
 
     /// A click on the canvas while the panel is open. Shift adds the color and Option takes it away, whichever
     /// eyedropper is chosen.
     func sampleColorRange(at point: CGPoint, shift: Bool, option: Bool) {
-        guard let edit = colorRange, let color = Self.color(in: edit.image, at: point) else { return }
+        guard let edit = colorRange, !edit.commitRequested, let color = Self.color(in: edit.image, at: point) else { return }
         switch option ? .remove : shift ? .add : edit.sampleMode {
         case .replace: edit.include = color; edit.exclude = []
         case .add: edit.include += color
@@ -63,24 +68,33 @@ extension EditorSession {
     /// Matches the image against the picked colors off the main thread and shows the result as the selection, without
     /// an undo step. A newer change supersedes one still being worked out.
     func updateColorRange() {
-        guard let edit = colorRange, let document else { return }
+        guard let edit = colorRange, !edit.commitRequested, let document, document.id == edit.documentID else { return }
         edit.generation += 1
         let generation = edit.generation
-        guard edit.hasColors else { self.document?.selection = edit.original; edit.preview = nil; return }
+        guard edit.hasColors else {
+            edit.isComputing = false; edit.error = nil
+            self.document?.selection = edit.original; edit.preview = nil; return
+        }
+        edit.isComputing = true
+        edit.error = nil
         let job = ColorRangeJob(image: edit.image, include: edit.include, exclude: edit.exclude,
                                 fuzziness: Int32(edit.fuzziness.rounded()), invert: edit.invert)
         Task {
             let result = await Task.detached(priority: .userInitiated) { Self.colorRangeResult(job) }.value
             guard colorRange === edit, edit.generation == generation, self.document?.id == document.id else { return }
+            edit.isComputing = false
             edit.error = result.error?.localizedDescription
             edit.preview = result.preview
-            if result.error != nil { return }
+            if result.error != nil { edit.commitRequested = false; return }
             self.document?.selection = result.path.map { DocumentSelection(path: $0, antialiased: selectionAntialiased) }
+            if edit.commitRequested { commitColorRange() }
         }
     }
 
     func commitColorRange() {
-        guard let edit = colorRange else { return }
+        guard let edit = colorRange, document?.id == edit.documentID else { return }
+        // Keep the editor alive until the newest sample has finished.
+        if edit.isComputing { edit.commitRequested = true; return }
         let result = selection
         document?.selection = edit.original
         colorRange = nil
@@ -90,7 +104,7 @@ extension EditorSession {
 
     func cancelColorRange() {
         guard let edit = colorRange else { return }
-        document?.selection = edit.original
+        if document?.id == edit.documentID { document?.selection = edit.original }
         colorRange = nil
     }
 

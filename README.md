@@ -56,6 +56,7 @@ Both editions support painting and image editing with layers, with different UI,
 | 功能 / Feature | 说明 / Notes |
 | --- | --- |
 | 中文与英文 / Chinese and English | 界面、菜单、提示、撤销名称与语言设置；下次启动切换。 / Localized UI, menus, alerts, undo names, and a persistent language setting applied on restart. |
+| 自定义快捷键 / Custom shortcuts | 编辑菜单配置；修复中文标点、图层焦点与提示同步。详见 [修复与验证记录](docs/macos-shortcut-fixes.md)。 / Configure keys in Edit; fixes cover Chinese punctuation, layer focus and live shortcut labels. |
 | 宽高互换 / Swap dimensions | 新建画布时交换宽度和高度。 / Swap width and height when creating a canvas. |
 | 对齐与分布 / Align and distribute | 6 种对齐、4 种分布；参照选中对象、画布或关键图层。 / Six alignment and four distribution operations, relative to the selection, canvas, or a key layer. |
 | 油漆桶 / Paint bucket | `K`；颜色容差、连续区域及采样全部图层，结合当前选区。 / `K`; tolerance, contiguous filling, sample-all-layers, and current-selection coverage. |

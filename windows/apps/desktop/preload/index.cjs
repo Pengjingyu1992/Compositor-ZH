@@ -35,3 +35,12 @@ contextBridge.exposeInMainWorld('editor', Object.freeze({
   recover: () => ipcRenderer.invoke('editor:recover'),
   onCommand: (name, callback) => { if (!commands.has(name)) throw new Error('Invalid command'); return subscribe(`editor:${name}`, callback); }
 }));
+// The assistant reaches the network through the main process because the
+// renderer runs under `connect-src 'self'`. The API key stays in the main
+// process: `settings` reports whether one is set, never the value.
+contextBridge.exposeInMainWorld('ai', Object.freeze({
+  settings: () => ipcRenderer.invoke('ai:settings'),
+  save: settings => ipcRenderer.invoke('ai:save', settings),
+  complete: (prompt, layers) => ipcRenderer.invoke('ai:complete', prompt, layers),
+  test: settings => ipcRenderer.invoke('ai:test', settings)
+}));

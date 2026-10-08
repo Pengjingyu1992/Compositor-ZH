@@ -17,7 +17,7 @@ export const MAX_OPERATIONS = 20;
 // or writes files, so those kinds are simply not on the menu.
 export const ASSISTANT_OPERATIONS = [
   'appearance', 'rename', 'transform', 'reorder', 'duplicate', 'delete',
-  'parent', 'add', 'filter', 'adjustment', 'effect'
+  'parent', 'add', 'styled', 'filter', 'adjustment', 'effect'
 ];
 
 // Fields the editor accepts per operation, with the shape of their value.
@@ -33,6 +33,70 @@ const FIELDS = {
 
 function pair(v) {
   return Array.isArray(v) && v.length === 2 && v.every(n => typeof n === 'number' && Number.isFinite(n));
+}
+
+function finite(v, lo, hi) { return typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi; }
+
+// The box a text or shape is rendered into. The editor needs every side to be
+// at least 16, and the renderer refuses more than 16 million pixels, so the
+// value is clamped here rather than failing later with an opaque error.
+const MIN_BOX = 16, MAX_BOX_PIXELS = 16_000_000;
+
+function boxOf(value, document) {
+  const width = document?.width ?? 1920, height = document?.height ?? 1080;
+  const fallback = [Math.min(600, Math.max(MIN_BOX, width)), Math.min(300, Math.max(MIN_BOX, height))];
+  const wanted = pair(value) ? value : fallback;
+  let [w, h] = wanted.map(v => Math.max(MIN_BOX, Math.min(30000, Math.round(v))));
+  if (w * h > MAX_BOX_PIXELS) { const k = Math.sqrt(MAX_BOX_PIXELS / (w * h)); w = Math.max(MIN_BOX, Math.floor(w * k)); h = Math.max(MIN_BOX, Math.floor(h * k)); }
+  return [w, h];
+}
+
+function colorOf(style) {
+  const channel = (name) => style?.[name] === undefined ? 1 : style[name];
+  const [red, green, blue] = [channel('red'), channel('green'), channel('blue')];
+  if (![red, green, blue].every(v => finite(v, 0, 1))) return null;
+  return { red, green, blue };
+}
+
+// A text or shape layer is a rendered image plus the parameters it came from.
+// The model supplies only the parameters worth deciding; everything the
+// renderer needs but the model should not have to invent is filled in here.
+// The result is ready for renderText/renderShape and for the editor.
+export function styledStyle(type, style, document) {
+  const colour = colorOf(style);
+  if (!colour) return { error: 'colour' };
+  if (type === 'text') {
+    const content = typeof style?.content === 'string' ? style.content : '';
+    if (!content.trim() || content.length > 2000) return { error: 'content' };
+    const fontSize = style.fontSize === undefined ? 64 : style.fontSize;
+    if (!finite(fontSize, 4, 600)) return { error: 'fontSize' };
+    const tracking = style.tracking === undefined ? 0 : style.tracking;
+    const leading = style.leading === undefined ? 0 : style.leading;
+    if (!finite(tracking, -100, 1000) || !finite(leading, 0, 5000)) return { error: 'spacing' };
+    const alignment = ['Left', 'Center', 'Right'].includes(style.alignment) ? style.alignment : 'Left';
+    return {
+      style: {
+        content, fontName: typeof style.fontName === 'string' && style.fontName.trim() && !/[\r\n]/.test(style.fontName) ? style.fontName.trim() : 'ArialMT',
+        fontSize, ...colour, alignment, tracking, leading,
+        boxSize: boxOf(style.boxSize, document), colorRuns: [], fontRuns: []
+      }
+    };
+  }
+  if (type === 'shape') {
+    const kind = ['Rectangle', 'Ellipse', 'Line'].includes(style?.kind) ? style.kind : 'Rectangle';
+    const cornerRadius = style.cornerRadius === undefined ? 0 : style.cornerRadius;
+    const lineWidth = style.lineWidth === undefined ? 0 : style.lineWidth;
+    if (!finite(cornerRadius, 0, 30000) || !finite(lineWidth, 0, 2000)) return { error: 'shape' };
+    const unit = (value, fallback) => pair(value) && value.every(v => finite(v, 0, 1)) ? value : fallback;
+    return {
+      style: {
+        kind, ...colour, cornerRadius, lineWidth,
+        start: unit(style.start, [0, 0]), end: unit(style.end, [1, 1]),
+        boxSize: boxOf(style.boxSize, document)
+      }
+    };
+  }
+  return { error: 'type' };
 }
 
 function layerLine(layer, index) {
@@ -70,6 +134,8 @@ function schema() {
     '{"kind":"parent","id":"<layer id>","parentID":"<group id>"}   // omit parentID to move to the root',
     '{"kind":"add","type":"pixels","name":"new layer"}   // type is "pixels", "group", or "adjustment"',
     '{"kind":"add","type":"adjustment","adjustment":"<one of the adjustment kinds>","name":"new adjustment"}',
+    '{"kind":"styled","type":"text","origin":[x,y],"style":{"content":"text","fontSize":96,"red":1,"green":1,"blue":1,"alignment":"Center"}}',
+    '{"kind":"styled","type":"shape","origin":[x,y],"style":{"kind":"Rectangle","red":1,"green":0.3,"blue":0.3,"cornerRadius":0,"lineWidth":0,"start":[0,0],"end":[1,1]}}',
     '{"kind":"filter","id":"<layer id>","filter":"<one of the filters>","radius":4}',
     '{"kind":"adjustment","id":"<adjustment layer id>","hue":0,"saturation":0,"lightness":0}',
     '{"kind":"effect","id":"<layer id>","effect":"shadow","opacity":0.6}',
@@ -96,6 +162,8 @@ export function systemPrompt({ layers = [], filters = [] }) {
     '- Answer with one JSON object and nothing else: {"reply":"...","ops":[...]}',
     `- "ops" holds at most ${MAX_OPERATIONS} operations, applied in order.`,
     '- Copy every id from the layer list above. Never invent an id.',
+    '- A "styled" operation without an "id" creates a new text or shape layer; with an "id" it restyles that layer.',
+    '- Text and shapes are rendered by the editor, so give the parameters, not an image.',
     '- "reply" is one short sentence in the same language as the request.',
     '- If the request cannot be expressed with these operations, return {"reply":"why not","ops":[]}.'
   ].join('\n');
@@ -139,6 +207,16 @@ export function checkOperation(operation, layers) {
   if (kind === 'add') {
     if (!['pixels', 'group', 'adjustment'].includes(operation.type)) return 'type';
     if (operation.type === 'adjustment' && !ADJUSTMENT_KINDS.includes(operation.adjustment)) return 'adjustment';
+    return '';
+  }
+  // A text or shape layer may be created (no id) or restyled (id present), so
+  // the id is only looked up when the answer supplies one.
+  if (kind === 'styled') {
+    if (!['text', 'shape'].includes(operation.type)) return 'type';
+    if (operation.id !== undefined && (typeof operation.id !== 'string' || !ids.has(operation.id.toUpperCase()))) return 'layer';
+    if (operation.origin !== undefined && !pair(operation.origin)) return 'value';
+    const problem = styledStyle(operation.type, operation.style, null).error;
+    if (problem) return problem === 'content' || problem === 'fontSize' ? problem : 'style';
     return '';
   }
   const known = operation.id ?? operation.ids?.[0];

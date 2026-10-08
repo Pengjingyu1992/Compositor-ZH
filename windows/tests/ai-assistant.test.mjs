@@ -4,7 +4,7 @@ import { mkdtemp, rm, writeFile, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { ADJUSTMENT_KINDS, BLEND_MODES, EFFECT_KINDS } from '../packages/comp-bridge/capabilities.mjs';
-import { systemPrompt, requestBody, readResponse, checkOperations, checkOperation, DEFAULT_MODEL } from '../packages/platform/ai-assistant.mjs';
+import { systemPrompt, requestBody, readResponse, checkOperations, checkOperation, styledStyle, DEFAULT_MODEL } from '../packages/platform/ai-assistant.mjs';
 import { checkEndpoint, checkModel, getAiSettings, setAiSettings } from '../packages/platform/ai-settings.mjs';
 import { IDS } from './fixtures.mjs';
 
@@ -103,6 +103,66 @@ test('operations are checked against the live layer list before anything runs', 
 test('the accepted list never exceeds the operation budget', () => {
   const many = Array.from({ length: 40 }, () => ({ kind: 'delete', id: IDS[0] }));
   assert.equal(checkOperations(many, layers).accepted.length, 20);
+});
+
+test('a text layer is normalised into everything the renderer needs', () => {
+  const document = { width: 1920, height: 1080 };
+  const built = styledStyle('text', { content: '标题 / Title', fontSize: 96, alignment: 'Center', red: .2 }, document);
+  assert.deepEqual(built.style, {
+    content: '标题 / Title', fontName: 'ArialMT', fontSize: 96,
+    red: .2, green: 1, blue: 1, alignment: 'Center', tracking: 0, leading: 0,
+    boxSize: [600, 300], colorRuns: [], fontRuns: []
+  });
+  // A box the model asks for is honoured, and clamped to what can be rendered.
+  assert.deepEqual(styledStyle('text', { content: 'x', boxSize: [400, 120] }, document).style.boxSize, [400, 120]);
+  const huge = styledStyle('text', { content: 'x', boxSize: [30000, 30000] }, document).style.boxSize;
+  assert.ok(huge[0] * huge[1] <= 16_000_000, 'the box must stay inside the render budget');
+  const tiny = styledStyle('text', { content: 'x', boxSize: [1, 1] }, document).style.boxSize;
+  assert.deepEqual(tiny, [16, 16], 'every side has a floor of 16');
+
+  assert.equal(styledStyle('text', { content: '' }, document).error, 'content');
+  assert.equal(styledStyle('text', { content: '   ' }, document).error, 'content');
+  assert.equal(styledStyle('text', { content: 'x', fontSize: 5000 }, document).error, 'fontSize');
+  assert.equal(styledStyle('text', { content: 'x', red: 5 }, document).error, 'colour');
+  assert.equal(styledStyle('text', { content: 'x', tracking: 99999 }, document).error, 'spacing');
+  // An unknown alignment falls back rather than failing the whole request.
+  assert.equal(styledStyle('text', { content: 'x', alignment: 'Justify' }, document).style.alignment, 'Left');
+  assert.equal(styledStyle('blob', {}, document).error, 'type');
+});
+
+test('a shape layer is normalised the same way', () => {
+  const document = { width: 1920, height: 1080 };
+  assert.deepEqual(styledStyle('shape', {}, document).style, {
+    kind: 'Rectangle', red: 1, green: 1, blue: 1, cornerRadius: 0, lineWidth: 0,
+    start: [0, 0], end: [1, 1], boxSize: [600, 300]
+  });
+  const line = styledStyle('shape', { kind: 'Line', lineWidth: 8, start: [.1, .1], end: [.9, .9], boxSize: [200, 200] }, document).style;
+  assert.equal(line.kind, 'Line');
+  assert.equal(line.lineWidth, 8);
+  assert.deepEqual(line.start, [.1, .1]);
+  assert.equal(styledStyle('shape', { kind: 'Star' }, document).style.kind, 'Rectangle');
+  assert.equal(styledStyle('shape', { lineWidth: -5 }, document).error, 'shape');
+  // Out-of-range unit coordinates fall back instead of being passed through.
+  assert.deepEqual(styledStyle('shape', { start: [5, 5] }, document).style.start, [0, 0]);
+});
+
+test('a styled operation may create a layer or restyle one, and is checked either way', () => {
+  const create = { kind: 'styled', type: 'text', style: { content: 'Hi' } };
+  assert.equal(checkOperation(create, layers), '');
+  // With an id it restyles, and that id has to exist.
+  assert.equal(checkOperation({ ...create, id: IDS[0] }, layers), '');
+  assert.equal(checkOperation({ ...create, id: IDS[0].toLowerCase() }, layers), '');
+  assert.equal(checkOperation({ ...create, id: 'not-a-layer' }, layers), 'layer');
+  assert.equal(checkOperation({ ...create, type: 'blob' }, layers), 'type');
+  assert.equal(checkOperation({ ...create, style: { content: '' } }, layers), 'content');
+  assert.equal(checkOperation({ ...create, style: { content: 'x', fontSize: 9000 } }, layers), 'fontSize');
+  assert.equal(checkOperation({ ...create, style: { content: 'x', red: -1 } }, layers), 'style');
+  assert.equal(checkOperation({ ...create, origin: [1] }, layers), 'value');
+  assert.equal(checkOperation({ ...create, origin: [10, 20] }, layers), '');
+  // Both forms survive the checker with the style the panel will render.
+  const checked = checkOperations([create], layers);
+  assert.deepEqual(checked.rejected, []);
+  assert.equal(checked.accepted.length, 1);
 });
 
 test('an endpoint must be https, or plain http on the loopback only', () => {

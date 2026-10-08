@@ -178,6 +178,42 @@ test('an operation the editor would reject is reported instead of run',async()=>
   await expect(page.locator('.assistant-chip.off')).toHaveCount(0);
 });
 
+test('the assistant can add a text layer and a shape layer',async()=>{
+  await page.getByTestId('ai-settings').click();
+  const dialog=page.getByRole('dialog',{name:'AI 设置'});
+  await dialog.getByLabel('接口地址').fill(`http://127.0.0.1:${stub.address().port}/v1`);
+  await dialog.getByLabel('模型').fill('stub-model');
+  await dialog.getByLabel('API 密钥').fill('test-key');
+  await dialog.getByTestId('ai-save-settings').click();
+  await expect(dialog).toBeHidden();
+
+  // The model supplies parameters only; the panel renders them to an image and
+  // the editor stores that image together with the parameters it came from.
+  answer={reply:'加好了',ops:[
+    {kind:'styled',type:'text',origin:[20,30],style:{content:'标题',fontSize:48,red:1,green:1,blue:1,alignment:'Center'}},
+    {kind:'styled',type:'shape',origin:[120,140],style:{kind:'Ellipse',red:.9,green:.3,blue:.3,boxSize:[80,80]}}
+  ]};
+  await page.getByTestId('ai-prompt').fill('加一行标题和一个圆形');
+  await page.getByTestId('ai-send').click();
+
+  const log=page.locator('.assistant-log');
+  await expect(log).toContainText('已应用');
+  await expect(log).toContainText('styled text');
+  await expect(log).toContainText('styled shape Ellipse');
+  // Two layers were added on top of the fixture's two. Neither replaced the
+  // selected layer, which is what happens if the operation carries no id.
+  await expect(page.getByTestId('ai-layer')).toHaveCount(4);
+  await expect(page.getByTestId('ai-layer').filter({hasText:'标题'})).toBeVisible();
+  await expect(page.getByTestId('ai-layer').filter({hasText:'背景 / Background'})).toBeVisible();
+  await expect(page.getByTestId('ai-layer').filter({hasText:'色彩 / Color'})).toBeVisible();
+  await page.screenshot({path:path.join(root,'test-results/assistant-styled-preview.png')});
+
+  // Undo takes both back, so they went through the editor's own history.
+  await page.getByTestId('ai-undo').click();
+  await page.getByTestId('ai-undo').click();
+  await expect(page.getByTestId('ai-layer')).toHaveCount(2);
+});
+
 test('without a key the panel says so and never reaches the network',async()=>{
   await page.getByTestId('ai-prompt').fill('隐藏背景');
   await page.getByTestId('ai-send').click();

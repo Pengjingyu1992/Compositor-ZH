@@ -9,7 +9,11 @@
 
 import { computed, onMounted, ref, watch } from 'vue';
 import { messages } from '../../../packages/locales';
-import { checkOperations, DEFAULT_ENDPOINT, DEFAULT_MODEL } from '../../../packages/platform/ai-assistant.mjs';
+import { checkOperations, styledStyle, DEFAULT_ENDPOINT, DEFAULT_MODEL } from '../../../packages/platform/ai-assistant.mjs';
+// A text or shape layer is an image plus the parameters it came from, so the
+// layer is rendered here with the same code the editor uses for its own text
+// and shape tools.
+import { renderText, renderShape } from '../../../packages/editor-adapter/styled-layers';
 import type { Language, ViewerProject, AssistantLayer, AiSettings, AiAnswer } from './types';
 
 const props = defineProps<{
@@ -55,6 +59,11 @@ function say(kind: Line['kind'], text: string) { lines.value.push({ kind, text }
 function nameOf(id: unknown) { return layers.value.find(l => l.id === id)?.name ?? String(id ?? '').slice(0, 8); }
 function describe(op: Record<string, unknown>) {
   const parts = [String(op.kind)];
+  if (op.kind === 'styled') {
+    parts.push(String(op.type), op.type === 'text' ? JSON.stringify((op.style as { content?: string })?.content ?? '') : String((op.style as { kind?: string })?.kind ?? ''));
+    if (op.id) parts.push(nameOf(op.id));
+    return parts.join(' ');
+  }
   if (op.id) parts.push(nameOf(op.id));
   if (op.field) parts.push(`${op.field}=${JSON.stringify(op.value)}`);
   if (op.filter) parts.push(String(op.filter));
@@ -86,6 +95,27 @@ async function run(op: Record<string, unknown>): Promise<{ outcome: Outcome; det
   return { outcome: 'applied', detail: '' };
 }
 
+// The editor wants a rendered image for a text or shape layer, so it is built
+// here from the parameters the model supplied. `id` is always present: the
+// editor's own edit() fills in the selected layer when the key is missing,
+// which would restyle that layer instead of creating a new one.
+async function buildStyled(op: Record<string, unknown>) {
+  const type = String(op.type);
+  const built = styledStyle(type, op.style, props.project?.manifest);
+  if (built.error) return { error: built.error as keyof typeof t.value.reasons };
+  const style = built.style as Record<string, any>;
+  const png = type === 'text'
+    ? await renderText(style)
+    : await renderShape(style, style.boxSize[0], style.boxSize[1]);
+  return {
+    operation: {
+      kind: 'styled', id: op.id, type, style, png,
+      origin: op.origin ?? [0, 0],
+      name: type === 'text' ? String(style.content).slice(0, 64) : messages[props.language].shape
+    }
+  };
+}
+
 async function send() {
   const text = prompt.value.trim();
   if (!text || asking.value || !props.project) return;
@@ -106,7 +136,13 @@ async function send() {
       return;
     }
     for (const operation of checked.accepted) {
-      const { outcome, detail } = await run(operation);
+      let prepared = operation;
+      if (operation.kind === 'styled') {
+        const built = await buildStyled(operation);
+        if (built.error) { say('bad', `${describe(operation)} — ${t.value.reasons[built.error] ?? built.error}`); continue; }
+        prepared = built.operation as Record<string, unknown>;
+      }
+      const { outcome, detail } = await run(prepared);
       if (outcome === 'rejected') say('bad', `${describe(operation)} — ${t.value.rejected}：${detail}`);
       else say(outcome === 'applied' ? 'ok' : 'note', `${describe(operation)} — ${outcome === 'applied' ? t.value.applied : t.value.noChange}`);
     }

@@ -52,9 +52,14 @@ input.
   range. A rejected operation is reported and skipped.
 - **The allowlist is small on purpose.** The assistant may change layer
   appearance, names, transforms, order, parenting, duplication, deletion,
-  filters, adjustments and effects. It has no operation for opening, saving,
-  importing, exporting, or writing files, so it cannot reach the filesystem
-  even if it is asked to.
+  filters, adjustments, effects, and it may create or restyle **text and shape
+  layers**. It has no operation for opening, saving, importing, exporting, or
+  writing files, so it cannot reach the filesystem even if it is asked to.
+- **A text or shape layer is rendered by the editor, not by the model.** The
+  model supplies the parameters (content, font size, colour, alignment, box);
+  the panel renders them with the same `renderText`/`renderShape` the editor's
+  own text and shape tools use, and the resulting image is stored alongside the
+  parameters so the layer stays re-editable.
 - **What it does is what a person could do.** Operations go through
   `window.editor.edit` with the current revision, so they are revision-bound,
   they land on the undo stack, and unsupported rendering blocks them exactly as
@@ -64,13 +69,14 @@ input.
 
 - `tests/ai-assistant.test.mjs` covers the pure parts: prompt assembly (every
   enumeration appears exactly, every layer id is present), response parsing
-  (fenced, wrapped, malformed), operation checking, endpoint policy, and the
-  settings round-trip.
+  (fenced, wrapped, malformed), operation checking, text and shape
+  normalisation, endpoint policy, and the settings round-trip.
 - `tests/smoke/assistant.spec.mjs` runs the packaged app against a loopback
   stub service, so the whole path — settings, IPC, prompt, parsing, checking,
   applying, undo — is exercised with no network, no real key, and no vendor.
-  It also asserts the panel never covers the canvas, and that a rejected or
-  unauthorized operation changes nothing.
+  It also asserts the panel never covers the canvas, that a refused or
+  unauthorized operation changes nothing, and that a text or shape request
+  really produces a new layer without disturbing the selected one.
 
 ## Limits
 

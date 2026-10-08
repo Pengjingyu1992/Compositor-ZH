@@ -32,7 +32,7 @@ export const messages = {
       test: '测试连接', testRunning: '正在测试…', testOk: '连接成功。', saved: '设置已保存。',
       cancelKey: '清除密钥', configured: '已配置密钥',
       errors: { empty: '请先描述要做什么。', toomuch: '请求太长了，请缩短一些。', nokey: '尚未设置 API 密钥，请在 AI 设置中填写。', malformed: '模型没有返回可用的操作。', network: '无法连接模型服务，请检查网络和接口地址。', timeout: '请求超时，请重试。', http: '模型服务返回错误（HTTP {status}）。', settings: '设置未能保存，请检查填写内容。' },
-      reasons: { operation: '不支持的操作类型', layer: '项目中找不到这个图层', value: '参数值无效', type: '图层类型无效', adjustment: '调整层类型无效', effect: '效果名称无效', group: '目标组无效', adjustmentLayer: '目标不是调整层' }
+      reasons: { operation: '不支持的操作类型', layer: '项目中找不到这个图层', value: '参数值无效', type: '图层类型无效', adjustment: '调整层类型无效', effect: '效果名称无效', group: '目标组无效', adjustmentLayer: '目标不是调整层', content: '文字内容无效（不能为空或过长）', fontSize: '字号超出范围', style: '样式参数无效' }
     }
   },
   en: {
@@ -68,7 +68,7 @@ export const messages = {
       test: 'Test connection', testRunning: 'Testing…', testOk: 'Connected.', saved: 'Settings saved.',
       cancelKey: 'Clear key', configured: 'Key configured',
       errors: { empty: 'Describe what to change first.', toomuch: 'The request is too long. Please shorten it.', nokey: 'No API key yet. Add one in AI settings.', malformed: 'The model did not return usable operations.', network: 'Cannot reach the model service. Check the network and the endpoint.', timeout: 'The request timed out. Try again.', http: 'The model service returned an error (HTTP {status}).', settings: 'Settings could not be saved. Check the values.' },
-      reasons: { operation: 'Unsupported operation', layer: 'No such layer in this project', value: 'Invalid value', type: 'Invalid layer type', adjustment: 'Invalid adjustment kind', effect: 'Invalid effect name', group: 'Invalid target group', adjustmentLayer: 'Target is not an adjustment layer' }
+      reasons: { operation: 'Unsupported operation', layer: 'No such layer in this project', value: 'Invalid value', type: 'Invalid layer type', adjustment: 'Invalid adjustment kind', effect: 'Invalid effect name', group: 'Invalid target group', adjustmentLayer: 'Target is not an adjustment layer', content: 'Invalid text content (empty or too long)', fontSize: 'Font size out of range', style: 'Invalid style parameters' }
     }
   }
 } as const;

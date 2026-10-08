@@ -118,8 +118,8 @@ extension EditorSession {
     @discardableResult
     func arrangeLayers(_ operation: ArrangeOperation) -> LayerEditResult {
         if let refusal = editingRefusal() { return .rejected(refusal) }
-        guard allowsSelectedLayerEdits(.position, descendants: true) else { return .rejected(.locked) }
         guard let targets = arrangeTargets, var changed = document else { return .rejected(.arrangeTarget) }
+        guard allowsSelectedLayerEdits(.position, descendants: true) else { return .rejected(.locked) }
         let reference: CGRect?
         switch operation.isAlignment ? arrangeReference : .selection {
         case .selection: reference = nil

@@ -18,6 +18,27 @@ import Testing
             let c = try BrushRaster.copy(image); let p = c.data!.assumingMemoryBound(to: UInt8.self) + y * c.bytesPerRow + x * 4
             return Array(UnsafeBufferPointer(start: p, count: 4))
         }
+        let grouping = EditorSession(); grouping.createDocument(width: 32, height: 24)
+        let emptyDocument = grouping.document
+        check("empty canvas permits folder creation", grouping.canGroupSelectedLayers)
+        grouping.groupSelectedLayers()
+        check("empty folder created", grouping.activeLayer?.isGroup == true && grouping.document?.layers.count == 1)
+        grouping.undo(); check("empty folder creation undo", grouping.document == emptyDocument)
+        grouping.redo(); check("empty folder creation redo", grouping.activeLayer?.isGroup == true)
+        grouping.selectLayer(nil); grouping.groupSelectedLayers()
+        check("deselected canvas creates another folder", grouping.document?.layers.count == 2)
+        grouping.toggleSelectedLayerLock(.all)
+        let lockedDocument = grouping.document, lockedRevision = grouping.history.currentRevision
+        grouping.groupSelectedLayers()
+        check("locked grouping remains refused", !grouping.canGroupSelectedLayers && grouping.document == lockedDocument && grouping.history.currentRevision == lockedRevision)
+        let arranging = EditorSession(); arranging.document = CanvasDocument(width: 32, height: 24, layers: [try LiquifyRegressionChecks.fixture(8, 8)])
+        let arrangeID = arranging.document!.layers[0].id
+        arranging.selectLayer(arrangeID); arranging.toggleSelectedLayerLock(.position)
+        check("valid position lock retains refusal", arranging.arrangeLayers(.left) == .rejected(.locked))
+        arranging.selectedLayerIDs = [UUID()]
+        let arrangeDocument = arranging.document, arrangeRevision = arranging.history.currentRevision
+        check("missing arrange target has accurate refusal", arranging.arrangeLayers(.left) == .rejected(.arrangeTarget))
+        check("missing arrange target preserves state", arranging.document == arrangeDocument && arranging.history.currentRevision == arrangeRevision)
         let red = FillColor(red: 1, green: 0, blue: 0), blue = FillColor(red: 0, green: 0, blue: 1)
         var fill = LayerFillStyle(kind: .linear, stops: [FillStop(position: 0, color: red), FillStop(position: 1, color: blue)], angle: 0)
         let gradient = try fill.render(width: 100, height: 80)

@@ -177,7 +177,8 @@ import Testing
         let inputPixels = try bytes(source)
         check("command mask uses luminance and alpha", maskBytes.enumerated().allSatisfy { index, value in
             let p = index * 4
-            let expected = (54 * Int(inputPixels[p]) + 183 * Int(inputPixels[p+1]) + 19 * Int(inputPixels[p+2]) + 128) >> 8
+            let red: Int = 54 * Int(inputPixels[p]), green: Int = 183 * Int(inputPixels[p+1]), blue: Int = 19 * Int(inputPixels[p+2])
+            let expected: Int = (red + green + blue + 128) >> 8
             return abs(value * 255 - Float(expected)) <= 1
         })
         let maskIndex = commandSession.document!.layers.firstIndex { $0.id == importedID }!

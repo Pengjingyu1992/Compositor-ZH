@@ -10,6 +10,7 @@ import { ProjectSession } from '../../../packages/platform/project-session.mjs';
 import { compatibilityReport } from '../../../packages/platform/compatibility-report.mjs';
 import { RecoveryStore, recoverSaves, fingerprint } from '../../../packages/platform/save-project.mjs';
 import { safeDirectory, safeRead, readProject, jpegDimensions, ProjectError, LIMITS } from '../../../packages/comp-bridge/project.mjs';
+import { registerAiAssistant } from './ai-assistant.mjs';
 
 const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 const RENDERER = path.join(ROOT, 'out', 'renderer');
@@ -260,6 +261,14 @@ handler('viewer:report', async (id, display) => {
   if (!session.current || session.current.id !== id || session.pending) return { error: 'stale' };
   await clipboard.writeText(JSON.stringify(compatibilityReport(session.current.data, app.getVersion(), display), null, 2));
   return { copied: true };
+});
+// The directory is a parameter so automated checks can point it at a temporary
+// folder. Without that, a check that saves an endpoint would overwrite the real
+// settings of the machine it runs on, because APPDATA in the environment does
+// not move Electron's user-data directory.
+registerAiAssistant({
+  handler,
+  directory: process.env.COMPOSITOR_AI_DIRECTORY || app.getPath('userData')
 });
 nativeMenu();
 await win.loadURL(HOME);

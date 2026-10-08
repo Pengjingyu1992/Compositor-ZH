@@ -5,6 +5,8 @@ import { createPreviewRenderer, pngBytes, exportPlaced, makeCanvas } from '../..
 import { BLEND_MODES, ADJUSTMENT_KINDS as ADJUSTMENTS, EFFECT_KINDS as EFFECTS } from '../../../packages/comp-bridge/capabilities.mjs';
 import AdjustmentEditor from './AdjustmentEditor.vue';
 import EffectEditor from './EffectEditor.vue';
+import AiPanel from './AiPanel.vue';
+import { editRejection } from '../../../packages/platform/edit-command.mjs';
 import Icon from './Icon.vue';
 import CompleteControls from './CompleteControls.vue';
 import { useCompleteEditor, TOOL_LIST, TOOL_KEYS } from './useCompleteEditor';
@@ -105,7 +107,14 @@ async function closeProject() {
   project.value = undefined; selected.value = undefined; source.value = 'none'; error.value = ''; extraIssues.value = [];
   query.value = ''; collapsed.value = new Set(); reportState.value = 'idle';
 }
-function edit(op:Record<string,unknown>){const p=project.value;if(!p||busy.value)return;if(op.kind==='transform'&&(full.ids.length>1||selected.value?.isGroup))op={...op,kind:'transformLayers',ids:full.ids};return request(()=>window.editor.edit(p.id,p.revision,ipcData({id:selected.value?.id,...op})));}
+async function submitEdit(op:Record<string,unknown>,owner:Pick<ViewerProject,'id'|'revision'>|undefined=project.value,finishingStroke=false):Promise<OpenResult>{
+  const denied=editRejection(op,owner,project.value,{busy:busy.value,painting:painting.value,source:source.value,issues:issues.value},finishingStroke);
+  if(denied){error.value=denied;return {error:denied};}
+  let result:OpenResult={error:'read'};
+  await request(async()=>{result=await window.editor.edit(owner!.id,owner!.revision,ipcData(op));return result;});
+  return result;
+}
+function edit(op:Record<string,unknown>){const p=project.value;if(!p)return;if(op.kind==='transform'&&(full.ids.length>1||selected.value?.isGroup))op={...op,kind:'transformLayers',ids:full.ids};return submitEdit({id:selected.value?.id,...op},p);}
 function history(direction:string){const p=project.value;if(p)return request(()=>window.editor.history(p.id,p.revision,direction));}
 function save(as=false){const p=project.value;if(p)return request(()=>window.editor.save(p.id,p.revision,as));}
 function importImage(): Promise<void> | undefined {const p=project.value;if(p)return request(()=>window.editor.importImage(p.id,p.revision));}
@@ -180,7 +189,7 @@ function onKey(event: KeyboardEvent) {
 }
 function wheel(event: WheelEvent) { if (event.ctrlKey) { event.preventDefault(); scale(event.deltaY < 0 ? 1.1 : 1 / 1.1); } }
 let drag: { x: number; y: number; left: number; top: number } | undefined;
-const full=reactive(useCompleteEditor({project,selected,tool,color,brushSize,brushOpacity,paintTarget,painting,editable,language,canvas,overlay,artboard,stage,zoom,error,execute:(op,p=project.value)=>{if((source.value!=='engine'||issues.value.length)&&!['rename','lock','selection'].includes(String(op.kind))){error.value='unsupported';return;}if(p)return request(()=>window.editor.edit(p.id,p.revision,ipcData({id:selected.value?.id,...op})));},receive:result=>request(()=>Promise.resolve(result)),history,scale}));
+const full=reactive(useCompleteEditor({project,selected,tool,color,brushSize,brushOpacity,paintTarget,painting,editable,language,canvas,overlay,artboard,stage,zoom,error,execute:async(op,p=project.value)=>{await submitEdit({id:selected.value?.id,...op},p,true);},receive:result=>request(()=>Promise.resolve(result)),history,scale}));
 watch(() => newDialog.value || psdDialog.value || detailsDialog.value || full.modal, async visible => {
   if (visible) {
     returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -352,6 +361,7 @@ onUnmounted(() => { operation++; epoch++; cancelStroke();renderer?.dispose(); fu
       <span v-if="project?.selection">{{ full.labels.selection }}</span>
       <span class="badge">{{ t.readonly }} · {{ project?.dirty?t.editor.unsaved:t.editor.saved }} · {{ version }}</span>
     </div>
+    <AiPanel :language="language" :project="project" :busy="busy" :editable="editable" :edit="submitEdit" :history="history"/>
     <CompleteControls :e="full" mode="dialogs" :tool="tool" :disabled="!editable" :selected="selected" :color="color" :size="brushSize" :opacity="brushOpacity" :target="paintTarget"/>
     <div v-if="newDialog" class="modal-shade" @click.self="newDialog=false"><form class="dialog" role="dialog" aria-modal="true" :aria-label="t.editor.newCanvas" @submit.prevent="create"><h2>{{ t.editor.newCanvas }}</h2><p>{{ ui.transparent }}</p><div class="new-dimensions"><label>{{ t.editor.width }}<input type="number" v-model.number="newWidth" min="1" max="30000" required></label><button class="icon-button" type="button" :aria-label="t.editor.swap" :title="t.editor.swap" @click="[newWidth,newHeight]=[newHeight,newWidth]"><Icon name="swap"/></button><label>{{ t.editor.height }}<input type="number" v-model.number="newHeight" min="1" max="30000" required></label></div><div class="button-row"><button type="button" @click="newDialog=false">{{ t.editor.cancel }}</button><button class="primary" type="submit">{{ t.editor.create }}</button></div></form></div>
     <div v-if="psdDialog" class="modal-shade" @click.self="psdDialog=false"><div class="dialog" role="dialog" aria-modal="true" :aria-label="t.editor.conversion"><h2>{{ t.editor.conversion }}</h2><p>{{ t.editor.conversionNote }}</p><div class="button-row"><button @click="psdDialog=false">{{ t.editor.cancel }}</button><button :disabled="!layeredPSD || !editable" @click="exportImage('psd')">{{ t.editor.layered }}</button><button :disabled="!editable" class="primary" @click="exportImage('psd',true)">{{ t.editor.flattened }}</button></div></div></div>

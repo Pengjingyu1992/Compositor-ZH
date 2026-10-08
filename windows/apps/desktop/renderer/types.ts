@@ -23,6 +23,14 @@ export interface ViewerProject {
     coverage: { simple: number; pixelFallback: number; previewOnly: number; total: number } };
 }
 export interface OpenResult { copied?:boolean; project?: ViewerProject; canceled?: boolean; error?: string; backup?: boolean; exported?: boolean; warnings?: string[] }
+// The layer fields the assistant needs. Sending these instead of whole
+// LayerRows keeps pixel data out of the IPC message.
+export interface AssistantLayer {
+  id: string; name: string; isVisible: boolean; opacity?: number; blendMode?: string;
+  isGroup?: boolean; parentID?: string; adjustment?: { kind: string }; maskFile?: string;
+}
+export interface AiSettings { endpoint: string; model: string; hasKey: boolean; encryption: boolean }
+export interface AiAnswer { reply?: string; operations?: Record<string, unknown>[]; error?: string; status?: number }
 declare global {
   interface Window {
     viewer: {
@@ -51,6 +59,12 @@ declare global {
       export(id: string, revision: string, type: string, payload: Record<string, unknown>): Promise<OpenResult>;
       recover(): Promise<OpenResult>;
       onCommand(name: string, callback: () => void): () => void;
+    };
+    ai: {
+      settings(): Promise<AiSettings>;
+      save(settings: { endpoint: string; model: string; key?: string | null }): Promise<AiSettings>;
+      complete(prompt: string, layers: AssistantLayer[]): Promise<AiAnswer>;
+      test(settings: { endpoint: string; model: string; key?: string }): Promise<AiAnswer & { endpoint?: string; model?: string }>;
     };
   }
 }

@@ -74,7 +74,7 @@ extension EditorSession {
     func clearSelectedPixels() async {
         guard selection != nil, canEditPixels, let layer = activeLayer else { return }
         if isMaskSelected { await fillSelection(with: .background); return }
-        guard layer.asset != nil else { return }
+        guard layer.asset != nil, !effectiveLocks(for: layer.id).contains(.transparency) else { return }
         await applyPixelEdit(to: layer, name: "Clear") { try $0.clearPixels() }
     }
 
@@ -101,7 +101,7 @@ extension EditorSession {
     /// first, and the Crop tool's rectangle doesn't block it.
     var canInvert: Bool {
         _ = showsBusy
-        guard document != nil, textDraft == nil, let layer = activeLayer, !isProjectBusy, !isImporting, brushStroke == nil, pixelMove == nil,
+        guard document != nil, textDraft == nil, allowsLayerEdit(activeLayerID, .content), let layer = activeLayer, !isProjectBusy, !isImporting, brushStroke == nil, pixelMove == nil,
               renamingLayerID == nil, !showsNewDocument, !showsImporter, selectedLayerIDs.count == 1, !layer.isGroup || isMaskSelected,
               document?.effectiveVisibleIDs.contains(layer.id) == true, selection?.isEmpty != true else { return false }
         return isMaskSelected ? layer.mask?.isEnabled == true : layer.asset != nil
@@ -160,7 +160,7 @@ extension EditorSession {
     /// Starts moving the selected image pixels; false when there is nothing to move
     /// (no selection, a mask target, or no pixels under the selection).
     func beginPixelMove(duplicate: Bool = false) -> Bool {
-        guard pixelMove == nil, let selection, !selection.isEmpty, canPaint, !isMaskSelected,
+        guard pixelMove == nil, allowsLayerEdit(activeLayerID, .position), !effectiveLocks(for: activeLayerID ?? UUID()).contains(.transparency), let selection, !selection.isEmpty, canPaint, !isMaskSelected,
               let layer = activeLayer, layer.asset != nil else { return false }
         do {
             let raster = try makeRasterEdit(for: layer)

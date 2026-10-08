@@ -1,8 +1,8 @@
-# Compositor project format, versions 1–11
+# Compositor project format, versions 1–12
 
 A `.comp` file is a macOS document package containing `manifest.json` and an `images/` directory of `<layer UUID>.png` assets.
 
-The manifest identifies `com.compositor.project`, version `11` for new saves (versions `1`–`10` remain readable), and the sRGB working space. It stores document UUID, pixel dimensions, active layer UUID, and layers in bottom-to-top order. Each layer stores its UUID, name, visibility, transform (origin, size, clockwise rotation, flips, sampling), and optional image filename. Blank layers have no image asset.
+The manifest identifies `com.compositor.project`, version `12` for new saves (versions `1`–`11` remain readable), and the sRGB working space. It stores document UUID, pixel dimensions, active layer UUID, and layers in bottom-to-top order. Each layer stores its UUID, name, visibility, transform (origin, size, clockwise rotation, flips, sampling), and optional image filename. Blank layers have no image asset.
 
 Embedded PNGs preserve source pixels and transparency; transforms remain separate. Projects survive moving or deleting imported source photos. Saving uses a coordinated atomic package replacement. Unsupported versions, invalid metadata, missing assets, unsafe paths, and oversized data are rejected before replacing the live document.
 
@@ -36,6 +36,16 @@ Version 10 lets a text layer color some of its letters differently: optional `co
 
 Version 11 lets those letters use different faces too: optional `fontRuns` in the same metadata. Files declaring 1–10 cannot contain it. `colorRuns` stays valid from version 10.
 
+### Version 12: editable fills, overlays and typography
+
+Version 12 adds `fill` to pixel layer records, `gradientOverlay`, `patternOverlay` and `bevel` to `effects`, and optional `vertical` plus alignment `Justified` to text. These properties require version 12; declaring them in an older manifest is invalid. Versions 1–11 remain readable. Saving any document now writes version 12, so keep a copy when exchanging with an older macOS build.
+
+`fill` is a `LayerFillStyle`: `kind` (`Solid Color`, `Linear`, `Radial`, `Pattern`); 2–32 ordered `stops` with unique UUID `id`, `position` (0–1) and RGBA `color` (0–1); `angle` (−180…180 degrees); `scale` (0.01…10); `reversed`; `pattern` (`Checkerboard`, `Stripes`, `Dots`); `cellSize` (4…512 local pixels). Solid uses the first stop; patterns use the first two; gradients use all stops. Coordinates are local to the layer. An image is required, and fill cannot coexist with text, shape, group or adjustment metadata. The PNG is the authoritative display fallback. Transform, duplicate, masks, canvas size and crop preserve editability; painting, pixel filters and image resampling rasterize it and omit `fill` on the next save.
+
+Gradient/pattern overlay records carry `enabled` (optional, defaults true), `fill` using the same schema, and `opacity` (0–1). Bevel carries `enabled`, `size` (0–500 local pixels), `depth` (0–1), `angle` (−180…180). The initial bevel is an inner highlight/shadow bevel; it does not encode Photoshop's full contour/material model. Overlays clip to masked source alpha and participate in preview, export, copy, scaling and undo. Text `vertical: true` uses right-to-left Core Text columns and vertical glyph forms; missing/false keeps horizontal layout. `Justified` uses the system paragraph engine (the final paragraph line is not stretched).
+
+Windows' bridge accepts v12 and preserves these records and resources. Its current editor cannot edit these new properties: visible unsupported content requires the saved composite preview and disables visual edits. A missing required preview is an explicit refusal, never permission to silently drop a layer or effect. Windows-native new documents continue to use v11. This bridge update does not add Windows tools or replace its application.
+
 ### Additive layer fields
 
 Later fields are optional and not gated on the version, so older readers ignore them and keep the pixels or the linked mask as they were:
@@ -49,4 +59,4 @@ Pixel layer records may include optional `text` metadata: content, PostScript fo
 
 ### Layer effects
 
-An optional `effects` record contains independent `stroke`, `shadow`, `colorOverlay`, `innerShadow`, `outerGlow` and `innerGlow` records. Stroke carries a size (0–500 layer pixels), a color, an opacity and an `inside` flag choosing which side of the edge it sits on; drop shadow and inner shadow each carry an angle, a distance, a blur, a color and an opacity; color overlay carries a color and an opacity; outer glow and inner glow each carry a size (0–500 layer pixels), a color and an opacity. Each supports optional `enabled` visibility (missing means visible); hidden effects keep all parameters and remain listed under their layer. Effects, including their visibility, are saved and participate in document undo. Canvas Size, Crop, Trim, color adjustments and selection transforms preserve them. Image Size scales their pixel sizes, distances and blurs with the image, using the geometric mean of the horizontal and vertical factors for nonuniform resizing and clamping to supported ranges. Canvas previews run on a serial background worker with a shared pixel budget; exports render the full-resolution effects. A record omitting an effect means that layer does not have it, so older readers see the effects they understand and ignore the rest.
+An optional `effects` record contains independent `stroke`, `shadow`, `colorOverlay`, `innerShadow`, `outerGlow` and `innerGlow` records, plus the v12 overlays and bevel described above. Stroke carries a size (0–500 layer pixels), a color, an opacity and an `inside` flag choosing which side of the edge it sits on; drop shadow and inner shadow each carry an angle, a distance, a blur, a color and an opacity; color overlay carries a color and an opacity; outer glow and inner glow each carry a size (0–500 layer pixels), a color and an opacity. Each supports optional `enabled` visibility (missing means visible); hidden effects keep all parameters and remain listed under their layer. Effects, including their visibility, are saved and participate in document undo. Canvas Size, Crop, Trim, color adjustments and selection transforms preserve them. Image Size scales their pixel sizes, distances and blurs with the image, using the geometric mean of the horizontal and vertical factors for nonuniform resizing and clamping to supported ranges. Canvas previews run on a serial background worker with a shared pixel budget; exports render the full-resolution effects. A record omitting an effect means that layer does not have it, so older readers see the effects they understand and ignore the rest.

@@ -40,6 +40,7 @@ import CoreImage
     }
 
     init?(layerID: UUID, effects: LayerEffects, grid: CGSize, sourceRect: CGRect) {
+        guard !effects.usesPosterEffects else { return nil }
         let margin = LayerEffectsRenderer.margin(for: effects)
         let width = Int(grid.width + margin * 2), height = Int(grid.height + margin * 2)
         guard width > 0, height > 0, width * height <= 80_000_000,

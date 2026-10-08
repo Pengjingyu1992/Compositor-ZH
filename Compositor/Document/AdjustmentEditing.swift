@@ -4,6 +4,7 @@ extension EditorSession {
     /// Uses the ordinary color editors, but sends their changes to layer metadata.
     /// The source is only for the histogram and sampling; it never replaces layer pixels.
     func beginAdjustmentEditing(_ id: UUID) async {
+        guard allowsLayerEdit(id, .content) else { adjustmentEditingID = nil; return }
         guard adjustmentEditingID == id, adjustmentOriginal == nil,
               levels == nil, hueSaturation == nil, filterEdit == nil,
               let snapshot = projectSnapshot(),

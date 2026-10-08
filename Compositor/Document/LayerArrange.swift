@@ -108,7 +108,7 @@ extension EditorSession {
     }
 
     func canArrange(_ operation: ArrangeOperation) -> Bool {
-        guard canEditLayers, let targets = arrangeTargets else { return false }
+        guard canEditLayers, allowsSelectedLayerEdits(.position, descendants: true), let targets = arrangeTargets else { return false }
         if operation.isAlignment, case .keyObject(let id) = arrangeReference {
             return targets.contains { $0.id == id }
         }
@@ -118,6 +118,7 @@ extension EditorSession {
     @discardableResult
     func arrangeLayers(_ operation: ArrangeOperation) -> LayerEditResult {
         if let refusal = editingRefusal() { return .rejected(refusal) }
+        guard allowsSelectedLayerEdits(.position, descendants: true) else { return .rejected(.locked) }
         guard let targets = arrangeTargets, var changed = document else { return .rejected(.arrangeTarget) }
         let reference: CGRect?
         switch operation.isAlignment ? arrangeReference : .selection {

@@ -13,11 +13,14 @@ The public repository starts with a curated source snapshot. It preserves the up
 - Persistent Chinese/English settings and a localized app name: **叠绘 / Compositor**.
 - New canvas dimension swap; a corrected text-tool icon; localized undo and dynamic labels.
 - Edit permission and transaction safeguards; document/revision/instance-bound asynchronous commits.
-- Layer alignment/distribution and a paint bucket using the existing fill path.
-- Local recovery snapshots, mosaic filtering, and 8-bit RGB PSD export.
-- Fixes around effects preservation, resizing, import, and export.
+- Layer alignment/distribution and a paint bucket using the existing fill path; layer locks, local recovery snapshots, and mosaic filtering.
+- A liquify workspace and handoff to a shared advanced liquify filter.
+- Editable solid/gradient/pattern fill layers, gradient and pattern overlays, basic inner bevel, manual edge refinement, and color decontamination.
+- Color halftone, selective color, channel mixer, and `.cube` LUT filters; Chinese vertical text and justified alignment; multi-size PNG/JPEG export.
+- Transactional edit commands, a standalone CLI and an independent stdio MCP server.
+- 8-bit RGB PSD export and fixes around effects preservation, resizing, import, and export.
 - A new icon, portable CLT build/packaging helpers, a separate bundle identifier, and manual updates from this repository.
 
-The `.comp` format remains version **11** and supports versions **1–11**. The bundle identifier `com.wonderassembly.compositor.zh-Hans` retains compatibility with the Chinese edition's existing settings and recovery storage.
+The macOS app reads `.comp` versions **1–12** and saves version **12**. Windows-native new documents remain version **11**; the Windows project bridge accepts v12, preserves its metadata and resource bytes, and restricts edits that cannot represent v12 visual properties. The bundle identifier `com.wonderassembly.compositor.zh-Hans` retains compatibility with the Chinese edition's existing settings and recovery storage.
 
 Local machine logs, recovery documents, backups, reference photographs, personal paths, and private operational reports are excluded. The original local checkout and its existing Git history are preserved separately.

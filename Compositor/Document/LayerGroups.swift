@@ -165,7 +165,7 @@ extension EditorSession {
     }
 
     func groupSelectedLayers() {
-        guard canEditLayers, let document, document.layers.count < 10_000 else { return }
+        guard canEditLayers, allowsSelectedLayerEdits(.structure, descendants: true), let document, document.layers.count < 10_000 else { return }
         let byID = Dictionary(uniqueKeysWithValues: document.layers.map { ($0.id, $0) })
         let selected = selectedLayerIDs.intersection(Set(byID.keys))
         func ancestors(_ id: UUID) -> [UUID?] {
@@ -212,7 +212,7 @@ extension EditorSession {
     }
 
     /// The active layer must be a folder, so there is something to unwrap.
-    var canUngroupLayers: Bool { canEditLayers && activeLayer?.isGroup == true }
+    var canUngroupLayers: Bool { canEditLayers && allowsSelectedLayerEdits(.structure, descendants: true) && activeLayer?.isGroup == true }
 
     /// Reverses Group from Layers: the folder's direct children take its place among its own siblings, in the
     /// order they had inside it, and the folder goes. Its own opacity, blend mode, mask and effects are
@@ -276,9 +276,9 @@ extension EditorSession {
         }
     }
     func canPlaceLayer(_ id: UUID, in parent: UUID?) -> Bool {
-        guard canEditLayers, document?.layers.contains(where: { $0.id == id }) == true else { return false }
+        guard canEditLayers, allowsLayerEdit(id, .structure), document?.layers.contains(where: { $0.id == id }) == true else { return false }
         guard let parent else { return true }
-        return parent != id && !descendantIDs(of: id).contains(parent)
+        return allowsLayerEdit(parent, .structure) && parent != id && !descendantIDs(of: id).contains(parent)
             && document?.layers.first(where: { $0.id == parent })?.isGroup == true
     }
     @discardableResult

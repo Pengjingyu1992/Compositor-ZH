@@ -13,7 +13,7 @@ struct FloatingTransform {
 
 extension EditorSession {
     var canTransformSelection: Bool {
-        guard transformEdit == nil, canEditPixels, !isMaskSelected, let selection, !selection.isEmpty,
+        guard allowsLayerEdit(activeLayerID, .position), !effectiveLocks(for: activeLayerID ?? UUID()).contains(.transparency), transformEdit == nil, canEditPixels, !isMaskSelected, let selection, !selection.isEmpty,
               activeLayer?.asset != nil else { return false }
         return true
     }

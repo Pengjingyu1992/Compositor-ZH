@@ -154,9 +154,14 @@ final class ProjectWorkspace {
         if session.gradientEdit != nil { await session.commitGradient() }
         if session.pixelMove != nil { await session.finishPixelMove() }
         session.cancelFilter()
+        session.cancelLiquify()
+        session.cancelFillLayer()
+        session.cancelEdgeRefinement()
+        session.cancelBatchExport()
         session.cancelHueSaturation()
         session.cancelLevels()
         session.finishAdjustmentEditing(commit: false)
+        session.finishEffectsEditing(commit: false)
         session.cancelColorRange()
         session.selectionAmountOperation = nil
         if session.colorPicker != nil { session.closeColorPicker(commit: false) }
@@ -252,7 +257,7 @@ final class ProjectWorkspace {
         var copied = sourceDocument.layers.filter { included.contains($0.id) }
         let used = target.session.document?.layers.reduce(0) { $0 + ($1.asset.map { $0.image.width * $0.image.height } ?? 0) } ?? 0
         let added = copied.reduce(0) { $0 + ($1.asset.map { $0.image.width * $0.image.height } ?? 0) }
-        guard used + added <= DocumentLimits.documentPixelBudget else { target.session.importError = "The copied layers exceed this project’s \(DocumentLimits.documentBudgetMegapixels)-megapixel limit."; return }
+        guard used + added <= DocumentLimits.documentPixelBudget else { target.session.importError = L10n.format("The copied layers exceed this project’s %lld-megapixel limit.", DocumentLimits.documentBudgetMegapixels); return }
         isManaging = true
         sourceTab.session.isProjectBusy = true
         target.session.isProjectBusy = true

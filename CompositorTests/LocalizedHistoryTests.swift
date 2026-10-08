@@ -36,7 +36,7 @@ struct LocalizedHistoryTests {
             #expect(L10n.text(key) != key)
             #expect(english.localizedString(forKey: key, value: key, table: "Localizable") == key)
         }
-        #expect(ProjectManifest.current == 11)
+        #expect(ProjectManifest.current == 12)
     }
 
     @Test func layerFlipsKeepUndoRedoAndLocalizedMenuNames() throws {
@@ -98,6 +98,9 @@ struct LocalizedHistoryTests {
                 case .innerShadow: effects.innerShadow?.opacity = 0.7
                 case .outerGlow: effects.outerGlow?.opacity = 0.7
                 case .innerGlow: effects.innerGlow?.opacity = 0.7
+                case .gradientOverlay: effects.gradientOverlay?.opacity = 0.7
+                case .patternOverlay: effects.patternOverlay?.opacity = 0.7
+                case .bevel: effects.bevel?.depth = 0.4
                 }
             }
             checkName(session, kind.historyNames.edit)

@@ -184,7 +184,10 @@ final class InlineTextEditor: NSView, NSTextViewDelegate {
             shownGeometry = geometry
             needsDisplay = true
         }
-        if shownStyle != style {
+        if shownStyle != style, !textView.hasMarkedText() {
+            if textView.layoutOrientation != (style.isVertical ? .vertical : .horizontal) {
+                textView.setLayoutOrientation(style.isVertical ? .vertical : .horizontal)
+            }
             synchronizing = true
             let live = textView.selectedRange()
             let kept = canvas.session.textDraft?.selection ?? live

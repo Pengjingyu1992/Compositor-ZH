@@ -5,13 +5,13 @@ extension EditorSession {
     /// One layer merges with the layer beneath it in the same folder; several selected layers merge together
     /// (with anything their folders hold); a folder merges its contents, and the folder goes.
     private func mergePlan() -> (ids: [UUID], removed: Set<UUID>, name: String, parent: UUID?, anchor: UUID, action: String)? {
-        guard canEditLayers, let document, let active = activeLayer else { return nil }
+        guard canEditLayers, allowsSelectedLayerEdits(.structure, descendants: true), let document, let active = activeLayer else { return nil }
         let layers = document.layers
         if selectedLayerIDs.count > 1 {
             var picked = selectedLayerIDs
             for id in selectedLayerIDs { picked.formUnion(descendantIDs(of: id)) }
             let ordered = layers.filter { picked.contains($0.id) }
-            guard ordered.contains(where: { !$0.isGroup }),
+            guard ordered.allSatisfy({ allowsLayerEdit($0.id, .structure) }), ordered.contains(where: { !$0.isGroup }),
                   let top = ordered.last(where: { selectedLayerIDs.contains($0.id) }) else { return nil }
             return (ordered.map(\.id), picked, top.name, top.parentID, top.id, "Merge Layers")
         }
@@ -22,7 +22,7 @@ extension EditorSession {
             return (ids, Set(ids), active.name, active.parentID, active.id, "Merge Group")
         }
         guard let index = layers.firstIndex(where: { $0.id == active.id }),
-              let below = layers[..<index].last(where: { $0.parentID == active.parentID }), !below.isGroup else { return nil }
+              let below = layers[..<index].last(where: { $0.parentID == active.parentID }), !below.isGroup, allowsLayerEdit(below.id, .structure) else { return nil }
         return ([below.id, active.id], [below.id, active.id], below.name, active.parentID, active.id, "Merge Down")
     }
 

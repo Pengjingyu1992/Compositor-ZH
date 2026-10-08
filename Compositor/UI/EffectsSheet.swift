@@ -14,6 +14,8 @@ struct EffectsSheet: View {
             case .innerShadow: innerShadow
             case .outerGlow: outerGlow
             case .innerGlow: innerGlow
+            case .gradientOverlay, .patternOverlay: fillOverlay
+            case .bevel: bevel
             }
             HStack(spacing: 10) {
                 Spacer()
@@ -26,6 +28,33 @@ struct EffectsSheet: View {
         .padding(20).frame(width: 340).fixedSize()
         // The picker previews its working color on the layer while it is open.
         .onChange(of: session.colorPicker?.color) { _, _ in session.previewEffectColor() }
+    }
+
+    private var fillOverlay: some View {
+        ScrollView { VStack {
+            FillStyleControls(style: Binding(get: {
+                (kind == .gradientOverlay ? session.editingEffects.gradientOverlay : session.editingEffects.patternOverlay)?.fill ?? LayerFillStyle()
+            }, set: { value in
+                var value = value; value.stops.sort { $0.position < $1.position }
+                session.changeEffects {
+                    if kind == .gradientOverlay { $0.gradientOverlay?.fill = value }
+                    else { $0.patternOverlay?.fill = value }
+                }
+            }), showsKind: kind == .gradientOverlay, gradientOnly: kind == .gradientOverlay)
+            slider("Opacity", value: Binding(get: {
+                CGFloat((kind == .gradientOverlay ? session.editingEffects.gradientOverlay : session.editingEffects.patternOverlay)?.opacity ?? 1) * 100
+            }, set: { value in session.changeEffects {
+                if kind == .gradientOverlay { $0.gradientOverlay?.opacity = value / 100 }
+                else { $0.patternOverlay?.opacity = value / 100 }
+            } }), range: 0...100, unit: "%")
+        } }.frame(height: 380)
+    }
+    private var bevel: some View {
+        VStack {
+            slider("Size", value: Binding(get: { session.editingEffects.bevel?.size ?? 8 }, set: { value in session.changeEffects { $0.bevel?.size = value } }), range: 0...100, inputRange: 0...500, unit: "px")
+            slider("Depth", value: Binding(get: { CGFloat(session.editingEffects.bevel?.depth ?? 0.75) * 100 }, set: { value in session.changeEffects { $0.bevel?.depth = value / 100 } }), range: 0...100, unit: "%")
+            slider("Angle", value: Binding(get: { session.editingEffects.bevel?.angle ?? 120 }, set: { value in session.changeEffects { $0.bevel?.angle = value } }), range: -180...180, unit: "°")
+        }
     }
 
     @ViewBuilder private var stroke: some View {

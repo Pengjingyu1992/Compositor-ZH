@@ -90,6 +90,7 @@ struct ShortcutDefinition: Identifiable {
             entry("Inverse Selection", "i", 9, menu: true), entry("Select Subject", "a", 3, menu: true),
             entry("Curves", "m", 1, menu: true), entry("Levels", "l", 1, menu: true),
             entry("Hue/Saturation", "u", 1, menu: true), entry("Invert Pixels / Mask", "i", 1, menu: true),
+            entry("Advanced Liquify", "x", 9, menu: true),
             entry("Canvas Size", "c", 3, menu: true), entry("Image Size", "i", 3, menu: true),
             entry("Transform Layer / Selection", "t", 1, menu: true), entry("Duplicate / Layer via Copy", "j", 1, menu: true),
             entry("Toggle Clipping Mask", "g", 3, menu: true), entry("Group Layers", "g", 1, menu: true),
@@ -104,7 +105,7 @@ struct ShortcutDefinition: Identifiable {
             ("Zoom tool", "z"), ("Brush tool", "b"), ("Eraser", "e"), ("Spot Healing", "j"),
             ("Clone Stamp", "s"), ("Type tool", "t"), ("Gradient tool", "g"), ("Paint Bucket tool", "k"), ("Shape tool", "u"),
             ("Eyedropper tool", "i"), ("Marquee / cycle shape", "m"), ("Magic", "w"),
-            ("Lasso / cycle mode", "l"), ("Blur / Smudge / Liquify", "r"), ("Crop tool", "c"),
+            ("Lasso / cycle mode", "l"), ("Blur / Smudge / Basic Liquify", "r"), ("Crop tool", "c"),
             ("Swap foreground/background", "x"), ("Reset colors", "d"), ("Cycle tool mode", "\t"),
             ("Temporary Hand tool (hold)", " "), ("Delete selection / layer / effect / lasso point", "\u{7f}"),
             ("Apply current canvas operation", "\r"), ("Cancel current canvas operation", "\u{1b}"),
@@ -147,6 +148,10 @@ final class ShortcutSettings {
     }
     static func migrate(_ saved: [String: ShortcutChord]) -> [String: ShortcutChord] {
         var result = saved
+        for (old, new) in [("Menus:Liquify Workspace", "Menus:Advanced Liquify"),
+                           ("Canvas & Layers:Blur / Smudge / Liquify", "Canvas & Layers:Blur / Smudge / Basic Liquify")] {
+            if let chord = result.removeValue(forKey: old), result[new] == nil { result[new] = chord }
+        }
         if let legacy = result.removeValue(forKey: "Menus:Hide Compositor"), result["Menus:Hide Others"] == nil {
             result["Menus:Hide Others"] = legacy
         }

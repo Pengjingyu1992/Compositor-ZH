@@ -7,6 +7,7 @@ private extension TextAlignment {
         case .left: L10n.text("Align left")
         case .center: L10n.text("Align center")
         case .right: L10n.text("Align right")
+        case .justified: L10n.text("Justify")
         }
     }
 }
@@ -65,7 +66,7 @@ struct TypeControls: View {
                             Button {
                                 session.changeTextStyle { $0.alignment = alignment }
                             } label: {
-                                Image(systemName: alignment == .left ? "text.alignleft" : alignment == .center ? "text.aligncenter" : "text.alignright")
+                                Image(systemName: alignment == .left ? "text.alignleft" : alignment == .center ? "text.aligncenter" : alignment == .justified ? "text.justify" : "text.alignright")
                                     .frame(width: 30, height: 26)
                                     .background(selected ? Color.white.opacity(0.14) : .clear,
                                                 in: RoundedRectangle(cornerRadius: 4))
@@ -78,6 +79,7 @@ struct TypeControls: View {
                             .accessibilityAddTraits(selected ? .isSelected : [])
                         }
                     }
+                    Toggle("Vertical Text", isOn: Binding(get: { session.currentTextStyle.isVertical }, set: { value in session.changeTextStyle { $0.vertical = value } }))
                     Text("Tracking").scrubbable(sensitivity: 1, value: value(\.tracking), range: -100...1000, step: 1)
                     TextField("Tracking", value: number(\.tracking), format: .number).frame(width: 45)
                         .arrowSteps(value: { Double(session.currentTextStyle.tracking) },
@@ -97,6 +99,9 @@ struct TypeControls: View {
                         .help("Line height, baseline to baseline. Empty or 0 is Auto: 120% of the font size.")
                 }
             }.scrollIndicators(.hidden)
+            if NSFont(name: session.currentTextStyle.fontName, size: session.currentTextStyle.fontSize) == nil {
+                Image(systemName: "exclamationmark.triangle").help("Font unavailable; the saved appearance is retained until editing uses a system fallback.")
+            }
             if session.textDraft != nil {
                 Button("Cancel") { session.cancelText() }
                 Button("Done") { _ = session.finishText() }

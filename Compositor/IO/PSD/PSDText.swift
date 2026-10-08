@@ -28,7 +28,25 @@ nonisolated enum PSDText {
 
     static func missingFontNote(_ name: String) -> String? {
         guard NSFont(name: name, size: 12) == nil else { return nil }
-        return "The font “\(name)” isn’t installed, so the text was drawn with the system font."
+        return L10n.format("The font “%@” isn’t installed. Editing text will use the system font.", name)
+    }
+
+    /// Use the saved glyph raster inside the native layout frame when it fits exactly.
+    /// Keeping the native padding/anchor makes the first text edit stay at the same baseline.
+    /// Rotated or incompatible frames continue through the explicit layout-conversion path.
+    static func cachedAppearance(_ image: CGImage?, bounds: CGRect,
+                                 rendered: (image: CGImage, transform: LayerTransform)) throws -> CGImage? {
+        guard let image, rendered.transform.rotation == 0, !rendered.transform.flipX, !rendered.transform.flipY,
+              bounds.size == CGSize(width: image.width, height: image.height),
+              rendered.transform.size == CGSize(width: rendered.image.width, height: rendered.image.height) else { return nil }
+        let local = bounds.offsetBy(dx: -rendered.transform.origin.x, dy: -rendered.transform.origin.y)
+        let frame = CGRect(x: 0, y: 0, width: rendered.image.width, height: rendered.image.height)
+        guard frame.contains(local), abs(local.minX.rounded() - local.minX) < 0.0001,
+              abs(local.minY.rounded() - local.minY) < 0.0001 else { return nil }
+        let context = try BrushRaster.context(width: rendered.image.width, height: rendered.image.height, mask: false)
+        BrushRaster.draw(image, in: local, mask: false, context: context)
+        guard let result = context.makeImage() else { throw ExportError.render }
+        return result
     }
 
     static func parse(extra: [String: Data]) -> Source? {
@@ -225,7 +243,7 @@ nonisolated enum PSDText {
 
     private static func horizontalAnchor(_ style: LayerTextStyle, width: CGFloat) -> CGFloat {
         switch style.alignment {
-        case .left: LayerTextStyle.padding
+        case .left, .justified: LayerTextStyle.padding
         case .center: width / 2
         case .right: width - LayerTextStyle.padding
         }

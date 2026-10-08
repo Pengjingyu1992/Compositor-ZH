@@ -200,6 +200,11 @@ def scan_source(root):
                         if literal.kind == "string":
                             add(literal, path, source, "ui-provider")
 
+        if path.name == "PSDText.swift":
+            for index, token in enumerate(tokens[:-3]):
+                if token.value == "let" and tokens[index + 1].value.endswith("Note") and tokens[index + 2].value == "=" and tokens[index + 3].kind == "string":
+                    add(tokens[index + 3], path, source, "ui-provider")
+
         # Preserve the previous enum coverage, excluding commented-out code.
         by_start = {t.start: t for t in tokens if t.kind == "string"}
         for match in re.finditer(r'(?:case\s+|,\s*)\w+\s*=\s*(")', source):
@@ -233,6 +238,10 @@ def scan_source(root):
                 target = args[0] if args else None
                 category = "runtime"
             elif name in UI_CALLS and (name not in UI_HELPERS or path.relative_to(root).parts[0] == "UI"):
+                target = args[0] if args else None
+            elif path.parent.name == "PSD" and name == "PSDConversion":
+                target = next((arg[2:] for arg in args if len(arg) > 1 and arg[0].value == "message"), None)
+            elif path.parent.name == "PSD" and full_name == "notes.append":
                 target = args[0] if args else None
             elif name == "NSMenuItem":
                 target = next((arg[2:] for arg in args if len(arg) > 1 and arg[0].value == "title"), None)

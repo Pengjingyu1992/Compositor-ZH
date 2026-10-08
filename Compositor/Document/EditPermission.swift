@@ -7,7 +7,9 @@ nonisolated struct EditOwner: Equatable, Sendable {
     let instance = UUID()
 }
 
-nonisolated enum EditRefusal: String, Error {
+nonisolated enum EditRefusal: String, LocalizedError {
+    var errorDescription: String? { L10n.text(rawValue) }
+    case locked = "The layer or its folder is locked for content edits."
     case noDocument = "Create or open a document first."
     case busy = "The editor is busy. Try again when the current operation finishes."
     case modal = "Finish or cancel the current edit first."
@@ -34,7 +36,7 @@ extension EditorSession {
         if selectionAmountOperation != nil || colorRange != nil || textDraft != nil || brushStroke != nil
             || warpStroke != nil || showsNewDocument || showsImporter || renamingLayerID != nil
             || transformEdit != nil || cropRect != nil || gradientEdit != nil || pixelMove != nil
-            || hueSaturation != nil || levels != nil || filterEdit != nil || adjustmentEditingID != nil {
+            || hueSaturation != nil || levels != nil || filterEdit != nil || adjustmentEditingID != nil || liquify != nil {
             return .modal
         }
         return nil

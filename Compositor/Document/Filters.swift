@@ -12,6 +12,10 @@ nonisolated enum FilterKind: String, CaseIterable, Sendable {
     case bloomGlow = "Bloom / Glow"
     case dither = "Dither"
     case mosaic = "Mosaic"
+    case colorHalftone = "Color Halftone"
+    case selectiveColor = "Selective Color"
+    case channelMixer = "Channel Mixer"
+    case colorLUT = "Color Lookup"
     case tonalContrast = "Tonal Contrast"
     case lensCorrection = "Lens Correction"
     case cameraRaw = "Camera Raw Filter"
@@ -27,7 +31,7 @@ nonisolated enum FilterKind: String, CaseIterable, Sendable {
     /// Color adjustments: in the Image menu (and editable as adjustment layers), not under Filter.
     var isImageAdjustment: Bool {
         self == .curves || self == .exposure || self == .gradientMap || self == .grain
-            || self == .blackWhite || self == .colorBalance
+            || self == .blackWhite || self == .colorBalance || self == .selectiveColor || self == .channelMixer || self == .colorLUT
     }
 }
 
@@ -42,6 +46,10 @@ nonisolated enum BackgroundQuality: String, CaseIterable, Sendable {
 nonisolated struct FilterSettings: Equatable, Sendable {
     /// Mosaic square size in original layer pixels, 1–512.
     var mosaicSize: Double = 16
+    var colorHalftone = ColorHalftoneSettings()
+    var selectiveColor = SelectiveColorSettings()
+    var channelMixer = ChannelMixerSettings()
+    var colorLUT = ColorLUTSettings()
     /// Gaussian Blur radius in layer pixels (the blur's standard deviation), 0.1–250.
     var radius: Double = 1
     /// Motion Blur direction in degrees, counterclockwise from horizontal as in Photoshop, −90–90.
@@ -190,6 +198,10 @@ nonisolated enum PixelFilter {
         let edges = CIImage(cgImage: job.image)
         let image: CGImage
         switch job.kind {
+        case .colorHalftone: image = try settings.colorHalftone.apply(job.image, scale: job.scale)
+        case .selectiveColor: image = try settings.selectiveColor.apply(job.image)
+        case .channelMixer: image = try settings.channelMixer.apply(job.image)
+        case .colorLUT: image = try settings.colorLUT.apply(job.image)
         case .curves: image = try settings.curves.apply(job.image)
         case .exposure: image = try settings.exposure.apply(job.image)
         case .gradientMap: image = try settings.gradientMap.apply(job.image)
@@ -631,6 +643,10 @@ extension EditorSession {
                 (edit.settings.tonalShadows == 0 && edit.settings.tonalMidtones == 0 && edit.settings.tonalHighlights == 0)))
             || (edit.kind == .exposure && edit.settings.exposure == ExposureSettings())
             || (edit.kind == .grain && edit.settings.grain.amount == 0)
+            || (edit.kind == .colorHalftone && edit.settings.colorHalftone.strength == 0)
+            || (edit.kind == .channelMixer && edit.settings.channelMixer == ChannelMixerSettings())
+            || (edit.kind == .selectiveColor && edit.settings.selectiveColor.adjustments.values.allSatisfy { $0.allSatisfy { $0 == 0 } })
+            || (edit.kind == .colorLUT && (edit.settings.colorLUT.table == nil || edit.settings.colorLUT.strength == 0))
             || (edit.kind == .cameraRaw && rendered.cameraRaw.isIdentity) { cancelFilter(); return }
         guard let owner = beginOwnedEdit() else { return }
         edit.committing = true

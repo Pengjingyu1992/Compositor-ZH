@@ -12,7 +12,7 @@ extension UTType {
 
 nonisolated struct ProjectManifest: Codable, Sendable {
     /// The format version new saves write.
-    static let current = 11
+    static let current = 12
     /// Every version `load` accepts. The package-header check, the manifest check and the error
     /// message all read this, so they cannot drift apart when `current` is bumped.
     static let supported = 1...ProjectManifest.current
@@ -53,6 +53,7 @@ nonisolated struct ProjectLayerRecord: Codable, Sendable {
     /// The stroke and drop shadow drawn around the layer.
     var effects: LayerEffects? = nil
     var text: LayerTextStyle? = nil
+    var fill: LayerFillStyle? = nil
 }
 
 nonisolated struct ProjectSnapshot: @unchecked Sendable {
@@ -82,7 +83,7 @@ actor ProjectStore {
     }
 
     func save(_ snapshot: ProjectSnapshot, to url: URL, quickLook: QuickLookImages? = nil,
-              recoveryMetadata: Data? = nil, maximumPackageBytes: Int? = nil) throws {
+              recoveryMetadata: Data? = nil, maximumPackageBytes: Int? = nil, mustNotExist: Bool = false) throws {
         try validate(snapshot.manifest)
         var images: [String: FileWrapper] = [:]
         var pixels = 0, maskPixels = 0
@@ -131,6 +132,7 @@ actor ProjectStore {
         var writeError: Error?
         NSFileCoordinator().coordinate(writingItemAt: url, options: .forReplacing, error: &coordinationError) { destination in
             do {
+                if mustNotExist, FileManager.default.fileExists(atPath: destination.path) { throw CocoaError(.fileWriteFileExists) }
                 // Foundation stages a sibling package and atomically replaces the
                 // destination only once the complete package has been written.
                 try package.write(to: destination, options: .atomic, originalContentsURL: nil)
@@ -202,6 +204,21 @@ actor ProjectStore {
         return ProjectSnapshot(manifest: manifest, images: images, masks: masks)
     }
 
+    func validateSnapshot(_ snapshot: ProjectSnapshot) throws {
+        try validate(snapshot.manifest)
+        var used = 0, masks = 0
+        for layer in snapshot.manifest.layers {
+            if layer.imageFile != nil {
+                guard let image = snapshot.images[layer.id]?.image else { throw ProjectError.missingImage }
+                try checkSize(width: image.width, height: image.height, used: &used)
+            }
+            if layer.maskFile != nil {
+                guard let image = snapshot.masks[layer.id]?.image, LayerMask.isValid(image) else { throw ProjectError.invalid }
+                try checkSize(width: image.width, height: image.height, used: &masks)
+            }
+        }
+    }
+
     private func validate(_ manifest: ProjectManifest) throws {
         guard manifest.format == "com.compositor.project" else { throw ProjectError.invalid }
         guard ProjectManifest.supported.contains(manifest.version) else { throw ProjectError.version(manifest.version) }
@@ -212,11 +229,19 @@ actor ProjectStore {
         guard (1...DocumentLimits.maxSide).contains(manifest.width), (1...DocumentLimits.maxSide).contains(manifest.height),
               manifest.layers.count <= 10_000 else { throw ProjectError.tooLarge }
         for layer in manifest.layers {
+            if let effects = layer.effects, effects.usesPosterEffects {
+                guard manifest.version >= 12 else { throw ProjectError.invalid }
+            }
+            if let fill = layer.fill {
+                guard manifest.version >= 12, fill.isValid, layer.imageFile != nil, layer.isGroup != true,
+                      layer.adjustment == nil, layer.text == nil, layer.shape == nil else { throw ProjectError.invalid }
+            }
             if let text = layer.text {
                 // Per-letter colors arrived in version 10, per-letter faces in version 11.
                 guard text.isValid,
                       text.colorRuns == nil || manifest.version >= 10,
                       text.fontRuns == nil || manifest.version >= 11,
+                      (!text.isVertical && text.alignment != .justified) || manifest.version >= 12,
                       layer.imageFile != nil, layer.isGroup != true, layer.adjustment == nil else { throw ProjectError.invalid }
             }
             if let adjustment = layer.adjustment {

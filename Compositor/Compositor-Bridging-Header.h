@@ -8,3 +8,8 @@
 #import "Rendering/AdjustPixels.h"
 #import "Rendering/DitherPixels.h"
 #import "Rendering/MosaicPixels.h"
+
+#import "Rendering/LayerLockPixels.h"
+#import "Rendering/LiquifyPixels.h"
+
+#include "Rendering/PosterPixels.h"

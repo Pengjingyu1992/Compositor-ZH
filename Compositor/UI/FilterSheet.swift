@@ -19,6 +19,8 @@ struct FilterSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             switch edit?.kind ?? .gaussianBlur {
+            case .colorHalftone, .selectiveColor, .channelMixer, .colorLUT:
+                PosterFilterControls(session: session, kind: edit?.kind ?? .colorHalftone)
             case .curves:
                 CurvesControls(settings: Binding(get: { settings.curves }, set: { new in update { $0.curves = new } }))
             case .exposure:

@@ -29,10 +29,19 @@ nonisolated enum PSDDocumentBuilder {
                 conversions.append(PSDConversion(layerName: record.name,
                                                  message: "Cropped to the canvas so the file fits in memory. Pixels outside the canvas weren't imported."))
             }
-            let renderedText = record.text.flatMap { try? PSDText.render($0) }
+            var renderedText = record.text.flatMap { try? PSDText.render($0) }
+            var keptTextAppearance = false
+            if let rendered = renderedText,
+               let cached = try PSDText.cachedAppearance(record.image, bounds: record.bounds, rendered: rendered) {
+                renderedText = (cached, rendered.transform)
+                keptTextAppearance = true
+            }
             var notes: [String] = []
             if record.kind == .text {
                 if let source = record.text, renderedText != nil {
+                    notes.append(keptTextAppearance
+                        ? "The saved text appearance was preserved. Editing text uses this app’s text layout."
+                        : "Editable text was laid out again. Its appearance may differ from the saved Photoshop preview.")
                     notes.append(contentsOf: source.notes)
                     if let missing = PSDText.missingFontNote(source.style.fontName) { notes.append(missing) }
                 } else {
@@ -57,10 +66,10 @@ nonisolated enum PSDDocumentBuilder {
             }
             if record.isGroup {
                 if record.blendKey != "pass" && record.blendKey != "norm" {
-                    notes.append("Folder blend mode “\(record.blendKey)” isn’t supported. The folder will be pass-through.")
+                    notes.append(L10n.format("Folder blend mode “%@” isn’t supported. The folder will be pass-through.", record.blendKey))
                 }
             } else if record.blendMode == nil, record.blendKey != "pass" {
-                notes.append("Blend mode “\(record.blendKey.trimmingCharacters(in: .whitespaces))” isn’t supported and will be applied as Normal.")
+                notes.append(L10n.format("Blend mode “%@” isn’t supported and will be applied as Normal.", record.blendKey.trimmingCharacters(in: .whitespaces)))
             }
             if record.kind == .adjustment {
                 if record.adjustment == nil {

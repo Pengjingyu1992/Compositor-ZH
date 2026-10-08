@@ -8,7 +8,7 @@ nonisolated enum BrushToolMode: String, CaseIterable, Sendable {
 }
 
 nonisolated enum BlurToolMode: String, CaseIterable, Sendable {
-    case liquify = "Liquify"
+    case liquify = "Basic Liquify"
     case blur = "Blur"
     case smudge = "Smudge"
 }

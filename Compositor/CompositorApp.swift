@@ -24,7 +24,12 @@ struct CompositorApp: App {
                 CommandGroup(replacing: .undoRedo) {
                     // Dialog text fields keep native text undo; document history
                     // is unavailable while an import or modal edit is active.
-                    if session.textDraft != nil || session.levels != nil || session.isProjectBusy || session.showsNewDocument || session.showsImporter || session.renamingLayerID != nil || session.transformEdit?.persistent == true {
+                    if let edit = session.liquify {
+                        Button("Undo Liquify Stroke") { edit.undo() }
+                            .configuredKeyboardShortcut("z").disabled(!edit.canUndo)
+                        Button("Redo Liquify Stroke") { edit.redo() }
+                            .configuredKeyboardShortcut("z", modifiers: [.command, .shift]).disabled(!edit.canRedo)
+                    } else if session.textDraft != nil || session.levels != nil || session.isProjectBusy || session.showsNewDocument || session.showsImporter || session.renamingLayerID != nil || session.transformEdit?.persistent == true {
                         Button("Undo") {
                             if NSApp.keyWindow?.firstResponder is NSTextView {
                                 NSApp.sendAction(NSSelectorFromString("undo:"), to: nil, from: nil)
@@ -68,7 +73,7 @@ struct CompositorApp: App {
                     }
                         .disabled(!applicationDelegate.projects.canStart)
                     Button("Import Images…") { session.showsImporter = true }
-                        .disabled(session.levels != nil || session.showsBusy || session.isImporting || session.showsNewDocument)
+                        .disabled(session.liquify != nil || session.levels != nil || session.showsBusy || session.isImporting || session.showsNewDocument)
                     Button("Recovery Copies…") { Task { await applicationDelegate.projects.reviewRecoveryCopies() } }
                         .disabled(!applicationDelegate.projects.canStart)
                 }
@@ -79,6 +84,8 @@ struct CompositorApp: App {
                         .configuredKeyboardShortcut("s", modifiers: [.command, .shift])
                         .disabled(session.document == nil || !applicationDelegate.projects.canStart)
                     Divider()
+                    Button("Edit Commands…") { session.showsAutomation = true }.disabled(!session.canEditLayers || session.document == nil)
+                    Button("Batch Export…") { session.openBatchExport() }.disabled(!session.canEditLayers || session.document == nil)
                     Button("Export PNG…") { Task { await applicationDelegate.projects.exportPNG() } }
                         .configuredKeyboardShortcut("e", modifiers: [.command, .shift])
                         .disabled(session.document == nil || !applicationDelegate.projects.canStart)
@@ -106,21 +113,25 @@ struct CompositorApp: App {
                     CommandGroup(after: .toolbar) {
                         // With a dialog's preview open (Export JPEG), these zoom that preview rather than the canvas.
                         Button("Fit Canvas") {
-                            if let preview = session.previewZoom { preview(.fit) } else { session.fit() }
+                            if let edit = session.liquify { edit.zoom = 1; edit.pan = .zero }
+                            else if let preview = session.previewZoom { preview(.fit) } else { session.fit() }
                         }.configuredKeyboardShortcut("0").disabled(session.document == nil)
                         Button("Actual Pixels") {
                             if let preview = session.previewZoom { preview(.actual) } else { session.zoom(to: 1) }
-                        }.configuredKeyboardShortcut("1").disabled(session.document == nil)
+                        }.configuredKeyboardShortcut("1").disabled(session.document == nil || session.liquify != nil)
                         Button("Zoom In") {
                             guard !(NSApp.keyWindow?.firstResponder is NSText) else { return }
-                            if let preview = session.previewZoom { preview(.zoomIn) } else { session.zoomKeyboard(by: 1) }
+                            if let edit = session.liquify { edit.zoom = min(20, edit.zoom * 1.25) }
+                            else if let preview = session.previewZoom { preview(.zoomIn) } else { session.zoomKeyboard(by: 1) }
                         }
                             .configuredKeyboardShortcut("=").disabled(session.document == nil)
                         Button("Zoom Out") {
                             guard !(NSApp.keyWindow?.firstResponder is NSText) else { return }
-                            if let preview = session.previewZoom { preview(.zoomOut) } else { session.zoomKeyboard(by: -1) }
+                            if let edit = session.liquify { edit.zoom = max(0.1, edit.zoom / 1.25) }
+                            else if let preview = session.previewZoom { preview(.zoomOut) } else { session.zoomKeyboard(by: -1) }
                         }
                             .configuredKeyboardShortcut("-").disabled(session.document == nil)
+                        Toggle("History", isOn: Binding(get: { session.showsHistory }, set: { session.showsHistory = $0 }))
                         Toggle("Pixel Grid (800% and above)", isOn: Binding(get: { session.showsPixelGrid },
                                                                               set: { session.showsPixelGrid = $0 }))
                         Toggle("Snap", isOn: Binding(get: { session.snappingEnabled },
@@ -264,7 +275,7 @@ struct CompositorApp: App {
                         .configuredKeyboardShortcut("l").disabled(!session.canAdjustColors || session.hueSaturation != nil)
                     Button("Hue/Saturation…") { session.beginHueSaturation() }
                         .configuredKeyboardShortcut("u").disabled(!session.canAdjustColors)
-                    ForEach([FilterKind.blackWhite, .colorBalance, .exposure, .gradientMap, .grain], id: \.self) { kind in
+                    ForEach([FilterKind.blackWhite, .colorBalance, .exposure, .gradientMap, .grain, .selectiveColor, .channelMixer, .colorLUT], id: \.self) { kind in
                         Button(L10n.text(kind.rawValue) + "…") { session.beginFilter(kind) }
                             .disabled(!session.canAdjustColors || session.hueSaturation != nil)
                     }
@@ -289,12 +300,24 @@ struct CompositorApp: App {
                     }
                 }
                 CommandMenu("Filter") {
+                    Button("Advanced Liquify…") { session.beginLiquify() }
+                        .configuredKeyboardShortcut("x", modifiers: [.command, .shift]).disabled(!session.canLiquify)
+                    Divider()
                     ForEach(FilterKind.allCases.filter { $0 != .contentAwareFill && !$0.isImageAdjustment }, id: \.self) { kind in
                         Button(L10n.text(kind.rawValue) + "…") { session.beginFilter(kind) }
                             .disabled(!(kind == .vignette ? session.canVignette : session.canAdjustColors) || session.hueSaturation != nil)
                     }
                 }
                 CommandMenu("Layer") {
+                    Menu("Lock") {
+                        LayerLockMenuItems(session: session)
+                    }.disabled(!session.canEditLayers || session.history.hasPendingEdit || session.effectsEditing != nil || session.selectedLayerIDs.isEmpty)
+                    Divider()
+                    Button("New Fill Layer…") { session.openFillLayer() }
+                        .disabled(!session.canEditLayers || session.document == nil || !session.canInsertFillLayer)
+                    Button("Refine Layer Edges…") { session.beginEdgeRefinement() }.disabled(!session.canRefineEdges)
+                    Button("Edit Fill Layer…") { session.openFillLayer(editing: true) }
+                        .disabled(!session.canEditLayers || session.activeLayer?.liveFill == nil || !session.allowsLayerEdit(session.activeLayerID, .content))
                     Menu("New Adjustment Layer") {
                         ForEach(AdjustmentKind.allCases, id: \.self) { kind in
                             Button(L10n.text(kind.rawValue) + (kind.isEditable ? "…" : "")) { session.addAdjustment(kind) }
@@ -302,7 +325,7 @@ struct CompositorApp: App {
                     }.disabled(!session.canEditLayers || session.document == nil)
                     Button("Edit Adjustment…") {
                         session.adjustmentEditingID = session.activeLayerID
-                    }.disabled(!session.canEditLayers || session.activeLayer?.adjustment == nil)
+                    }.disabled(!session.canEditLayers || !session.allowsLayerEdit(session.activeLayerID, .content) || session.activeLayer?.adjustment == nil)
                     Divider()
                     Button(L10n.text(session.canTransformSelection ? "Transform Selection" : "Transform Layer")) { session.transformCommand() }
                         .configuredKeyboardShortcut("t").disabled(!session.canTransform && !session.canTransformSelection)
@@ -317,7 +340,7 @@ struct CompositorApp: App {
                     .disabled(session.activeLayerID.map { !session.canToggleClippingMask($0) } ?? true)
                     Divider()
                     Button("Group Selected Layers") { session.groupSelectedLayers() }
-                        .configuredKeyboardShortcut("g").disabled(!session.canEditLayers)
+                        .configuredKeyboardShortcut("g").disabled(!session.canGroupSelectedLayers)
                     Button("Ungroup Layers") { session.ungroupLayers() }
                         .configuredKeyboardShortcut("g", modifiers: [.command, .shift]).disabled(!session.canUngroupLayers)
                     Button("Move Out of Folder") { session.moveActiveLayerOutOfGroup() }

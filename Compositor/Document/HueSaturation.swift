@@ -444,14 +444,14 @@ extension EditorSession {
     /// Vignette also paints an empty layer, which has no pixels until something is put on it.
     var canVignette: Bool {
         if canAdjustColors { return true }
-        guard let layer = activeLayer, layer.asset == nil, layer.adjustment == nil, !layer.isGroup else { return false }
+        guard allowsLayerEdit(activeLayerID, .content), let layer = activeLayer, layer.asset == nil, layer.adjustment == nil, !layer.isGroup else { return false }
         return canAdjust(allowingEmpty: true)
     }
     var canAdjustColors: Bool { canAdjust(allowingEmpty: false) }
     private func canAdjust(allowingEmpty: Bool) -> Bool {
         _ = showsBusy
         // Text being edited is drawn by its editor, not the layer, so a filter's preview of it would be wrong: commit it first.
-        guard levels == nil, filterEdit == nil, textDraft == nil, document != nil, let layer = activeLayer, !isProjectBusy, !isImporting, brushStroke == nil,
+        guard liquify == nil, allowsLayerEdit(activeLayerID, .content), levels == nil, filterEdit == nil, textDraft == nil, document != nil, let layer = activeLayer, !isProjectBusy, !isImporting, brushStroke == nil,
               pixelMove == nil, renamingLayerID == nil, !showsNewDocument, !showsImporter,
               selectedLayerIDs.count == 1, !layer.isGroup, !isMaskSelected, layer.asset != nil || allowingEmpty,
               document?.effectiveVisibleIDs.contains(layer.id) == true, selection?.isEmpty != true else { return false }

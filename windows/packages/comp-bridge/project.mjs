@@ -35,7 +35,7 @@ export function parseManifest(bytes) {
   let m;
   try { m = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)); } catch { throw new ProjectError('invalid'); }
   requireValue(record(m) && m.format === 'com.compositor.project');
-  requireValue(Number.isInteger(m.version) && m.version >= 1 && m.version <= 11, 'version');
+  requireValue(Number.isInteger(m.version) && m.version >= 1 && m.version <= 12, 'version');
   requireValue(m.colorSpace === 'sRGB', 'colorSpace');
   requireValue(UUID.test(m.documentID) && optionalID(m.activeLayerID));
   requireValue([m.width, m.height].every(n => Number.isInteger(n) && n >= 1 && n <= LIMITS.side));
@@ -171,7 +171,7 @@ export function analyze(manifest, sourcePixels = 0, maskPixels = 0) {
       const shown = visible && l.isVisible, alpha = opacity * (l.opacity ?? 1);
       const unknown = Object.keys(l).some(k => !KNOWN_LAYER.has(k)) || Object.keys(l.transform).some(k => !KNOWN_TRANSFORM.has(k)) || Object.keys(l.maskPlacement ?? {}).some(k => !KNOWN_TRANSFORM.has(k));
       const reasons = [];
-      if (unknown) reasons.push('unknown');
+      if (unknown || l.text?.vertical === true || l.text?.alignment === 'Justified') reasons.push('unknown');
       if (l.adjustment && !supportsAdjustment(l.adjustment)) reasons.push('adjustment');
       if (l.effects && (!supportsEffects(l.effects) || l.isGroup || l.adjustment)) reasons.push('effects');
       // Adjustments and effects are now explicitly evaluated by the adapter.

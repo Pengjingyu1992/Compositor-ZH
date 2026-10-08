@@ -218,7 +218,8 @@ extension ProjectSnapshot {
 
 extension EditorSession {
     /// Layers and folders alike take a mask.
-    var canEditMask: Bool { canEditLayers && selectedLayerIDs.count == 1 && activeLayer != nil }
+    var canEditMask: Bool { canEditLayers && allowsLayerEdit(activeLayerID, .content) && selectedLayerIDs.count == 1 && activeLayer != nil }
+    var canToggleLayerMask: Bool { canEditLayers && allowsLayerEdit(activeLayerID, .appearance) && selectedLayerIDs.count == 1 && activeLayer?.mask != nil }
     func selectLayerTarget(_ id: UUID, mask: Bool) {
         effectSelection = nil
         guard !isProjectBusy, !isImporting, brushStroke == nil else { return }
@@ -277,7 +278,7 @@ extension EditorSession {
         endEdit()
     }
     func toggleLayerMask() {
-        guard canEditMask, activeLayer?.mask != nil,
+        guard canToggleLayerMask,
               let index = document?.layers.firstIndex(where: { $0.id == activeLayerID }) else { return }
         finishOpacityEdit()
         beginEdit(activeLayer?.mask?.isEnabled == true ? "Disable Layer Mask" : "Enable Layer Mask")
@@ -295,7 +296,7 @@ extension EditorSession {
     }
     /// Whether an Option-drag can drop a copy of `source`'s mask on `target`.
     func canCopyMask(from source: UUID, to target: UUID) -> Bool {
-        guard canEditLayers, source != target, let layers = document?.layers,
+        guard canEditLayers, allowsLayerEdit(target, .content), source != target, let layers = document?.layers,
               layers.first(where: { $0.id == source })?.mask != nil,
               let layer = layers.first(where: { $0.id == target }) else { return false }
         return !layer.isGroup
@@ -317,7 +318,7 @@ extension EditorSession {
     }
     /// The link between a layer and its mask: linked they move together; unlinked each transforms on its own.
     func toggleMaskLink(_ id: UUID) {
-        guard canEditLayers, let index = document?.layers.firstIndex(where: { $0.id == id }),
+        guard canEditLayers, allowsLayerEdit(id, .position), let index = document?.layers.firstIndex(where: { $0.id == id }),
               let mask = document?.layers[index].mask else { return }
         commitTransform()
         finishOpacityEdit()

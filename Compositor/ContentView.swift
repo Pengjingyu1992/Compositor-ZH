@@ -208,6 +208,15 @@ struct ContentView: View {
 
     private var editorPanels: some View {
         editorChrome
+        .sheet(isPresented: $session.showsAutomation) { AutomationSheet(session: session) }
+        .sheet(item: Binding(get: { session.batchExportDraft }, set: { if $0 == nil { session.cancelBatchExport() } })) { draft in BatchExportSheet(session: session, draft: draft) }
+        .sheet(isPresented: Binding(get: { session.edgeRefinement != nil }, set: { if !$0 { session.cancelEdgeRefinement() } })) {
+            if let edit = session.edgeRefinement { EdgeRefinementSheet(session: session, edit: edit) }
+        }
+        .sheet(item: Binding(get: { session.fillLayerDraft }, set: { if $0 == nil { session.cancelFillLayer() } })) { draft in FillLayerSheet(session: session, draft: draft) }
+        .sheet(isPresented: Binding(get: { session.liquify != nil }, set: { if !$0 { session.cancelLiquify() } })) {
+            if let edit = session.liquify { LiquifySheet(session: session, edit: edit) }
+        }
         .onChange(of: session.levels == nil) { _, closed in
             if closed { levelsPanel.close() }
             else {
@@ -347,6 +356,10 @@ struct ContentView: View {
                 Text("\(document.width) × \(document.height) px").accessibilityIdentifier("canvasDimensions")
                 Text("sRGB · Transparent")
             } else { Text("Ready when you are") }
+            if session.history.droppedLatestUndo {
+                Text("Undo unavailable: this edit exceeded the history memory budget.")
+                    .foregroundStyle(.orange).accessibilityIdentifier("historyBudgetWarning")
+            }
             Spacer()
             if session.showsBusy {
                 ProgressView().controlSize(.mini)

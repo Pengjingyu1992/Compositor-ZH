@@ -17,7 +17,13 @@ struct BrushControls: View {
                     ForEach(BlurToolMode.allCases, id: \.self) { Text(L10n.text($0.rawValue)).tag($0) }
                 }
                 .pickerStyle(.segmented).labelsHidden().fixedSize()
-                .help("Liquify pushes pixels · Blur softens · Smudge drags color along")
+                .help("Basic Liquify pushes pixels directly on the canvas. Advanced Liquify adds reconstruct, freeze, and deformation tools.")
+                if session.blurMode == .liquify {
+                    Button("Advanced Liquify…") { session.beginLiquify() }
+                        .disabled(!session.canLiquify)
+                        .help("Open Advanced Liquify with the current basic brush settings.")
+                        .accessibilityIdentifier("openAdvancedLiquify")
+                }
             }
             if session.tool == .spotHealing {
                 Picker("Type", selection: $session.spotHealingMode) {

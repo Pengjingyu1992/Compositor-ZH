@@ -50,6 +50,7 @@ struct NativeLayerList: NSViewRepresentable {
         private var rows: [ImageLayer] = []
         private var rowDetails: [UUID: LayerHierarchy.Entry] = [:]
         private var oldCollapsed: Set<UUID> = []
+        private var previousLocks: [UUID: LayerLocks] = [:]
         private var editingEnabled = false
         private var synchronizing = false
         init(session: EditorSession) { self.session = session }
@@ -62,6 +63,8 @@ struct NativeLayerList: NSViewRepresentable {
             rowDetails = Dictionary(uniqueKeysWithValues: entries.map { ($0.layer.id, $0) })
             let expansionChanged = oldCollapsed != session.collapsedGroupIDs
             oldCollapsed = session.collapsedGroupIDs
+            let locksChanged = previousLocks != session.layerLocks
+            previousLocks = session.layerLocks
             let enabled = session.canEditLayers
             synchronizing = true
             defer { synchronizing = false }
@@ -74,7 +77,7 @@ struct NativeLayerList: NSViewRepresentable {
             } else {
                 // Selection never reloads cells or recreates thumbnails.
                 let changed = IndexSet(next.indices.filter {
-                    editableChanged || expansionChanged || (old[$0].name != next[$0].name || old[$0].isVisible != next[$0].isVisible || old[$0].size != next[$0].size || old[$0].parentID != next[$0].parentID || old[$0].isGroup != next[$0].isGroup || old[$0].asset?.image !== next[$0].asset?.image || (old[$0].liveText != nil) != (next[$0].liveText != nil) || old[$0].effects != next[$0].effects || old[$0].mask != next[$0].mask || old[$0].maskSourceID != next[$0].maskSourceID) || previousDetails[next[$0].id]?.depth != rowDetails[next[$0].id]?.depth || previousDetails[next[$0].id]?.visible != rowDetails[next[$0].id]?.visible
+                    locksChanged || editableChanged || expansionChanged || (old[$0].name != next[$0].name || old[$0].isVisible != next[$0].isVisible || old[$0].size != next[$0].size || old[$0].parentID != next[$0].parentID || old[$0].isGroup != next[$0].isGroup || old[$0].asset?.image !== next[$0].asset?.image || (old[$0].liveText != nil) != (next[$0].liveText != nil) || old[$0].effects != next[$0].effects || old[$0].mask != next[$0].mask || old[$0].maskSourceID != next[$0].maskSourceID) || previousDetails[next[$0].id]?.depth != rowDetails[next[$0].id]?.depth || previousDetails[next[$0].id]?.visible != rowDetails[next[$0].id]?.visible
                 })
                 let resized = IndexSet(next.indices.filter { (old[$0].effects?.kinds.count ?? 0) != (next[$0].effects?.kinds.count ?? 0) })
                 // Adding or removing an effect only changes how tall a row is. Left to AppKit that is animated, and
@@ -230,13 +233,13 @@ struct NativeLayerList: NSViewRepresentable {
             case #selector(duplicateLayerAction):
                 return session.canEditLayers && session.activeLayer != nil
             case #selector(renameLayerAction):
-                return session.canEditLayers && session.activeLayer != nil && session.selectedLayerIDs.count == 1
+                return session.canRenameActiveLayer
             case #selector(deleteLayerAction):
-                return session.canEditLayers && session.activeLayer != nil
+                return session.canDeleteLayerTarget
             case #selector(toggleClippingMaskAction):
                 return session.activeLayerID.map { session.canToggleClippingMask($0) } ?? false
             case #selector(groupSelectedLayersAction):
-                return session.canEditLayers && session.document != nil && (session.document?.layers.count ?? 0) < 10_000 && !session.selectedLayerIDs.isEmpty
+                return session.canGroupSelectedLayers
             case #selector(ungroupLayersAction):
                 return session.canUngroupLayers
             case #selector(moveOutOfFolderAction):
@@ -246,13 +249,13 @@ struct NativeLayerList: NSViewRepresentable {
             case #selector(addWhiteMaskAction), #selector(addBlackMaskAction):
                 return session.canEditMask && session.activeLayer?.mask == nil
             case #selector(toggleMaskAction):
-                return session.canEditMask && session.activeLayer?.mask != nil
+                return session.canToggleLayerMask
             case #selector(deleteMaskAction):
                 return session.canEditMask && session.activeLayer?.mask != nil
             case #selector(toggleMaskLinkAction):
-                return session.canEditLayers && session.activeLayer?.mask != nil && session.activeLayer?.isGroup == false && session.activeLayer?.adjustment == nil
+                return session.canEditLayers && session.allowsLayerEdit(session.activeLayerID, .position) && session.activeLayer?.mask != nil && session.activeLayer?.isGroup == false && session.activeLayer?.adjustment == nil
             case #selector(toggleVisibilityAction):
-                return session.canEditLayers && session.activeLayer != nil
+                return session.canEditLayers && session.allowsLayerEdit(session.activeLayerID, .appearance)
             default:
                 if menuItem.submenu != nil && menuItem.title == L10n.text("Add Mask") {
                     return session.canEditMask && session.activeLayer?.mask == nil
@@ -366,6 +369,7 @@ struct NativeLayerList: NSViewRepresentable {
             let point = NSApp.currentEvent?.locationInWindow ?? .zero
             let cell = table.view(atColumn: 0, row: table.clickedRow, makeIfNecessary: false) as? LayerCell
             if cell?.isOnControl(point) == true {
+                if rows[table.clickedRow].liveFill != nil { session.openFillLayer(editing: true); return }
                 if rows[table.clickedRow].liveText != nil { session.editActiveText(); return }
                 if rows[table.clickedRow].adjustment?.kind.isEditable == true { session.adjustmentEditingID = id; return }
             }
@@ -940,7 +944,7 @@ private final class LayerCell: NSTableCellView, NSTextFieldDelegate {
         maskGap.constant = linkable ? 13 : 5
         linkButton.isHidden = !linkable
         linkButton.image = layer.mask?.isLinked == false ? nil : Self.linkImage
-        linkButton.isEnabled = thumbnail.isEnabled
+        linkButton.isEnabled = enabled && session.allowsLayerEdit(layer.id, .position)
         linkButton.toolTip = L10n.text(layer.mask?.isLinked == false ? "Link layer and mask so they move together"
             : "Unlink layer and mask to move or transform them separately")
         linkButton.setAccessibilityLabel(L10n.format(layer.mask?.isLinked == false ? "Link mask: %@" : "Unlink mask: %@", layer.name))
@@ -952,7 +956,7 @@ private final class LayerCell: NSTableCellView, NSTextFieldDelegate {
         layerName = layer.name
         // A reused cell must not carry another row's half-finished rename.
         if renaming, layerID != layer.id { restoreLabel() }
-        if !renaming { nameLabel.stringValue = (layer.maskSourceID == nil ? "" : "↳ ") + layer.name }
+        if !renaming { nameLabel.stringValue = (session.effectiveLocks(for: layer.id).isEmpty ? "" : "🔒 ") + (layer.maskSourceID == nil ? "" : "↳ ") + layer.name }
         dimensions.stringValue = layer.liveText != nil ? L10n.text("Text · Double-click to edit") : layer.adjustment != nil ? L10n.text("Adjustment · Double-click to edit") : layer.isGroup ? L10n.text("Folder") : layer.sizeLabel
         if let source = layer.maskSourceID {
             let sourceName = session.document?.layers.first(where: { $0.id == source })?.name ?? L10n.text("Missing source")

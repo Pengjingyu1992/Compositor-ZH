@@ -7,6 +7,20 @@ struct LayersPanel: View {
     static let widths: ClosedRange<Double> = 202...352
 
     var body: some View {
+        VStack(spacing: 0) {
+            Picker("Panel", selection: $session.showsHistory) {
+                Text("Layers").tag(false)
+                Text("History").tag(true)
+            }
+            .pickerStyle(.segmented).labelsHidden().padding(12).accessibilityIdentifier("sidebarPanel")
+            Divider()
+            if session.showsHistory { HistoryPanel(session: session) }
+            else { layersBody }
+        }
+        .frame(width: width)
+    }
+
+    private var layersBody: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text("Layers").font(.system(size: 12, weight: .semibold))
@@ -16,6 +30,7 @@ struct LayersPanel: View {
             }.padding(18)
             Divider()
             LayerAppearanceControls(session: session, layerID: session.activeLayerID).id(session.activeLayerID)
+            LayerLockControls(session: session)
             Divider()
             if let layers = session.document?.layers, !layers.isEmpty {
                 NativeLayerList(session: session)
@@ -36,7 +51,7 @@ struct LayersPanel: View {
                     .help(L10n.format("New blank layer (%@)", ShortcutSettings.shared.keyLabel("n", 9, menu: true))).accessibilityLabel("New blank layer")
                     .accessibilityIdentifier("addBlankLayer").disabled(!session.canEditLayers)
                 Button { session.groupSelectedLayers() } label: { Image(systemName: "folder.badge.plus").footerHitArea() }
-                    .help(L10n.format("Group selected layers (%@)", ShortcutSettings.shared.keyLabel("g", 1, menu: true))).accessibilityLabel("New folder").disabled(!session.canEditLayers)
+                    .help(L10n.format("Group selected layers (%@)", ShortcutSettings.shared.keyLabel("g", 1, menu: true))).accessibilityLabel("New folder").disabled(!session.canGroupSelectedLayers)
                 LayerMaskMenu(session: session)
                 Menu {
                     ForEach(LayerEffectKind.allCases, id: \.self) { kind in
@@ -57,7 +72,7 @@ struct LayersPanel: View {
                     .help(L10n.text(session.selectedEffect != nil ? "Delete selected effect" : session.isMaskSelected ? "Delete layer mask" : session.selectedLayerIDs.count > 1 ? "Delete selected layers" : "Delete selected layer"))
                     .accessibilityLabel(L10n.text(session.selectedEffect != nil ? "Delete selected effect" : session.isMaskSelected ? "Delete layer mask" : session.selectedLayerIDs.count > 1 ? "Delete selected layers" : "Delete selected layer"))
                     .accessibilityIdentifier("deleteLayer")
-                    .disabled(!session.canEditLayers || session.activeLayer == nil)
+                    .disabled(!session.canDeleteLayerTarget)
             }
             .buttonStyle(.plain).foregroundStyle(.secondary)
             .padding(.horizontal, 8).padding(.vertical, 4) // Plus the hit areas' 8 and 12: the original 16.

@@ -131,11 +131,14 @@ nonisolated struct LayerEffects: Codable, Equatable, Sendable {
     var innerShadow: InnerShadowEffect? = nil
     var outerGlow: OuterGlowEffect? = nil
     var innerGlow: InnerGlowEffect? = nil
-    var isEmpty: Bool { stroke == nil && shadow == nil && colorOverlay == nil && innerShadow == nil && outerGlow == nil && innerGlow == nil }
+    var gradientOverlay: FillOverlayEffect? = nil
+    var patternOverlay: FillOverlayEffect? = nil
+    var bevel: BevelEffect? = nil
+    var isEmpty: Bool { stroke == nil && shadow == nil && colorOverlay == nil && innerShadow == nil && outerGlow == nil && innerGlow == nil && gradientOverlay == nil && patternOverlay == nil && bevel == nil }
     var isValid: Bool {
         (stroke?.isValid ?? true) && (shadow?.isValid ?? true)
             && (colorOverlay?.isValid ?? true) && (innerShadow?.isValid ?? true)
-            && (outerGlow?.isValid ?? true) && (innerGlow?.isValid ?? true)
+            && (outerGlow?.isValid ?? true) && (innerGlow?.isValid ?? true) && (gradientOverlay?.isValid ?? true) && (patternOverlay?.isValid ?? true) && (bevel?.isValid ?? true)
     }
     /// The effects for an image resampled by `factor`: every size, distance and blur in pixels scaled with it, held to
     /// the ranges `isValid` accepts.
@@ -149,6 +152,9 @@ nonisolated struct LayerEffects: Codable, Equatable, Sendable {
         result.innerShadow?.blur = scale(innerShadow?.blur, upTo: 500)
         result.outerGlow?.size = scale(outerGlow?.size, upTo: 500)
         result.innerGlow?.size = scale(innerGlow?.size, upTo: 500)
+        result.bevel?.size = scale(bevel?.size, upTo: 500)
+        result.gradientOverlay?.fill.cellSize = min(512, max(4, (gradientOverlay?.fill.cellSize ?? 32) * factor))
+        result.patternOverlay?.fill.cellSize = min(512, max(4, (patternOverlay?.fill.cellSize ?? 32) * factor))
         return result
     }
     var kinds: [LayerEffectKind] { LayerEffectKind.allCases.filter { contains($0) } }
@@ -160,6 +166,9 @@ nonisolated struct LayerEffects: Codable, Equatable, Sendable {
         case .innerShadow: return innerShadow != nil
         case .outerGlow: return outerGlow != nil
         case .innerGlow: return innerGlow != nil
+        case .gradientOverlay: return gradientOverlay != nil
+        case .patternOverlay: return patternOverlay != nil
+        case .bevel: return bevel != nil
         }
     }
     func isEnabled(_ kind: LayerEffectKind) -> Bool {
@@ -170,6 +179,9 @@ nonisolated struct LayerEffects: Codable, Equatable, Sendable {
         case .innerShadow: return innerShadow?.isEnabled == true
         case .outerGlow: return outerGlow?.isEnabled == true
         case .innerGlow: return innerGlow?.isEnabled == true
+        case .gradientOverlay: return gradientOverlay?.isEnabled == true
+        case .patternOverlay: return patternOverlay?.isEnabled == true
+        case .bevel: return bevel?.isEnabled == true
         }
     }
     /// The effect's own color, and a way to put a new one back.
@@ -181,6 +193,9 @@ nonisolated struct LayerEffects: Codable, Equatable, Sendable {
         case .innerShadow: return innerShadow?.color
         case .outerGlow: return outerGlow?.color
         case .innerGlow: return innerGlow?.color
+        case .gradientOverlay: return gradientOverlay?.color
+        case .patternOverlay: return patternOverlay?.color
+        case .bevel: return nil
         }
     }
     mutating func setColor(_ color: PaletteColor, for kind: LayerEffectKind) {
@@ -191,6 +206,9 @@ nonisolated struct LayerEffects: Codable, Equatable, Sendable {
         case .innerShadow: innerShadow?.red = color.red; innerShadow?.green = color.green; innerShadow?.blue = color.blue
         case .outerGlow: outerGlow?.red = color.red; outerGlow?.green = color.green; outerGlow?.blue = color.blue
         case .innerGlow: innerGlow?.red = color.red; innerGlow?.green = color.green; innerGlow?.blue = color.blue
+        case .gradientOverlay: gradientOverlay?.fill.stops[0].color = FillColor(red: color.red, green: color.green, blue: color.blue)
+        case .patternOverlay: patternOverlay?.fill.stops[0].color = FillColor(red: color.red, green: color.green, blue: color.blue)
+        case .bevel: break
         }
     }
     mutating func remove(_ kind: LayerEffectKind) {
@@ -201,6 +219,9 @@ nonisolated struct LayerEffects: Codable, Equatable, Sendable {
         case .innerShadow: innerShadow = nil
         case .outerGlow: outerGlow = nil
         case .innerGlow: innerGlow = nil
+        case .gradientOverlay: gradientOverlay = nil
+        case .patternOverlay: patternOverlay = nil
+        case .bevel: bevel = nil
         }
     }
     mutating func setEnabled(_ enabled: Bool, for kind: LayerEffectKind) {
@@ -211,6 +232,9 @@ nonisolated struct LayerEffects: Codable, Equatable, Sendable {
         case .innerShadow: innerShadow?.enabled = enabled
         case .outerGlow: outerGlow?.enabled = enabled
         case .innerGlow: innerGlow?.enabled = enabled
+        case .gradientOverlay: gradientOverlay?.enabled = enabled
+        case .patternOverlay: patternOverlay?.enabled = enabled
+        case .bevel: bevel?.enabled = enabled
         }
     }
     var visible: LayerEffects {
@@ -219,12 +243,16 @@ nonisolated struct LayerEffects: Codable, Equatable, Sendable {
                      colorOverlay: colorOverlay?.isEnabled == true ? colorOverlay : nil,
                      innerShadow: innerShadow?.isEnabled == true ? innerShadow : nil,
                      outerGlow: outerGlow?.isEnabled == true ? outerGlow : nil,
-                     innerGlow: innerGlow?.isEnabled == true ? innerGlow : nil)
+                     innerGlow: innerGlow?.isEnabled == true ? innerGlow : nil,
+                     gradientOverlay: gradientOverlay?.isEnabled == true ? gradientOverlay : nil,
+                     patternOverlay: patternOverlay?.isEnabled == true ? patternOverlay : nil,
+                     bevel: bevel?.isEnabled == true ? bevel : nil)
     }
 }
 
 nonisolated enum LayerEffectKind: String, CaseIterable, Sendable {
     case stroke = "Stroke", shadow = "Drop Shadow", colorOverlay = "Color Overlay", innerShadow = "Inner Shadow", outerGlow = "Outer Glow", innerGlow = "Inner Glow"
+    case gradientOverlay = "Gradient Overlay", patternOverlay = "Pattern Overlay", bevel = "Bevel and Emboss"
     /// These names enter history as catalog keys, before any display localization.
     var historyNames: (add: String, edit: String, cancel: String, copy: String, hide: String, show: String, remove: String) {
         switch self {
@@ -240,6 +268,12 @@ nonisolated enum LayerEffectKind: String, CaseIterable, Sendable {
             ("Add Outer Glow", "Edit Outer Glow", "Cancel Outer Glow", "Copy Outer Glow", "Hide Outer Glow", "Show Outer Glow", "Remove Outer Glow")
         case .innerGlow:
             ("Add Inner Glow", "Edit Inner Glow", "Cancel Inner Glow", "Copy Inner Glow", "Hide Inner Glow", "Show Inner Glow", "Remove Inner Glow")
+        case .bevel:
+            ("Add Bevel and Emboss", "Edit Bevel and Emboss", "Cancel Bevel and Emboss", "Copy Bevel and Emboss", "Hide Bevel and Emboss", "Show Bevel and Emboss", "Remove Bevel and Emboss")
+        case .patternOverlay:
+            ("Add Pattern Overlay", "Edit Pattern Overlay", "Cancel Pattern Overlay", "Copy Pattern Overlay", "Hide Pattern Overlay", "Show Pattern Overlay", "Remove Pattern Overlay")
+        case .gradientOverlay:
+            ("Add Gradient Overlay", "Edit Gradient Overlay", "Cancel Gradient Overlay", "Copy Gradient Overlay", "Hide Gradient Overlay", "Show Gradient Overlay", "Remove Gradient Overlay")
         }
     }
 }
@@ -250,7 +284,7 @@ struct LayerEffectSelection: Equatable {
 }
 
 extension EditorSession {
-    var canEditEffects: Bool { canEditLayers && activeLayer?.isGroup == false && activeLayer?.asset != nil }
+    var canEditEffects: Bool { canEditLayers && allowsLayerEdit(activeLayerID, .appearance) && activeLayer?.isGroup == false && activeLayer?.asset != nil }
     var activeEffects: LayerEffects { activeLayer?.effects ?? LayerEffects() }
     var editingEffects: LayerEffects {
         document?.layers.first(where: { $0.id == effectsEditing?.layerID })?.effects ?? LayerEffects()
@@ -285,6 +319,9 @@ extension EditorSession {
             effects.outerGlow = OuterGlowEffect()
         case .innerGlow where effects.innerGlow == nil:
             effects.innerGlow = InnerGlowEffect()
+        case .gradientOverlay where effects.gradientOverlay == nil: effects.gradientOverlay = FillOverlayEffect()
+        case .patternOverlay where effects.patternOverlay == nil: effects.patternOverlay = FillOverlayEffect(fill: LayerFillStyle(kind: .pattern))
+        case .bevel where effects.bevel == nil: effects.bevel = BevelEffect()
         default: break
         }
         setEffects(effects, on: id, name: kind.historyNames.add)
@@ -321,6 +358,9 @@ extension EditorSession {
             case .innerShadow: effects.innerShadow = original.innerShadow
             case .outerGlow: effects.outerGlow = original.outerGlow
             case .innerGlow: effects.innerGlow = original.innerGlow
+            case .bevel: effects.bevel = original.bevel
+            case .patternOverlay: effects.patternOverlay = original.patternOverlay
+            case .gradientOverlay: effects.gradientOverlay = original.gradientOverlay
             }
             setEffects(effects, on: editing.layerID, name: editing.kind.historyNames.cancel)
         }
@@ -330,7 +370,7 @@ extension EditorSession {
     }
 
     func setEffects(_ effects: LayerEffects, on id: UUID? = nil, name: String = "Layer Effects") {
-        guard canEditLayers, effects.isValid,
+        guard canEditLayers, allowsLayerEdit(id ?? activeLayerID, .appearance), effects.isValid,
               let index = document?.layers.firstIndex(where: { $0.id == (id ?? activeLayerID) }),
               document?.layers[index].isGroup == false, document?.layers[index].asset != nil,
               document?.layers[index].effects != (effects.isEmpty ? nil : effects) else { return }
@@ -351,7 +391,7 @@ extension EditorSession {
     }
 
     func canCopyEffect(_ kind: LayerEffectKind, from source: UUID, to target: UUID) -> Bool {
-        guard canEditLayers, source != target,
+        guard canEditLayers, allowsLayerEdit(target, .appearance), source != target,
               document?.layers.first(where: { $0.id == source })?.effects?.contains(kind) == true,
               let layer = document?.layers.first(where: { $0.id == target }),
               !layer.isGroup, layer.asset != nil else { return false }
@@ -373,6 +413,9 @@ extension EditorSession {
         case .innerShadow: effects.innerShadow = original.innerShadow
         case .outerGlow: effects.outerGlow = original.outerGlow
         case .innerGlow: effects.innerGlow = original.innerGlow
+            case .bevel: effects.bevel = original.bevel
+            case .patternOverlay: effects.patternOverlay = original.patternOverlay
+            case .gradientOverlay: effects.gradientOverlay = original.gradientOverlay
         }
         setEffects(effects, on: target, name: kind.historyNames.copy)
         selectEffect(kind, on: target)
@@ -513,6 +556,7 @@ nonisolated enum LayerEffectsRenderer {
            let shape = try? coverage(shown, in: placed, size: CGSize(width: width, height: height), blur: 0) {
             fill(overlay.color, alpha: overlay.opacity, coverage: shape, in: full, context: context)
         }
+        try drawPosterEffects(effects, shown: shown, placed: placed, full: full, context: context)
         if let innerGlow = effects.innerGlow, innerGlow.isEnabled, innerGlow.opacity > 0,
            let insideGlow = try? innerGlowCoverage(shown, placed: placed, size: CGSize(width: width, height: height), glow: innerGlow) {
             fill(innerGlow.color, alpha: innerGlow.opacity, coverage: insideGlow, in: full, context: context)
@@ -660,7 +704,7 @@ nonisolated enum LayerEffectsRenderer {
         return result
     }
 
-    private static func fill(_ color: PaletteColor, alpha: Double, coverage: CGImage, in rect: CGRect, context: CGContext) {
+    static func fill(_ color: PaletteColor, alpha: Double, coverage: CGImage, in rect: CGRect, context: CGContext) {
         // Coverage is a CGImage: use the same local image flip as the source, so asymmetric marks
         // and their effects line up instead of mirroring the coverage vertically.
         BrushRaster.fill(CGColor(srgbRed: color.red, green: color.green, blue: color.blue, alpha: 1),

@@ -10,7 +10,7 @@ import { fixture, manifest, IDS, png } from './fixtures.mjs';
 const encode = m => Buffer.from(JSON.stringify(m));
 const rejects = (mutate, code = 'invalid') => { const m = manifest(); mutate(m); assert.throws(() => parseManifest(encode(m)), e => e.code === code); };
 test('all supported versions accept a basic project without newer metadata', () => {
-  for (let version = 1; version <= 11; version++) {
+  for (let version = 1; version <= 12; version++) {
     const m = manifest(); m.version = version; delete m.layers[1].opacity; delete m.layers[1].maskFile;
     assert.equal(parseManifest(encode(m)).version, version);
   }
@@ -21,7 +21,7 @@ test('unknown manifest/layer fields remain immutable and visible as unsupported'
   const parsed = parseManifest(encode(m)); assert.deepEqual(parsed, m); assert.ok(Object.isFrozen(parsed.layers[0]));
   assert.ok(analyze(parsed).issues.includes('unknown'));
 });
-test('unsupported version is rejected, never coerced', () => { rejects(m => m.version = 12, 'version'); rejects(m => m.version = 0, 'version'); });
+test('unsupported version is rejected, never coerced', () => { rejects(m => m.version = 13, 'version'); rejects(m => m.version = 0, 'version'); });
 test('unsafe image paths rejected', () => { for (const name of ['../x.png', 'C:\\secret.png', 'a.png', IDS[0] + '.PNG']) rejects(m => m.layers[0].imageFile = name); });
 test('duplicate IDs are case-insensitive', () => rejects(m => m.layers[1].id = m.layers[0].id.toLowerCase()));
 test('missing parents and cycles rejected', () => { rejects(m => m.layers[1].parentID = IDS[2]); rejects(m => { delete m.layers[0].imageFile; m.layers[0].isGroup = true; m.layers[0].parentID = IDS[0]; }); });
@@ -66,4 +66,20 @@ test('language persists across fresh reads without retaining project paths', asy
   assert.equal(await getLanguage(temp), 'zh-Hans'); await setLanguage(temp, 'en'); assert.equal(await getLanguage(temp), 'en');
   await setLanguage(temp, 'zh-Hans'); assert.equal(await getLanguage(temp), 'zh-Hans');
   assert.deepEqual(JSON.parse(await readFile(path.join(temp, 'preferences.json'), 'utf8')), { language: 'zh-Hans' });
+});
+
+test('v12 fill, effects and vertical text stay preserved and require a cached preview', async t => {
+  const temp = await mkdtemp(path.join(os.tmpdir(), 'comp-v12-')); t.after(() => rm(temp, { recursive: true, force: true }));
+  const source = path.join(temp, 'v12.comp'), copy = path.join(temp, 'copy.comp');
+  await fixture(source, m => {
+    m.version = 12; m.layers[0].fill = { kind: 'Linear', futureStops: ['keep'] };
+    m.layers[0].effects = { gradientOverlay: { fill: { kind: 'Linear' }, opacity: .5 } };
+    m.layers[1].text = { content: '中文', vertical: true, alignment: 'Justified' }; return m;
+  });
+  const original = await readProject(source); const report = analyze(original.manifest);
+  assert.ok(report.issues.includes('unknown')); assert.ok(report.issues.includes('effects'));
+  await writeSnapshotNew(original, copy); const saved = await readProject(copy);
+  assert.deepEqual(saved.sourceBytes, original.sourceBytes);
+  assert.deepEqual(saved.manifest, original.manifest);
+  assert.deepEqual(resourceDigests(saved), resourceDigests(original));
 });

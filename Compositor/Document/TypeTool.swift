@@ -1,7 +1,8 @@
 import AppKit
+import CoreText
 
 nonisolated enum TextAlignment: String, Codable, CaseIterable, Sendable {
-    case left = "Left", center = "Center", right = "Right"
+    case left = "Left", center = "Center", right = "Right", justified = "Justified"
 }
 
 nonisolated struct LayerTextStyle: Codable, Equatable, Sendable {
@@ -12,6 +13,8 @@ nonisolated struct LayerTextStyle: Codable, Equatable, Sendable {
     var green: CGFloat = 0
     var blue: CGFloat = 0
     var alignment: TextAlignment = .left
+    var vertical: Bool? = nil
+    var isVertical: Bool { vertical ?? false }
     var tracking: CGFloat = 0
     /// Baseline to baseline, in layer pixels, as Photoshop's Leading is. 0 is Auto: 120% of the font size.
     var leading: CGFloat = 0
@@ -238,7 +241,10 @@ extension EditorSession {
         let target = newLayer ? nil : document.layers.reversed().first {
             visible.contains($0.id) && $0.liveText != nil && $0.transform.contains(point)
         }
-        if let target { selectLayer(target.id) }
+        if let target {
+            guard allowsLayerEdit(target.id, .content) else { return }
+            selectLayer(target.id)
+        }
         var style = target?.liveText?.style ?? textDefaults
         if target == nil {
             style.content = ""
@@ -262,7 +268,7 @@ extension EditorSession {
     }
 
     func editActiveText() {
-        guard canEditLayers, textDraft == nil, let document, let layer = activeLayer, let text = layer.liveText else { return }
+        guard canEditLayers, allowsLayerEdit(activeLayerID, .content), textDraft == nil, let document, let layer = activeLayer, let text = layer.liveText else { return }
         tool = .type
         textDraft = TextDraft(documentID: document.id, layerID: layer.id, origin: layer.origin, transform: layer.transform, style: text.style)
     }
@@ -272,7 +278,7 @@ extension EditorSession {
         guard document?.id == draft.documentID, draft.style.isValid else { return false }
         let pending = textDraft
         textDraft = nil
-        guard canEditLayers else { textDraft = pending; return false }
+        guard canEditLayers, draft.layerID.map({ allowsLayerEdit($0, .content) }) != false else { textDraft = pending; return false }
         var succeeded = false
         defer { if !succeeded { textDraft = pending } }
         if draft.layerID == nil, draft.style.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -333,7 +339,7 @@ extension EditorSession {
         guard canEditLayers, textDraft == nil, rect.width.isFinite, rect.height.isFinite else { return }
         var style = textDefaults
         style.boxSize = CGSize(width: max(16, rect.width.rounded()), height: max(16, rect.height.rounded()))
-        guard style.boxIsValid else { brushError = "That text box exceeds the \(DocumentLimits.maxSide.formatted())-pixel or \(DocumentLimits.maxSurfaceMegapixels)-megapixel limit."; return }
+        guard style.boxIsValid else { brushError = L10n.format("That text box exceeds the %@-pixel or %lld-megapixel limit.", DocumentLimits.maxSide.formatted(), DocumentLimits.maxSurfaceMegapixels); return }
         beginText(at: rect.origin, newLayer: true)
         // A dragged box is exactly where it was drawn.
         textDraft?.origin = rect.origin
@@ -344,7 +350,7 @@ extension EditorSession {
     /// false when the layer isn't live text or its pixels couldn't be redrawn, so the caller fills as usual.
     @discardableResult
     func recolorText(_ id: UUID, to color: PaletteColor) -> Bool {
-        guard canEditLayers, let index = document?.layers.firstIndex(where: { $0.id == id }),
+        guard canEditLayers, allowsLayerEdit(id, .content), let index = document?.layers.firstIndex(where: { $0.id == id }),
               let layer = document?.layers[index], let text = layer.liveText, let asset = layer.asset else { return false }
         var style = text.style
         guard style.red != color.red || style.green != color.green || style.blue != color.blue || style.colorRuns != nil else { return true }
@@ -402,7 +408,7 @@ extension EditorSession {
 
     nonisolated static func textAttributes(_ style: LayerTextStyle) -> [NSAttributedString.Key: Any] {
         let paragraph = NSMutableParagraphStyle()
-        paragraph.alignment = style.alignment == .left ? .left : style.alignment == .center ? .center : .right
+        paragraph.alignment = style.alignment == .justified ? .justified : style.alignment == .left ? .left : style.alignment == .center ? .center : .right
         let font = NSFont(name: style.fontName, size: style.fontSize) ?? NSFont.systemFont(ofSize: style.fontSize)
         // Leading is the line's whole height, so the lines close up (and eventually overlap) as it comes down,
         // exactly as Photoshop's does. Auto is 120% of the size.
@@ -421,6 +427,11 @@ extension EditorSession {
         if let boxSize = style.boxSize { return boxSize }
         let string = attributedText(style)
         let padding = LayerTextStyle.padding
+        if style.isVertical {
+            let columns = style.content.components(separatedBy: "\n")
+            return CGSize(width: max(16, CGFloat(columns.count) * style.lineHeight + padding * 2),
+                          height: max(16, CGFloat(columns.map(\.count).max() ?? 1) * style.fontSize + padding * 2))
+        }
         let measured = string.boundingRect(with: CGSize(width: 100_000, height: 100_000),
                                            options: [.usesLineFragmentOrigin, .usesFontLeading])
         let line = ceil(style.lineHeight)
@@ -431,6 +442,7 @@ extension EditorSession {
     /// The text as it is drawn and measured, with each letter's own face and color.
     static func attributedText(_ style: LayerTextStyle) -> NSMutableAttributedString {
         let string = NSMutableAttributedString(string: style.content, attributes: textAttributes(style))
+        if style.isVertical { string.addAttribute(.verticalGlyphForm, value: 1, range: NSRange(location: 0, length: string.length)) }
         for run in style.fontRuns ?? [] where Self.containsTextRun(run.location, run.length, in: string.length) {
             let font = NSFont(name: run.fontName, size: style.fontSize) ?? NSFont.systemFont(ofSize: style.fontSize)
             string.addAttribute(.font, value: font, range: NSRange(location: run.location, length: run.length))
@@ -455,6 +467,15 @@ extension EditorSession {
         guard width.isFinite, height.isFinite, width >= 1, height >= 1,
               width <= DocumentLimits.maxSideExtent, height <= DocumentLimits.maxSideExtent, width * height <= DocumentLimits.maxSurfaceExtent else { throw ProjectError.tooLarge }
         let context = try BrushRaster.context(width: Int(width), height: Int(height), mask: false)
+        if style.isVertical {
+            context.translateBy(x: 0, y: height); context.scaleBy(x: 1, y: -1)
+            context.textMatrix = .identity
+            let frameSetter = CTFramesetterCreateWithAttributedString(string)
+            let path = CGPath(rect: CGRect(x: padding, y: padding, width: max(1, width - padding * 2), height: max(1, height - padding * 2)), transform: nil)
+            let attributes = [kCTFrameProgressionAttributeName: CTFrameProgression.rightToLeft.rawValue] as CFDictionary
+            CTFrameDraw(CTFramesetterCreateFrame(frameSetter, CFRange(location: 0, length: 0), path, attributes), context)
+            guard let image = context.makeImage() else { throw ExportError.render }; return image
+        }
         NSGraphicsContext.saveGraphicsState()
         defer { NSGraphicsContext.restoreGraphicsState() }
         NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: true)

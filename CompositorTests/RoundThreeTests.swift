@@ -41,7 +41,7 @@ struct RoundThreeTests {
         let p = try #require(c.data?.assumingMemoryBound(to: UInt8.self))
         return (0..<image.height).flatMap { Array(UnsafeBufferPointer(start: p + $0 * c.bytesPerRow, count: image.width * 4)) }
     }
-    private func record(_ s: EditorSession, version: Int = 11) throws -> RecoveryRecord {
+    private func record(_ s: EditorSession, version: Int = ProjectManifest.current) throws -> RecoveryRecord {
         RecoveryRecord(documentID: try #require(s.document?.id), revision: s.history.currentRevision,
                        projectVersion: version, title: "未保存中文文档", originalPath: nil, date: Date())
     }
@@ -65,7 +65,7 @@ struct RoundThreeTests {
         let entry = try #require(entries.first)
         #expect(entry.record?.revision == revision && entry.record?.closedNormally == false)
         let loaded = try await store.load(entry.url)
-        #expect(loaded.manifest.layers[0].opacity == 0.4 && loaded.manifest.version == 11)
+        #expect(loaded.manifest.layers[0].opacity == 0.4 && loaded.manifest.version == ProjectManifest.current)
         #expect(try bytes(try #require(loaded.images.values.first?.image)) == bytes(try image()))
         await coord.finishNormally()
         #expect(try await store.entries().first?.record?.closedNormally == true)

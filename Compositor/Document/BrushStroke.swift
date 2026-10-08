@@ -24,6 +24,28 @@ nonisolated struct BrushSettings: Sendable {
     var erasing = false
     var healing = false
     var healingMode: SpotHealingMode = .contentAware
+
+    static func steppedDiameter(_ current: CGFloat, increase: Bool, range: ClosedRange<CGFloat>) -> CGFloat {
+        let stepped = increase ? max(current + 1, (current * 1.2).rounded()) : min(current - 1, (current / 1.2).rounded())
+        return min(range.upperBound, max(range.lowerBound, stepped))
+    }
+
+    static func steppedHardness(_ current: CGFloat, increase: Bool) -> CGFloat {
+        let quarter = current * 4
+        let step = increase ? floor(quarter + 0.001) + 1 : ceil(quarter - 0.001) - 1
+        return min(4, max(0, step)) / 4
+    }
+
+    static func opacityValue(_ digit: Int, at time: TimeInterval, pending: inout (digit: Int, time: TimeInterval)?) -> CGFloat {
+        var percent = digit == 0 ? 100 : digit * 10
+        if let previous = pending, time >= previous.time, time - previous.time < 0.6 {
+            percent = max(1, previous.digit * 10 + digit)
+            pending = nil
+        } else {
+            pending = (digit, time)
+        }
+        return CGFloat(percent) / 100
+    }
 }
 
 nonisolated struct BrushPatch: @unchecked Sendable {
@@ -146,6 +168,7 @@ final class BrushStroke {
     /// size, run a little wider.
     static let maxDiameter: CGFloat = 2100
     var pixelLimit = DocumentLimits.documentPixelBudget
+    var locksAlpha = false
     /// Limits every edit to the document selection; nil when nothing is selected.
     var selectionClip: SelectionClip?
     /// Clone Stamp, Blur, Smudge and Liquify: an image painted through the tip, and where it sits, already shifted
@@ -186,7 +209,14 @@ final class BrushStroke {
     static let tileSize = 256
     /// The part of each tile the stroke touched since the last publish, in tile-local pixels.
     private var dirtyTiles: [Int: CGRect] = [:]
-    var patches: [BrushPatch] { tiles.values.compactMap { tile in tile.image.map { BrushPatch(rect: tile.rect, image: $0) } } }
+    var patches: [BrushPatch] {
+        tiles.values.compactMap { tile in
+            guard let image = tile.image else { return nil }
+            if locksAlpha, let base = tile.base, let a = base.dataProvider?.data, let b = image.dataProvider?.data,
+               CFEqual(a, b) { return nil }
+            return BrushPatch(rect: tile.rect, image: image)
+        }
+    }
 
     /// `growsMask`: a brush on a mask can paint anywhere on the canvas, as Photoshop's does, growing the mask past its
     /// layer. Other edits of a mask stay within it.
@@ -482,6 +512,19 @@ final class BrushStroke {
         previous = point
     }
 
+    /// Keep the source alpha on each touched tile, including partially transparent edges.
+    private func preserveAlpha(_ tile: Tile) throws {
+        guard locksAlpha, !isMask, let out = tile.context.data else { return }
+        guard let base = tile.base else {
+            tile.context.clear(CGRect(origin: .zero, size: tile.rect.size))
+            return
+        }
+        let original = try BrushRaster.copy(base)
+        guard let bytes = original.data else { throw ExportError.render }
+        layer_preserve_alpha(out.assumingMemoryBound(to: UInt8.self), bytes.assumingMemoryBound(to: UInt8.self),
+                             base.width, base.height, tile.context.bytesPerRow, original.bytesPerRow)
+    }
+
     private func publish(_ changed: Set<Int>) throws {
         dirtyDocumentRect = nil
         for key in changed {
@@ -542,6 +585,7 @@ final class BrushStroke {
                 }
                 tile.context.restoreGState()
             }
+            if let tile = tiles[key] { try preserveAlpha(tile) }
             guard let image = tiles[key]?.context.makeImage() else { throw ExportError.render }
             tiles[key]?.image = image
             if let rect = tiles[key]?.rect.applying(pixelToDocument).intersection(canvas) {
@@ -747,6 +791,7 @@ final class BrushStroke {
                 selectionClip?.apply(to: context)
                 try draw(context)
                 context.restoreGState()
+                try preserveAlpha(tile)
                 guard let image = context.makeImage() else { throw ExportError.render }
                 tiles[key]?.image = image
             }
@@ -848,7 +893,7 @@ final class BrushStroke {
 
     /// A mask's background (see LayerMask.background): what its area past the old pixels starts as.
     let maskBackground: CGFloat
-    var committedBounds: CGRect { (allocatedBounds ?? sourceRect).integral }
+    var committedBounds: CGRect { (locksAlpha ? sourceRect : allocatedBounds ?? sourceRect).integral }
     var committedTransform: LayerTransform { transform(for: committedBounds) }
     /// Where `rect` of the stroke's grid sits to be copied from `offset` document pixels away: the offset carried
     /// into the grid, turned, scaled and flipped as the layer is.
@@ -918,6 +963,7 @@ final class BrushStroke {
             }
             BrushRaster.draw(healed, in: region.offsetBy(dx: -tile.rect.minX, dy: -tile.rect.minY), mask: false, context: context)
             context.restoreGState()
+            try preserveAlpha(tile)
             tiles[key]?.image = context.makeImage()
         }
     }
@@ -936,7 +982,7 @@ final class BrushStroke {
             bounds = bounds.map { $0.union(rect) } ?? rect
         }
         // A mask keeps every tile the stroke touched: painted past its old pixels, it grows to hold them.
-        let crop = isMask ? committedBounds : bounds ?? committedBounds
+        let crop = locksAlpha ? sourceRect : isMask ? committedBounds : bounds ?? committedBounds
         let raster = RasterSnapshot.replacing(source: isMask ? layer.mask?.asset : layer.asset, sourceRect: sourceRect, patches: patches, crop: crop,
                                               isMask: isMask, fill: maskBackground)
         let image = try raster.makeImage()
@@ -947,7 +993,7 @@ final class BrushStroke {
         let bounds = committedBounds
         return BrushCommit.Input(width: Int(bounds.width), height: Int(bounds.height), source: source,
             patches: patches.map { BrushPatch(rect: $0.rect.offsetBy(dx: -bounds.minX, dy: -bounds.minY), image: $0.image) },
-            mask: isMask, name: layer.name, sourceRect: sourceRect.offsetBy(dx: -bounds.minX, dy: -bounds.minY), fill: maskBackground)
+            mask: isMask, name: layer.name, sourceRect: sourceRect.offsetBy(dx: -bounds.minX, dy: -bounds.minY), fill: maskBackground, keepsBounds: locksAlpha)
     }
 }
 
@@ -962,6 +1008,7 @@ actor BrushCommit {
         let sourceRect: CGRect
         /// A mask's background: what a grown mask is where neither its old pixels nor the edit reach.
         var fill: CGFloat = 1
+        var keepsBounds = false
     }
     nonisolated struct Output: @unchecked Sendable {
         let asset: ImportedImage
@@ -996,7 +1043,7 @@ actor BrushCommit {
         guard let bytes = context.data?.assumingMemoryBound(to: UInt8.self) else { throw ExportError.render }
         var edges = [Int](repeating: 0, count: 4)
         brush_alpha_bounds(bytes, input.width, input.height, context.bytesPerRow, &edges)
-        let crop = edges[2] <= edges[0] ? fullBounds : CGRect(x: edges[0], y: edges[1], width: edges[2] - edges[0], height: edges[3] - edges[1])
+        let crop = input.keepsBounds || edges[2] <= edges[0] ? fullBounds : CGRect(x: edges[0], y: edges[1], width: edges[2] - edges[0], height: edges[3] - edges[1])
         let image: CGImage
         if crop == fullBounds { image = fullImage }
         else {

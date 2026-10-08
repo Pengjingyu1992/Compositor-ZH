@@ -155,11 +155,14 @@ actor ImageExporter {
         try write(data, to: url)
     }
 
-    func write(_ data: Data, to url: URL) throws {
+    func write(_ data: Data, to url: URL, mustNotExist: Bool = false) throws {
         var coordinationError: NSError?
         var writeError: Error?
         NSFileCoordinator().coordinate(writingItemAt: url, options: .forReplacing, error: &coordinationError) { target in
-            do { try data.write(to: target, options: .atomic) }
+            do {
+                if mustNotExist, FileManager.default.fileExists(atPath: target.path) { throw CocoaError(.fileWriteFileExists) }
+                try data.write(to: target, options: .atomic)
+            }
             catch { writeError = error }
         }
         if let error = coordinationError ?? writeError { throw error }

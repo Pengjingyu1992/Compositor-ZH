@@ -24,13 +24,13 @@ Both editions support painting and image editing with layers, with different UI,
 | 渲染 / Rendering | Metal + Core Image + Core Graphics，使用系统图像与 GPU 接口。 / Uses Apple's image and GPU APIs. | Pentrado WebGL2 合成引擎；Canvas 2D 绘制文字/形状，工作线程执行像素处理。 / Pentrado WebGL2 compositing, Canvas 2D text/shapes and pixel processing in workers. |
 | 文字编辑 / Text editing | 画布内原生文字编辑，使用 AppKit 文本系统。 / Native inline editing on the canvas with AppKit. | 在文字编辑面板中输入和设置样式，以 Canvas 2D 排版并生成像素。 / Text and styles are edited in a panel, then laid out and rasterized with Canvas 2D. |
 | 背景移除 / Background removal | Apple Vision 主体识别，结果保存为可调整的图层蒙版。 / Apple Vision subject recognition produces an editable layer mask. | 从图像边缘按颜色容差清除相近背景像素，适合较简单背景。 / Clears similar background pixels from the edges using color tolerance; suited to simpler backgrounds. |
-| 图层锁定与对称 / Locks and symmetry | 当前尚未提供图层锁定和对称画笔。 / Layer locks and symmetric painting are not currently available. | 内容/位置/外观/透明度会话锁；双轴及 2–16 份径向对称绘画。 / Session locks for content, position, appearance and alpha; symmetry across both axes and radial symmetry with 2–16 sectors. |
+| 图层锁定与对称 / Locks and symmetry | 内容/位置/外观/透明度会话锁；尚无对称画笔。 / Session locks for content, position, appearance and alpha; no symmetric brush yet. | 内容/位置/外观/透明度会话锁；双轴及 2–16 份径向对称绘画。 / Session locks for content, position, appearance and alpha; symmetry across both axes and radial symmetry with 2–16 sectors. |
 | 语言切换 / Language switching | 保存语言选择后重启生效。 / The saved language choice takes effect after restarting. | 简体中文 / English 即时切换，选择保留到下次启动。 / Chinese/English switching is immediate and persists. |
 | 安装包 / Packages | `.app` 压缩包。 / A ZIP containing the app. | EXE 安装向导或便携 ZIP。 / An EXE installer or portable ZIP. |
 
-**项目兼容性：**两版使用 `.comp` 项目格式，目前支持读取 v1–11，保存为 v11。交换项目时需复制整个 `.comp` 文件夹。两套渲染器及系统字体可能产生不同的文字排版、滤镜或效果结果；Windows 的画质基准定标仍待完成。Windows 遇到不能准确编辑的可见属性时，会明确使用项目保存的预览并限制编辑，同时保留未知字段和未改动资源。功能同名也可能采用不同算法，具体使用范围见各版说明。安装包均可直接使用，无需编译或安装开发工具。
+**项目兼容性：**两版使用 `.comp` 项目格式，macOS 版读取 v1–12、保存为 v12；Windows 版创建的新项目仍为 v11，并保留读取到的 v12 元数据。v12 新增的填充图层、叠加样式和竖排文字在 Windows 上需使用保存的预览并限制编辑。交换项目时需复制整个 `.comp` 文件夹。两套渲染器及系统字体可能产生不同的文字排版、滤镜或效果结果；Windows 的画质基准定标仍待完成。Windows 遇到不能准确编辑的可见属性时，会明确使用项目保存的预览并限制编辑，同时保留未知字段和未改动资源。功能同名也可能采用不同算法，具体使用范围见各版说明。安装包均可直接使用，无需编译或安装开发工具。
 
-**Project compatibility:** Both editions read `.comp` versions 1–11 and save version 11. Transfer the entire project folder. Different renderers and system fonts can produce different text layouts, filter results and effects; Windows image-quality calibration remains pending. When Windows cannot accurately edit a visible property, it explicitly uses the saved preview and restricts editing while preserving unknown fields and unchanged resources. Similarly named features can use different algorithms; consult each edition's documentation. Downloaded packages run directly without compilation or developer tools.
+**Project compatibility:** The macOS edition reads `.comp` v1–12 and saves v12. Windows-native new documents remain v11; its bridge preserves v12 metadata, with saved-preview restrictions for new fill, overlay and vertical-text properties. Transfer the entire project folder. Different renderers and system fonts can produce different text layouts, filter results and effects; Windows image-quality calibration remains pending. When Windows cannot accurately edit a visible property, it explicitly uses the saved preview and restricts editing while preserving unknown fields and unchanged resources. Similarly named features can use different algorithms; consult each edition's documentation. Downloaded packages run directly without compilation or developer tools.
 
 ## 下载与使用 / Download and use
 
@@ -65,6 +65,7 @@ Both editions support painting and image editing with layers, with different UI,
 | PSD 导出 / PSD export | 8 位 RGB，分层或合成导出；像素层、组、混合、不透明度、蒙版。 / 8-bit RGB layered or flattened export, with pixels, groups, blending, opacity, and masks. |
 | 稳定性 / Reliability | 编辑许可与异步提交检查；修复尺寸调整时效果丢失等问题。 / Edit permissions, guarded asynchronous commits, and fixes including effects preservation during resizing. |
 | 新图标 / New icon | 薄荷绿、珊瑚粉、柔黄与淡紫的叠层图标。 / A layered icon in mint, coral, soft yellow, and lavender. |
+| 海报与照片编辑 / Poster and photo editing | 可编辑填充和图层叠加样式、手动修边、彩色半调、中文竖排、可选颜色、通道混合器、`.cube` LUT、多尺寸导出，以及 CLI/MCP 批量命令。详见 [使用说明](docs/macos-poster-batch.md)。 / Editable fills and layer overlays, manual edge refinement, color halftone, vertical Chinese text, selective color, channel mixer, `.cube` LUTs, multi-size export, and CLI/MCP batch commands. See the [feature guide](docs/macos-poster-batch.md). |
 
 macOS 版的基础图层、蒙版、画笔、文字、形状、选区、调整层、Camera Raw、PSD 导入及多项目标签等能力来自 Compositor。
 
@@ -102,3 +103,5 @@ Command Line Tools with a macOS 26 SDK can build the app. The standalone macOS 2
 - 本仓库的中文本地化及改动同样以 MIT 许可发布。 / Localization and modifications in this repository are also released under MIT.
 
 详见 [第三方说明 / Third-party notices](THIRD_PARTY_NOTICES.md)、[源码来源 / Source provenance](UPSTREAM.md) 与 [发布审查 / Release review](docs/release-audit.md)。
+
+macOS 海报与照片编辑扩展、CLI/MCP 安装和使用范围见 [使用说明](docs/macos-poster-batch.md)。

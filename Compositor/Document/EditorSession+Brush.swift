@@ -4,27 +4,30 @@ extension EditorSession {
     /// An explicitly empty selection leaves nothing paintable, so painting never starts.
     var canPaint: Bool {
         // A folder has no pixels of its own, so only its mask can be painted.
-        canEditLayers && selectedLayerIDs.count == 1 && (activeLayer?.isGroup == false || isMaskSelected) && selection?.isEmpty != true
+        canEditLayers && allowsLayerEdit(activeLayerID, .content) && selectedLayerIDs.count == 1 && (activeLayer?.isGroup == false || isMaskSelected) && selection?.isEmpty != true
             && activeLayerID.map { document?.effectiveVisibleIDs.contains($0) == true } == true
             && (!isMaskSelected || activeLayer?.mask?.isEnabled == true)
             && (isMaskSelected || activeLayer?.adjustment == nil)
+            && (isMaskSelected || activeLayer?.asset != nil || activeLayerID.map { !effectiveLocks(for: $0).contains(.transparency) } == true)
     }
     /// Why a stroke can't start on the target, for the alert, as Photoshop explains a brush it refuses. Nil when
     /// nothing about the target is in the way; while the editor is busy (a transform, a dialog) a press just waits.
     var paintRefusal: String? {
         guard canEditLayers, let layer = activeLayer, !canPaint else { return nil }
-        if selectedLayerIDs.count > 1 { return "Several layers are selected. Select just one to paint on it." }
+        if !allowsLayerEdit(layer.id, .content) { return L10n.text("The layer or its folder is locked for content edits.") }
+        if !isMaskSelected, layer.asset == nil, effectiveLocks(for: layer.id).contains(.transparency) { return L10n.text("Transparency is locked on an empty layer. Unlock it to paint.") }
+        if selectedLayerIDs.count > 1 { return L10n.text("Several layers are selected. Select just one to paint on it.") }
         if layer.isGroup, !isMaskSelected {
-            return "“\(layer.name)” is a folder, which has no pixels of its own. Paint on a layer inside it, or on the folder’s mask."
+            return L10n.format("“%@” is a folder, which has no pixels of its own. Paint on a layer inside it, or on the folder’s mask.", layer.name)
         }
         if document?.effectiveVisibleIDs.contains(layer.id) != true {
-            return "“\(layer.name)” is hidden, or inside a hidden folder. Show it to paint on it."
+            return L10n.format("“%@” is hidden, or inside a hidden folder. Show it to paint on it.", layer.name)
         }
         if isMaskSelected, layer.mask?.isEnabled != true {
             return "The layer mask is turned off. Shift-click its thumbnail to turn it on, then paint."
         }
         if !isMaskSelected, layer.adjustment != nil {
-            return "“\(layer.name)” is an adjustment layer, with no pixels to paint. Paint on its mask instead."
+            return L10n.format("“%@” is an adjustment layer, with no pixels to paint. Paint on its mask instead.", layer.name)
         }
         if selection?.isEmpty == true {
             return L10n.format("Nothing is selected, so there’s nowhere to paint. Choose Select › Deselect (%@) to paint anywhere.", ShortcutSettings.shared.keyLabel("d", 1, menu: true))
@@ -35,11 +38,13 @@ extension EditorSession {
     func makeRasterEdit(for layer: ImageLayer, settings: BrushSettings = BrushSettings(), growsMask: Bool = false,
                         coverage: SelectionClip? = nil) throws -> BrushStroke {
         guard let document else { throw ProjectError.tooLarge }
+        guard allowsLayerEdit(layer.id, .content), isMaskSelected || layer.asset != nil || !effectiveLocks(for: layer.id).contains(.transparency) else { throw EditRefusal.locked }
         let stroke = try BrushStroke(layer: layer, mask: isMaskSelected, settings: settings, canvas: document.size, growsMask: growsMask)
         let used = document.layers.filter { $0.id != layer.id }.reduce(0) { total, layer in
             let image = isMaskSelected ? layer.mask?.asset.image : layer.asset?.image
             return total + (image.map { $0.width * $0.height } ?? 0)
         }
+        stroke.locksAlpha = !isMaskSelected && effectiveLocks(for: layer.id).contains(.transparency)
         stroke.pixelLimit = DocumentLimits.documentPixelBudget - used
         stroke.selectionClip = try coverage ?? selection?.clip(canvas: document.size)
         if !isMaskSelected, layer.mask != nil {
@@ -53,6 +58,10 @@ extension EditorSession {
         if tool == .blur, blurMode != .blur { beginWarp(at: point); return }
         guard tool == .brush || tool == .blur || (tool.isBrushTool && !isMaskSelected) else { return }
         guard canPaint, let layer = activeLayer, let document else { brushError = paintRefusal; return }
+        if !isMaskSelected, tool == .brush, brushMode == .erase, effectiveLocks(for: layer.id).contains(.transparency) {
+            brushError = L10n.text("Transparency is locked. Unlock it to erase.")
+            return
+        }
         var sourceOffset: CGSize?
         if tool == .cloneStamp {
             guard let offset = cloneStrokeOffset(at: point) else {
@@ -187,7 +196,7 @@ extension EditorSession {
     @discardableResult
     func commitRasterEdit(_ stroke: BrushStroke, name: String, owner: EditOwner? = nil,
                           alsoApply: (() -> Void)? = nil) async throws -> Bool {
-        guard !Task.isCancelled else { return false }
+        guard !Task.isCancelled, !stroke.patches.isEmpty else { return false }
         let lease: EditOwner
         if let owner {
             guard ownsEdit(owner) else { return false }
@@ -215,6 +224,7 @@ extension EditorSession {
               let current = document?.layers[index], current.asset?.image === stroke.layer.asset?.image,
               current.transform == stroke.layer.transform,
               current.mask?.asset.image === stroke.layer.mask?.asset.image else { return false }
+        let before = document
         beginEdit(name)
         if stroke.isMask {
             let bounds = result.pixelBounds.offsetBy(dx: stroke.committedBounds.minX, dy: stroke.committedBounds.minY)
@@ -236,7 +246,7 @@ extension EditorSession {
         }
         alsoApply?()
         endEdit()
-        return true
+        return document != before
     }
     /// Tools where number keys set opacity: the brush or gradient opacity, or with
     /// Move/Transform the opacity of the selected layers.
@@ -246,14 +256,7 @@ extension EditorSession {
     /// Two digits typed quickly set an exact value (4 then 5 = 45%, 0 then 5 = 5%).
     func typeOpacityDigit(_ digit: Int, at time: TimeInterval = ProcessInfo.processInfo.systemUptime) {
         guard usesOpacityKeys, brushStroke == nil, !isProjectBusy, (0...9).contains(digit) else { return }
-        var percent = digit == 0 ? 100 : digit * 10
-        if let pending = pendingOpacityDigit, time - pending.time < 0.6 {
-            percent = max(1, pending.digit * 10 + digit)
-            pendingOpacityDigit = nil
-        } else {
-            pendingOpacityDigit = (digit, time)
-        }
-        let value = CGFloat(percent) / 100
+        let value = BrushSettings.opacityValue(digit, at: time, pending: &pendingOpacityDigit)
         switch tool {
         case .brush, .spotHealing, .cloneStamp, .blur: brushSettings.opacity = value
         case .gradient: gradientSettings.opacity = value
@@ -264,16 +267,12 @@ extension EditorSession {
     func changeBrushHardness(increase: Bool) {
         guard brushStroke == nil else { return }
         // Snap to the next step up or down, so 80% goes to 100% or 75%.
-        let quarter = brushSettings.hardness * 4
-        let step = increase ? floor(quarter + 0.001) + 1 : ceil(quarter - 0.001) - 1
-        brushSettings.hardness = min(4, max(0, step)) / 4
+        brushSettings.hardness = BrushSettings.steppedHardness(brushSettings.hardness, increase: increase)
     }
     func changeBrushSize(increase: Bool) {
         guard brushStroke == nil else { return }
         // A step of a fifth, but always at least one pixel: 2 shrunk by a fifth would otherwise round back to 2,
         // leaving the smallest brushes out of reach.
-        let current = brushSettings.diameter
-        let stepped = increase ? max(current + 1, (current * 1.2).rounded()) : min(current - 1, (current / 1.2).rounded())
-        brushSettings.diameter = min(2000, max(1, stepped))
+        brushSettings.diameter = BrushSettings.steppedDiameter(brushSettings.diameter, increase: increase, range: 1...2000)
     }
 }

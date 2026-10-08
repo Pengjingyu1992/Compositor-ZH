@@ -57,6 +57,7 @@ nonisolated final class MetalLayerEffects: Sendable {
     /// `pixels` — a layer's pixels as they are shown, with room around them for the effects — with its stroke and
     /// drop shadow composited around them. The result is the same size.
     func render(_ pixels: CGImage, effects: LayerEffects) throws -> CGImage {
+        guard !effects.usesPosterEffects else { throw ExportError.render }
         let width = pixels.width, height = pixels.height
         let count = width * height
         guard count > 0, count <= 80_000_000 else { throw ExportError.tooLarge }

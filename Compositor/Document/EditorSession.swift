@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 struct ImageLayer: Identifiable, Equatable {
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.id == rhs.id && lhs.name == rhs.name && lhs.isVisible == rhs.isVisible && lhs.transform == rhs.transform
-            && lhs.asset?.image === rhs.asset?.image && lhs.parentID == rhs.parentID && lhs.isGroup == rhs.isGroup && lhs.opacity == rhs.opacity && lhs.blendMode == rhs.blendMode && lhs.mask == rhs.mask && lhs.maskSourceID == rhs.maskSourceID && lhs.adjustment == rhs.adjustment && lhs.shape == rhs.shape && lhs.text == rhs.text && lhs.effects == rhs.effects
+            && lhs.asset?.image === rhs.asset?.image && lhs.parentID == rhs.parentID && lhs.isGroup == rhs.isGroup && lhs.opacity == rhs.opacity && lhs.blendMode == rhs.blendMode && lhs.mask == rhs.mask && lhs.maskSourceID == rhs.maskSourceID && lhs.adjustment == rhs.adjustment && lhs.shape == rhs.shape && lhs.text == rhs.text && lhs.effects == rhs.effects && lhs.fill == rhs.fill
     }
     let id: UUID
     var asset: ImportedImage?
@@ -24,6 +24,7 @@ struct ImageLayer: Identifiable, Equatable {
     /// A stroke and drop shadow drawn around the layer, kept apart from its pixels.
     var effects: LayerEffects?
     var text: LayerText?
+    var fill: LayerFill?
     nonisolated var size: CGSize { transform.size }
 
     init(asset: ImportedImage, origin: CGPoint) {
@@ -40,7 +41,7 @@ struct ImageLayer: Identifiable, Equatable {
         self.name = name
     }
 
-    init(id: UUID, asset: ImportedImage?, name: String, isVisible: Bool, transform: LayerTransform, parentID: UUID? = nil, isGroup: Bool = false, opacity: Double = 1, blendMode: LayerBlendMode = .normal, mask: LayerMask? = nil, maskSourceID: UUID? = nil, adjustment: LayerAdjustment? = nil, shape: LayerShape? = nil, effects: LayerEffects? = nil, text: LayerText? = nil) {
+    init(id: UUID, asset: ImportedImage?, name: String, isVisible: Bool, transform: LayerTransform, parentID: UUID? = nil, isGroup: Bool = false, opacity: Double = 1, blendMode: LayerBlendMode = .normal, mask: LayerMask? = nil, maskSourceID: UUID? = nil, adjustment: LayerAdjustment? = nil, shape: LayerShape? = nil, effects: LayerEffects? = nil, text: LayerText? = nil, fill: LayerFill? = nil) {
         self.id = id
         self.asset = asset
         self.name = name
@@ -56,6 +57,7 @@ struct ImageLayer: Identifiable, Equatable {
         self.shape = shape
         self.effects = effects
         self.text = text
+        self.fill = fill
     }
 }
 
@@ -134,7 +136,7 @@ final class EditorSession {
     var adjustmentOriginal: LayerAdjustment?
     var adjustmentEditingID: UUID? { didSet { resumeFileRequests() } }
     /// The layer whose effects panel is open.
-    var effectsEditing: LayerEffectSelection?
+    var effectsEditing: LayerEffectSelection? { didSet { resumeFileRequests() } }
     var effectsEditingOriginal: LayerEffects?
     var effectSelection: LayerEffectSelection?
     @ObservationIgnored var effectsPreviews = EffectsPreviewCache()
@@ -180,7 +182,7 @@ final class EditorSession {
     private var fileRequestWaiters: [CheckedContinuation<Void, Never>] = []
     var canStartProjectOperation: Bool {
         _ = showsBusy // Re-evaluate in the UI when a long operation starts or ends.
-        return selectionAmountOperation == nil && colorRange == nil && textDraft == nil && !isProjectBusy && !isImporting && brushStroke == nil && warpStroke == nil && levels == nil && !showsNewDocument && !showsImporter && renamingLayerID == nil && importError == nil && adjustmentEditingID == nil && !showsConversionSheet
+        return liquify == nil && selectionAmountOperation == nil && colorRange == nil && textDraft == nil && !isProjectBusy && !isImporting && brushStroke == nil && warpStroke == nil && levels == nil && filterEdit == nil && hueSaturation == nil && adjustmentEditingID == nil && effectsEditing == nil && !showsNewDocument && !showsImporter && renamingLayerID == nil && importError == nil && !showsConversionSheet
     }
     func waitForFileRequest() async {
         while !canStartProjectOperation {
@@ -253,6 +255,21 @@ final class EditorSession {
     /// opacity (both starting soft); the other brushes share one.
     @ObservationIgnored var parkedBrushTips: [Int: (diameter: CGFloat, hardness: CGFloat, opacity: CGFloat)] = [1: (40, 0, 1), 2: (40, 0, 1)]
     private static func tipFamily(_ tool: NavigationTool) -> Int { tool == .cloneStamp ? 1 : tool == .blur ? 2 : 0 }
+    var basicLiquifyTip: (diameter: CGFloat, hardness: CGFloat, opacity: CGFloat) {
+        get {
+            if tool == .blur { return (brushSettings.diameter, brushSettings.hardness, brushSettings.opacity) }
+            return parkedBrushTips[Self.tipFamily(.blur)] ?? (40, 0, 1)
+        }
+        set {
+            if tool == .blur {
+                brushSettings.diameter = newValue.diameter
+                brushSettings.hardness = newValue.hardness
+                brushSettings.opacity = newValue.opacity
+            } else {
+                parkedBrushTips[Self.tipFamily(.blur)] = newValue
+            }
+        }
+    }
     @ObservationIgnored var cloneOffset: CGSize?
     var maskPaintWhite = false { didSet { refreshGradient() } }
     var backgroundColor = PaletteColor.white { didSet { refreshGradient() } }
@@ -279,9 +296,17 @@ final class EditorSession {
     @ObservationIgnored var pixelClipboard: PixelClipboard?
     @ObservationIgnored var copiedLayer: CopiedLayer?
     var levels: LevelsEdit? { didSet { resumeFileRequests() } }
-    var hueSaturation: HueSaturationEdit?
+    var hueSaturation: HueSaturationEdit? { didSet { resumeFileRequests() } }
     /// The open filter (Filter menu), and the settings the next one starts from.
-    var filterEdit: FilterEdit?
+    var filterEdit: FilterEdit? { didSet { resumeFileRequests() } }
+    var batchExportDraft: BatchExportDraft?
+    var batchExportRunning = false
+    var batchExportResult: String?
+    var showsAutomation = false
+    var edgeRefinement: EdgeRefinement?
+    var fillLayerApplying = false
+    var fillLayerDraft: FillLayerDraft?
+    var liquify: LiquifyWorkspace? { didSet { resumeFileRequests() } }
     @ObservationIgnored var recovery: RecoveryCoordinator?
     var recoveryError: String?
     var filterSettings = FilterSettings()
@@ -354,7 +379,7 @@ final class EditorSession {
     @ObservationIgnored var warpStroke: WarpStroke? { didSet { resumeFileRequests() } }
 
     var canTransform: Bool {
-        guard canEditLayers else { return false }
+        guard canEditLayers, allowsSelectedLayerEdits(.position, descendants: true) else { return false }
         // Several selected layers, or a folder's contents, transform together.
         if transformsAsGroup { return !groupTransformMembers.isEmpty }
         return activeLayer?.asset != nil && activeLayer?.isGroup == false && activeLayerID.map { document?.effectiveVisibleIDs.contains($0) == true } == true
@@ -632,11 +657,15 @@ final class EditorSession {
         }
     }
     var renamingLayerID: UUID? { didSet { resumeFileRequests() } }
+    var lockRevision = UUID()
+    var layerLocks: [UUID: LayerLocks] = [:] { didSet { if oldValue != layerLocks { lockRevision = UUID() } } }
+    var lockDocumentID: UUID?
+    var showsHistory = false
     let history = DocumentHistory()
     var isModified: Bool { history.isModified }
     var canUseHistory: Bool {
         _ = showsBusy
-        return selectionAmountOperation == nil && colorRange == nil && textDraft == nil && !isProjectBusy && !isImporting && brushStroke == nil && warpStroke == nil && levels == nil && !showsNewDocument && !showsImporter && renamingLayerID == nil && importError == nil && transformEdit == nil && !showsConversionSheet
+        return liquify == nil && selectionAmountOperation == nil && colorRange == nil && textDraft == nil && !isProjectBusy && !isImporting && brushStroke == nil && warpStroke == nil && levels == nil && filterEdit == nil && hueSaturation == nil && adjustmentEditingID == nil && effectsEditing == nil && !showsNewDocument && !showsImporter && renamingLayerID == nil && importError == nil && transformEdit == nil && !showsConversionSheet
     }
     var canUndo: Bool { canUseHistory && (history.canUndo || gradientEdit != nil) }
     var canRedo: Bool { canUseHistory && history.canRedo }
@@ -651,6 +680,12 @@ final class EditorSession {
 
     func redo() {
         guard canRedo, let snapshot = history.redo() else { return }
+        restore(snapshot)
+        recovery?.schedule()
+    }
+
+    func jumpHistory(to revision: UUID) {
+        guard canUseHistory, gradientEdit == nil, let snapshot = history.jump(to: revision) else { return }
         restore(snapshot)
         recovery?.schedule()
     }
@@ -672,6 +707,12 @@ final class EditorSession {
     }
 
     func endEdit() {
+        if history.editDepth == 1, let before = history.pendingSnapshot,
+           violatesLayerLocks(before: before.document, after: document) {
+            document = before.document
+            activeLayerID = before.activeLayerID
+            brushError = L10n.text("The operation was canceled because a layer or its folder is locked.")
+        }
         let revision = history.currentRevision
         history.end(document: document, selection: activeLayerID)
         if revision != history.currentRevision { recovery?.schedule() }
@@ -709,7 +750,7 @@ final class EditorSession {
     }
 
     func deleteLayer(_ id: UUID) {
-        guard canEditLayers, document?.layers.contains(where: { $0.id == id }) == true else { return }
+        guard canEditLayers, allowsLayerEdit(id, .structure), document?.layers.contains(where: { $0.id == id }) == true else { return }
         guard !deleteWithLiveMaskChoice(id) else { return }
         finishDeletingLayer(id, baked: [:])
     }
@@ -721,7 +762,7 @@ final class EditorSession {
     /// Deletes every selected layer as one undo step (a selected folder takes its contents); with one
     /// layer selected, just that one.
     func deleteSelectedLayers() {
-        guard canEditLayers, let document else { return }
+        guard canEditLayers, allowsSelectedLayerEdits(.structure, descendants: true), let document else { return }
         // Captured first: deleting moves the active layer, which resets the selection.
         let ids = document.layers.map(\.id).filter(selectedLayerIDs.contains)
         guard ids.count > 1 else { deleteActiveLayer(); return }
@@ -731,14 +772,14 @@ final class EditorSession {
 
     func renameLayer(_ id: UUID, to name: String) {
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !isProjectBusy, !isImporting, !name.isEmpty, let index = document?.layers.firstIndex(where: { $0.id == id }) else { return }
+        guard !isProjectBusy, !isImporting, !effectiveLocks(for: id).contains(.all), !name.isEmpty, let index = document?.layers.firstIndex(where: { $0.id == id }) else { return }
         beginEdit("Rename Layer")
         defer { endEdit() }
         document?.layers[index].name = name
     }
 
     func toggleLayerVisibility(_ id: UUID) {
-        guard canEditLayers, let index = document?.layers.firstIndex(where: { $0.id == id }) else { return }
+        guard canEditLayers, allowsLayerEdit(id, .appearance), let index = document?.layers.firstIndex(where: { $0.id == id }) else { return }
         beginEdit(document?.layers[index].isVisible == true ? "Hide Layer" : "Show Layer")
         defer { endEdit() }
         document?.layers[index].isVisible.toggle()
@@ -747,14 +788,14 @@ final class EditorSession {
     /// Photoshop's eye swipe: pressing an eye shows or hides that layer, and dragging over other eyes gives them the
     /// same state, all as one undo step (`beginEdit` at the press, `endEdit` when the button comes up).
     func beginVisibilitySwipe(_ id: UUID) -> Bool? {
-        guard canEditLayers, let layer = document?.layers.first(where: { $0.id == id }) else { return nil }
+        guard canEditLayers, allowsLayerEdit(id, .appearance), let layer = document?.layers.first(where: { $0.id == id }) else { return nil }
         let visible = !layer.isVisible
         beginEdit(visible ? "Show Layer" : "Hide Layer")
         setVisibilityInSwipe(id, visible: visible)
         return visible
     }
     func setVisibilityInSwipe(_ id: UUID, visible: Bool) {
-        guard let index = document?.layers.firstIndex(where: { $0.id == id }),
+        guard allowsLayerEdit(id, .appearance), let index = document?.layers.firstIndex(where: { $0.id == id }),
               document?.layers[index].isVisible != visible else { return }
         document?.layers[index].isVisible = visible
     }
@@ -842,7 +883,7 @@ final class EditorSession {
                                                                          remainingPixels: DocumentLimits.documentPixelBudget - usedPixels)
                     insert(asset, centeredAt: point)
                 } else if PSDReader.matches(url) {
-                    beginPSDReading(title: "Open “\(url.lastPathComponent)”?", confirmTitle: "Import")
+                    beginPSDReading(title: L10n.format("Open “%@”?", url.lastPathComponent), confirmTitle: "Import")
                     let imported: PSDImport
                     do {
                         let parsed = try await ImageImporter.shared.loadPhotoshop(url, remainingPixels: DocumentLimits.documentPixelBudget - usedPixels)

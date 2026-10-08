@@ -1,5 +1,8 @@
 """Exercise the packaged CLI and stdio MCP against disposable synthetic projects."""
 import argparse
+import base64
+import struct
+import zlib
 import json
 from pathlib import Path
 import subprocess
@@ -56,7 +59,7 @@ try:
     initialized = request('initialize', {'protocolVersion': '2025-11-25', 'capabilities': {}, 'clientInfo': {'name': 'Regression', 'version': '1'}})
     check('MCP version negotiation', initialized['protocolVersion'] == '2025-11-25')
     definitions = request('tools/list', {})['tools']
-    check('MCP tools', len(definitions) == 10 and 'close_project' in [t['name'] for t in definitions])
+    check('MCP tools', len(definitions) == 11 and 'close_project' in [t['name'] for t in definitions])
     tool('new_project', {'width': True, 'height': 64}, error=True)
     created = tool('new_project', {'width': 160, 'height': 120})
     handle, state = created['handle'], created['state']
@@ -85,6 +88,42 @@ try:
     tool('save_project', {'handle': handle, 'expectedRevision': state['revision'], 'path': str(project)}, error=True)
     tool('export_project', {'handle': handle, 'expectedRevision': state['revision'], 'path': str(root / 'mcp.png')})
     tool('export_project', {'handle': handle, 'expectedRevision': state['revision'], 'path': str(root / 'mcp.png')}, error=True)
+    def chunk(kind, data):
+        return struct.pack('>I', len(data)) + kind + data + struct.pack('>I', zlib.crc32(kind + data))
+    rows = b''.join(b'\0' + b''.join(bytes([x * 4, y * 4, 180, 255]) for x in range(64)) for y in range(48))
+    png = b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', 64, 48, 8, 6, 0, 0, 0)) + chunk(b'IDAT', zlib.compress(rows)) + chunk(b'IEND', b'')
+    payload = base64.b64encode(png).decode()
+    text_style = {'content': '叠绘 POSTER 中文混排', 'fontName': 'PingFangSC-Regular', 'fontSize': 20,
+                  'red': 1, 'green': 1, 'blue': 1, 'alignment': 'Justified', 'vertical': False,
+                  'tracking': 0, 'leading': 0, 'boxSize': [140, 70]}
+    workflow = [
+        {'kind': 'addImage', 'imageData': payload, 'name': 'Synthetic Subject'},
+        {'kind': 'setMask', 'maskData': payload},
+        {'kind': 'refineEdges', 'edge': {'selectSubject': False, 'feather': 1, 'shift': -1,
+          'contrast': 10, 'decontaminate': 0, 'createsCopy': True,
+          'strokes': [{'mode': 'Hide', 'diameter': 12, 'strength': 0.8, 'points': [[2, 2], [15, 2]]}]}},
+        {'kind': 'filter', 'filter': 'Color Halftone', 'halftone': {'size': 6, 'cyan': 15, 'magenta': 75,
+          'yellow': 0, 'black': 45, 'shape': 'Round', 'strength': 60}},
+        {'kind': 'filter', 'filter': 'Selective Color', 'selectiveColor': {'adjustments': {'Blues': [0, 20, 0, 0]}, 'relative': True}},
+        {'kind': 'filter', 'filter': 'Channel Mixer', 'channelMixer': {'coefficients': [0, 0, 100, 0, 0, 100, 0, 0, 100, 0, 0, 0]}},
+        {'kind': 'addText', 'text': text_style}
+    ]
+    before_workflow = state.copy()
+    state = edit(workflow)['state']
+    check('Full poster workflow editable text', state['layers'][-1]['text']['content'] == text_style['content'])
+    poster_options = {'longSides': [0, 80], 'format': 'PNG', 'quality': 0.9, 'prefix': 'Poster-', 'individualLayers': False}
+    exported = tool('batch_export_project', {'handle': handle, 'expectedRevision': state['revision'],
+                    'path': str(root), 'options': poster_options})
+    check('MCP multi-size export', len(list(Path(exported['output']).glob('*.png'))) == 2)
+    selected_options = dict(poster_options, individualLayers=True)
+    selected = tool('batch_export_project', {'handle': handle, 'expectedRevision': state['revision'],
+                    'path': str(root), 'options': selected_options, 'layerIDs': [state['layers'][-1]['id']]})
+    check('MCP selected layer export', len(list(Path(selected['output']).glob('*.png'))) == 2)
+    tool('batch_export_project', {'handle': handle, 'expectedRevision': state['revision'],
+         'path': str(root), 'options': selected_options, 'layerIDs': ['invalid-id']}, error=True)
+    tool('save_project', {'handle': handle, 'expectedRevision': state['revision'], 'path': str(root / 'workflow.comp')})
+    state = tool('undo', {'handle': handle, 'expectedRevision': state['revision']})
+    check('Full workflow one-step undo', state['layers'] == before_workflow['layers'])
     check('MCP closes project', tool('close_project', {'handle': handle})['closed'] == handle)
     tool('project_state', {'handle': handle}, error=True)
 finally:
@@ -113,4 +152,8 @@ commands.write_text(json.dumps(example + [{'kind': 'opacity', 'opacity': 5}]))
 cli('batch', project, commands, root / 'failed.comp', inspected['sourceFingerprint'], fails=True)
 check('No failed output', not (root / 'failed.comp').exists())
 check('Failed batch keeps source', cli('inspect', project)['sourceFingerprint'] == inspected['sourceFingerprint'])
+options_file = root / 'export-options.json'
+options_file.write_text(json.dumps(poster_options))
+cli_export = cli('batch-export', root / 'workflow.comp', options_file, root)
+check('CLI multi-size export', len(list(Path(cli_export['output']).glob('*.png'))) == 2)
 print(f'CLI/MCP: {checks} checks, 0 failures')

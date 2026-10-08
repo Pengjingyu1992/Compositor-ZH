@@ -27,19 +27,29 @@ struct BatchExportSheet: View {
             if options.format == .jpeg { HStack { Text("Quality"); Slider(value: $options.quality, in: 0...1) } }
             Text("Files use prefix + layer/project name + width × height. Each export creates a new folder; existing files are preserved. JPEG uses a white background.").font(.caption).foregroundStyle(.secondary)
             if let path = session.batchExportResult {
-                Text(L10n.format("Exported to %@", path)).font(.caption).textSelection(.enabled)
+                Text(path).font(.caption).textSelection(.enabled)
+            }
+            if session.batchExportRunning {
+                ProgressView(value: Double(session.batchExportCompleted), total: Double(max(1, session.batchExportTotal)))
+                Text(L10n.format("Exporting %lld of %lld files", session.batchExportCompleted, session.batchExportTotal)).font(.caption)
             }
             HStack {
                 if session.batchExportRunning { ProgressView().controlSize(.small) }
                 Spacer()
-                Button("Close") { session.cancelBatchExport() }.disabled(session.batchExportRunning).configuredNativeShortcut(.escape)
+                if session.batchExportRunning {
+                    Button("Cancel Export") { session.stopBatchExport() }.configuredNativeShortcut(.escape)
+                } else {
+                    Button("Close") { session.cancelBatchExport() }.configuredNativeShortcut(.escape)
+                }
                 Button("Choose Folder and Export…") {
                     let panel = NSOpenPanel(); panel.canChooseFiles = false; panel.canChooseDirectories = true; panel.allowsMultipleSelection = false; panel.canCreateDirectories = true
+                    let exportOptions = resolved
                     panel.begin { response in
-                        if response == .OK, let url = panel.url { Task { await session.exportBatch(resolved, folder: url) } }
+                        if response == .OK, let url = panel.url { session.startBatchExport(exportOptions, folder: url, draftID: draft.id) }
                     }
                 }.disabled(!resolved.isValid || session.batchExportRunning)
             }
-        }.padding(24).frame(width: 520)
+        }.padding(24).frame(width: 520).interactiveDismissDisabled(session.batchExportRunning)
+            .onDisappear { session.stopBatchExport(); session.cancelBatchExport() }
     }
 }

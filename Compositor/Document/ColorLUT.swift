@@ -1,7 +1,7 @@
 import AppKit
 import UniformTypeIdentifiers
 
-nonisolated enum LUTSpace: String, CaseIterable, Sendable { case sRGB = "Encoded sRGB", linear = "Linear sRGB" }
+nonisolated enum LUTSpace: String, Codable, CaseIterable, Sendable { case sRGB = "Encoded sRGB", linear = "Linear sRGB" }
 nonisolated struct ColorLUTSettings: Equatable, Sendable {
     var table: ColorLUT?
     var strength: Double = 100

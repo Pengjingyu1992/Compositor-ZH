@@ -31,7 +31,7 @@ struct AutomationSheet: View {
                 Spacer()
                 Button("Close") { session.showsAutomation = false }.disabled(running).configuredNativeShortcut(.escape)
                 Button("Run Batch") {
-                    guard let data = source.data(using: .utf8), data.count <= 4 * 1024 * 1024 else { return }
+                    guard let data = source.data(using: .utf8), data.count <= 32 * 1024 * 1024 else { return }
                     do {
                         let request = try JSONDecoder().decode(PosterBatchRequest.self, from: data)
                         running = true

@@ -1,7 +1,7 @@
 import AppKit
 
 nonisolated enum PosterCommandKind: String, Codable, Sendable {
-    case addFill, editFill, addText, transform, opacity, blendMode, remove, invert, fillPixels, filter, effects, reorder
+    case addFill, editFill, addImage, addText, editText, transform, opacity, blendMode, visibility, remove, invert, fillPixels, filter, effects, reorder, setMask, refineEdges
 }
 nonisolated struct PosterCommand: Codable, Sendable {
     var kind: PosterCommandKind
@@ -17,6 +17,15 @@ nonisolated struct PosterCommand: Codable, Sendable {
     var amount: Double?
     var effects: LayerEffects?
     var index: Int?
+    var imageData: Data?
+    var maskData: Data?
+    var clearMask: Bool?
+    var visible: Bool?
+    var halftone: ColorHalftoneSettings?
+    var channelMixer: ChannelMixerSettings?
+    var selectiveColor: PosterSelectiveColor?
+    var lut: PosterLUT?
+    var edge: PosterEdgeOptions?
 }
 nonisolated struct PosterBatchRequest: Codable, Sendable {
     let documentID: UUID
@@ -68,7 +77,7 @@ extension EditorSession {
     }
 
     private func executePosterCommand(_ command: PosterCommand) async throws {
-        if let id = command.layerID {
+        if let id = command.layerID ?? activeLayerID {
             guard document?.layers.contains(where: { $0.id == id }) == true else { throw PosterCommandError.invalid }
             selectLayer(id); isMaskSelected = false
         }
@@ -86,6 +95,15 @@ extension EditorSession {
             guard var draft = fillLayerDraft else { throw PosterCommandError.invalid }
             draft.style = fill; await applyFillLayer(draft)
             guard fillLayerDraft == nil else { cancelFillLayer(); throw PosterCommandError.invalid }
+        case .addImage:
+            guard let data = command.imageData, canInsertFillLayer,
+                  command.name.map({ !$0.isEmpty && $0.count <= 200 }) ?? true,
+                  command.transform?.isValid != false else { throw PosterCommandError.invalid }
+            let asset = try await ImageImporter.shared.decode(data, name: command.name ?? L10n.text("Image"),
+                remainingPixels: DocumentLimits.documentPixelBudget - sourcePixelCount)
+            addPixelLayer(asset.image, at: command.transform?.origin ?? .zero, name: asset.name, editName: "Import Images", dropsSelection: false)
+            guard let index = document?.layers.firstIndex(where: { $0.id == activeLayerID }) else { throw PosterCommandError.invalid }
+            if let transform = command.transform { document?.layers[index].transform = transform }
         case .addText:
             guard let style = command.text, style.isValid, canInsertFillLayer else { throw PosterCommandError.invalid }
             let image = try Self.textImage(style)
@@ -93,10 +111,20 @@ extension EditorSession {
             if let transform = command.transform, let index = document?.layers.firstIndex(where: { $0.id == activeLayerID }) {
                 guard transform.isValid else { throw PosterCommandError.invalid }; document?.layers[index].transform = transform
             }
+        case .editText:
+            guard let style = command.text, style.isValid else { throw PosterCommandError.invalid }
+            guard activeLayer?.liveText != nil, allowsLayerEdit(activeLayerID, .content) else { throw PosterCommandError.locked }
+            editActiveText()
+            guard var draft = textDraft else { throw PosterCommandError.invalid }
+            draft.style = style
+            guard applyText(draft) else { throw PosterCommandError.invalid }
         case .transform:
             guard let transform = command.transform, transform.isValid, let id = activeLayerID,
                   let index = document?.layers.firstIndex(where: { $0.id == id }) else { throw PosterCommandError.invalid }
             guard allowsLayerEdit(id, .position), document?.layers[index].isGroup == false else { throw PosterCommandError.locked }
+            if let layer = activeLayer {
+                document?.layers[index].mask?.placement = layer.mask?.placement(movingLayer: layer.transform, to: transform)
+            }
             document?.layers[index].transform = transform
         case .opacity:
             guard let value = command.opacity, value.isFinite, (0...1).contains(value) else { throw PosterCommandError.invalid }
@@ -106,6 +134,10 @@ extension EditorSession {
             guard let mode = command.blendMode else { throw PosterCommandError.invalid }
             guard allowsLayerEdit(activeLayerID, .appearance), activeLayer?.isGroup == false else { throw PosterCommandError.locked }
             setLayerBlendMode(mode)
+        case .visibility:
+            guard let visible = command.visible, let layer = activeLayer else { throw PosterCommandError.invalid }
+            guard allowsLayerEdit(layer.id, .appearance) else { throw PosterCommandError.locked }
+            if layer.isVisible != visible { toggleLayerVisibility(layer.id) }
         case .remove:
             guard allowsSelectedLayerEdits(.structure, descendants: true) else { throw PosterCommandError.locked }
             deleteSelectedLayers()
@@ -120,13 +152,40 @@ extension EditorSession {
                   !kind.isAutomatic, kind != .cameraRaw else { throw PosterCommandError.invalid }
             beginFilter(kind)
             guard let edit = filterEdit else { throw PosterCommandError.locked }
+            defer { if filterEdit === edit { cancelFilter() } }
+            if let value = command.halftone {
+                guard kind == .colorHalftone, value.isValid else { throw PosterCommandError.invalid }
+                edit.settings.colorHalftone = value
+            }
+            if let value = command.channelMixer {
+                guard kind == .channelMixer, value.coefficients.count == 12,
+                      value.coefficients.allSatisfy({ $0.isFinite && (-200...200).contains($0) }) else { throw PosterCommandError.invalid }
+                edit.settings.channelMixer = value
+            }
+            if let value = command.selectiveColor {
+                guard kind == .selectiveColor else { throw PosterCommandError.invalid }
+                edit.settings.selectiveColor = try value.settings()
+            }
+            if let value = command.lut {
+                guard kind == .colorLUT else { throw PosterCommandError.invalid }
+                edit.settings.colorLUT = try value.settings()
+            }
+            if kind == .colorLUT, command.lut == nil { throw PosterCommandError.invalid }
             if let amount = command.amount {
                 guard amount.isFinite else { throw PosterCommandError.invalid }
                 switch kind {
-                case .colorHalftone: edit.settings.colorHalftone.size = amount
-                case .mosaic: edit.settings.mosaicSize = amount
-                case .gaussianBlur: edit.settings.radius = amount
-                case .grain: edit.settings.grain.amount = amount
+                case .colorHalftone:
+                    guard (2...128).contains(amount) else { throw PosterCommandError.invalid }
+                    edit.settings.colorHalftone.size = amount
+                case .mosaic:
+                    guard (1...512).contains(amount) else { throw PosterCommandError.invalid }
+                    edit.settings.mosaicSize = amount
+                case .gaussianBlur:
+                    guard (0.1...250).contains(amount) else { throw PosterCommandError.invalid }
+                    edit.settings.radius = amount
+                case .grain:
+                    guard (0...100).contains(amount) else { throw PosterCommandError.invalid }
+                    edit.settings.grain.amount = amount
                 default: throw PosterCommandError.unsupported
                 }
             }
@@ -142,6 +201,11 @@ extension EditorSession {
             guard allowsLayerEdit(layer.id, .structure), allowsLayerEdit(layer.parentID, .structure) || layer.parentID == nil else { throw PosterCommandError.locked }
             guard document?.layers[index].parentID == layer.parentID else { throw PosterCommandError.invalid }
             document?.layers.remove(at: old); document?.layers.insert(layer, at: index)
+        case .setMask:
+            try await setPosterMask(command.maskData, clear: command.clearMask ?? false)
+        case .refineEdges:
+            guard let options = command.edge else { throw PosterCommandError.invalid }
+            try await runPosterEdgeCommand(options)
         }
         if let error = brushError { throw PosterCommandError.failed(error) }
     }
@@ -150,9 +214,17 @@ extension EditorSession {
         ["documentID": document?.id.uuidString ?? "", "revision": history.currentRevision.uuidString,
          "lockRevision": lockRevision.uuidString, "width": document?.width ?? 0, "height": document?.height ?? 0,
          "layers": (document?.layers ?? []).map { layer -> [String: Any] in
-             ["id": layer.id.uuidString, "name": layer.name, "visible": layer.isVisible, "isGroup": layer.isGroup,
+             var value: [String: Any] = ["id": layer.id.uuidString, "name": layer.name, "visible": layer.isVisible, "isGroup": layer.isGroup,
               "opacity": layer.opacity, "blendMode": layer.blendMode.rawValue,
-              "locks": effectiveLocks(for: layer.id).rawValue, "editableFill": layer.liveFill != nil, "editableText": layer.liveText != nil]
+              "locks": effectiveLocks(for: layer.id).rawValue, "editableFill": layer.liveFill != nil, "editableText": layer.liveText != nil,
+              "hasMask": layer.mask != nil]
+             func json<T: Encodable>(_ item: T) -> Any? { (try? JSONEncoder().encode(item)).flatMap { try? JSONSerialization.jsonObject(with: $0) } }
+             value["transform"] = json(layer.transform)
+             value["fill"] = layer.liveFill.flatMap { json($0.style) }
+             value["text"] = layer.liveText.flatMap { json($0.style) }
+             value["effects"] = layer.effects.flatMap { json($0) }
+             value["parentID"] = layer.parentID?.uuidString
+             return value
          }]
     }
 }

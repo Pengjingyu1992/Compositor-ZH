@@ -302,6 +302,9 @@ final class EditorSession {
     var batchExportDraft: BatchExportDraft?
     var batchExportRunning = false
     var batchExportResult: String?
+    var batchExportCompleted = 0
+    var batchExportTotal = 0
+    @ObservationIgnored var batchExportTask: Task<Void, Never>?
     var showsAutomation = false
     var edgeRefinement: EdgeRefinement?
     var fillLayerApplying = false

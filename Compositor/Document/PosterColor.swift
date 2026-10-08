@@ -1,7 +1,7 @@
 import AppKit
 
-nonisolated enum HalftoneDot: String, CaseIterable, Sendable { case circle = "Round", square = "Square", line = "Line" }
-nonisolated struct ColorHalftoneSettings: Equatable, Sendable {
+nonisolated enum HalftoneDot: String, Codable, CaseIterable, Sendable { case circle = "Round", square = "Square", line = "Line" }
+nonisolated struct ColorHalftoneSettings: Codable, Equatable, Sendable {
     var size: Double = 10
     var cyan: Double = 15
     var magenta: Double = 75
@@ -9,6 +9,10 @@ nonisolated struct ColorHalftoneSettings: Equatable, Sendable {
     var black: Double = 45
     var shape: HalftoneDot = .circle
     var strength: Double = 100
+    var isValid: Bool {
+        size.isFinite && (2...128).contains(size) && strength.isFinite && (0...100).contains(strength)
+        && [cyan, magenta, yellow, black].allSatisfy { $0.isFinite && (-180...180).contains($0) }
+    }
     func apply(_ image: CGImage, scale: CGFloat) throws -> CGImage {
         guard ImageAdjustmentPixels.clamp(strength, 0...100, 100) > 0 else { return image }
         let source = try BrushRaster.context(width: image.width, height: image.height, mask: false)
@@ -25,7 +29,7 @@ nonisolated struct ColorHalftoneSettings: Equatable, Sendable {
     }
 }
 
-nonisolated struct ChannelMixerSettings: Equatable, Sendable {
+nonisolated struct ChannelMixerSettings: Codable, Equatable, Sendable {
     var coefficients: [Double] = [100, 0, 0, 0, 0, 100, 0, 0, 0, 0, 100, 0]
     func apply(_ image: CGImage) throws -> CGImage {
         guard coefficients.count == 12, coefficients.allSatisfy({ $0.isFinite && (-200...200).contains($0) }) else { throw ProjectError.invalid }
@@ -37,7 +41,7 @@ nonisolated struct ChannelMixerSettings: Equatable, Sendable {
     }
 }
 
-nonisolated enum SelectiveRange: String, CaseIterable, Sendable {
+nonisolated enum SelectiveRange: String, Codable, CaseIterable, Sendable {
     case reds = "Reds", yellows = "Yellows", greens = "Greens", cyans = "Cyans", blues = "Blues", magentas = "Magentas"
     case whites = "Whites", neutrals = "Neutrals", blacks = "Blacks"
 }

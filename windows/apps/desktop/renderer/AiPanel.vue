@@ -9,7 +9,7 @@
 
 import { computed, onMounted, ref, watch } from 'vue';
 import { messages } from '../../../packages/locales';
-import { checkOperations, styledStyle, DEFAULT_ENDPOINT, DEFAULT_MODEL } from '../../../packages/platform/ai-assistant.mjs';
+import { checkOperations, canonicalOperation, styledStyle, DEFAULT_ENDPOINT, DEFAULT_MODEL } from '../../../packages/platform/ai-assistant.mjs';
 // A text or shape layer is an image plus the parameters it came from, so the
 // layer is rendered here with the same code the editor uses for its own text
 // and shape tools.
@@ -64,10 +64,15 @@ function describe(op: Record<string, unknown>) {
     if (op.id) parts.push(nameOf(op.id));
     return parts.join(' ');
   }
-  if (op.id) parts.push(nameOf(op.id));
+  if (Array.isArray(op.ids)) parts.push(op.ids.map(nameOf).join(', '));
+  else if (op.id) parts.push(nameOf(op.id));
   if (op.field) parts.push(`${op.field}=${JSON.stringify(op.value)}`);
   if (op.filter) parts.push(String(op.filter));
   if (op.effect) parts.push(String(op.effect));
+  if (op.operation) parts.push(String(op.operation), `(${String(op.reference)})`);
+  if (op.axis) parts.push(String(op.axis));
+  if (op.delta) parts.push(JSON.stringify(op.delta));
+  if (op.width) parts.push(`${op.width}×${op.height}`);
   if (op.name) parts.push(`→ ${op.name}`);
   if (op.direction) parts.push(op.direction === 1 ? '↑' : '↓');
   return parts.join(' ');
@@ -136,9 +141,11 @@ async function send() {
       return;
     }
     for (const operation of checked.accepted) {
-      let prepared = operation;
+      // The editor matches ids exactly, so anything the model re-cased is put
+      // back to the spelling the project uses before it is sent.
+      let prepared = canonicalOperation(operation, layers.value) as Record<string, unknown>;
       if (operation.kind === 'styled') {
-        const built = await buildStyled(operation);
+        const built = await buildStyled(prepared);
         if (built.error) { say('bad', `${describe(operation)} — ${t.value.reasons[built.error] ?? built.error}`); continue; }
         prepared = built.operation as Record<string, unknown>;
       }

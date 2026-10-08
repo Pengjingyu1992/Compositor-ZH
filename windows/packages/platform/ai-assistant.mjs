@@ -12,13 +12,35 @@ export const DEFAULT_MODEL = 'deepseek-flash';
 export const MAX_REQUEST = 4000;
 export const MAX_OPERATIONS = 20;
 
-// Operations the assistant may emit. Deliberately narrower than what the
-// editor accepts: the assistant edits layers, it never opens, saves, imports,
-// or writes files, so those kinds are simply not on the menu.
+// Operations the assistant may emit. It edits layers; it never opens, saves,
+// imports, or writes files, so those kinds are not on the menu at all.
 export const ASSISTANT_OPERATIONS = [
-  'appearance', 'rename', 'transform', 'reorder', 'duplicate', 'delete',
-  'parent', 'add', 'styled', 'filter', 'adjustment', 'effect'
+  'appearance', 'rename', 'transform', 'reorder', 'duplicate', 'delete', 'parent',
+  'add', 'styled', 'filter', 'adjustment', 'effect',
+  'lock', 'rasterize', 'applyMask', 'ungroup', 'transformMask',
+  'group', 'arrange', 'moveLayers', 'transformLayers',
+  'canvas', 'imageSize', 'flipCanvas'
 ];
+
+// What the editor also has, and why the assistant is deliberately not offered
+// it. Each entry says what the model would have to supply and cannot. The
+// prompt states these too, so a request for one is answered honestly rather
+// than by quietly doing nothing.
+export const EXCLUDED_OPERATIONS = {
+  selection: 'a selection is made by pointing at the canvas',
+  selectionMask: 'it converts an existing selection, which the model cannot see',
+  fill: 'it needs a selection; without one it would fill the whole layer',
+  gradient: 'it needs a selection and two points on the canvas',
+  clear: 'it needs a selection; without one it would erase the whole layer',
+  bucket: 'it seeds from a pixel of the canvas',
+  stroke: 'it is a freehand path drawn over the canvas',
+  pixels: 'it is raw pixel data, which the model cannot produce',
+  guides: 'guides are dragged out of the rulers',
+  merge: 'it needs the layers composited into one image, which is the editor\'s own merge path',
+  batch: 'the panel already applies the operations in order',
+  duplicateTree: 'duplicate already copies a group together with its children',
+  importPixels: 'add with type "pixels" covers it'
+};
 
 // Fields the editor accepts per operation, with the shape of their value.
 // This mirrors packages/comp-bridge/edit.mjs; a value that does not match is
@@ -36,6 +58,84 @@ function pair(v) {
 }
 
 function finite(v, lo, hi) { return typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi; }
+
+// The editor validates all of this again; checking here is what lets the panel
+// say which part of a request it could not carry out.
+const ARRANGE_OPERATIONS = ['left', 'hcenter', 'right', 'top', 'vcenter', 'bottom', 'hspread', 'vspread', 'hgap', 'vgap'];
+const ARRANGE_REFERENCES = ['selection', 'canvas', 'keyObject'];
+const LOCK_FIELDS = ['content', 'position', 'appearance', 'alpha'];
+const TRANSFORM_FIELDS = ['origin', 'size', 'rotation', 'flipX', 'flipY', 'sampling'];
+const SURFACE_LIMIT = 30000;
+
+// Exported so the prompt, the tests and the documentation all read the same
+// enumerations rather than restating them.
+export { ARRANGE_OPERATIONS, ARRANGE_REFERENCES, LOCK_FIELDS, TRANSFORM_FIELDS };
+
+const named = (v) => v === undefined || (typeof v === 'string' && v.length > 0 && v.length <= 256);
+const surface = (op) => finite(op.width, 1, SURFACE_LIMIT) && finite(op.height, 1, SURFACE_LIMIT);
+
+// Operations that name one layer or a set of them, checked after the ids have
+// been resolved. Document-wide operations name none.
+const CHECKS = {
+  lock: op => LOCK_FIELDS.includes(op.field) && typeof op.value === 'boolean' ? '' : 'value',
+  transformMask: op => TRANSFORM_FIELDS.includes(op.field) && op.value !== undefined ? '' : 'value',
+  transformLayers: op => TRANSFORM_FIELDS.includes(op.field) && op.value !== undefined ? '' : 'value',
+  rasterize: () => '',
+  applyMask: () => '',
+  ungroup: () => '',
+  group: op => named(op.name) ? '' : 'value',
+  moveLayers: op => pair(op.delta) ? '' : 'value',
+  arrange: op => !ARRANGE_OPERATIONS.includes(op.operation) || !ARRANGE_REFERENCES.includes(op.reference) ? 'value'
+    : op.reference === 'keyObject' && typeof op.keyID !== 'string' ? 'value' : '',
+  canvas: op => surface(op) && (op.x === undefined || finite(op.x, -SURFACE_LIMIT, SURFACE_LIMIT)) && (op.y === undefined || finite(op.y, -SURFACE_LIMIT, SURFACE_LIMIT)) ? '' : 'value',
+  imageSize: op => surface(op) ? '' : 'value',
+  flipCanvas: op => ['horizontal', 'vertical'].includes(op.axis) ? '' : 'value'
+};
+
+// Operations that act on a whole set of layers rather than one.
+const SET_OPERATIONS = ['group', 'arrange', 'moveLayers', 'transformLayers'];
+// Operations that act on the document and name no layers.
+const DOCUMENT_OPERATIONS = ['canvas', 'imageSize', 'flipCanvas'];
+
+// The editor matches ids exactly (comp-bridge/edit.mjs: `m.layers.find(l => l.id
+// === op.id)`), so an id the model re-cased would come back as an opaque
+// 'stale'. Every id the operation names is mapped back to the spelling the
+// project uses. `id` is always present in the result, including when it is
+// undefined: the editor's own edit() fills in the selected layer when that key
+// is missing, which would retarget the operation.
+export function canonicalOperation(operation, layers) {
+  const exact = new Map(layers.map(l => [l.id.toUpperCase(), l.id]));
+  const one = id => typeof id === 'string' ? exact.get(id.toUpperCase()) : undefined;
+  const copy = { ...operation, id: one(operation.id) };
+  if (Array.isArray(operation.ids)) copy.ids = operation.ids.map(one).filter(Boolean);
+  if (operation.parentID !== undefined) copy.parentID = one(operation.parentID);
+  if (operation.maskSourceID !== undefined) copy.maskSourceID = one(operation.maskSourceID);
+  if (operation.keyID !== undefined) copy.keyID = one(operation.keyID);
+  return copy;
+}
+
+// The layer ids an operation names, whether it names one or a set.
+function namedIds(operation) {
+  if (Array.isArray(operation.ids)) return operation.ids;
+  return operation.id === undefined ? [] : [operation.id];
+}
+
+// A set operation needs at least one layer, and every id in it has to exist.
+function checkSet(operation, layers) {
+  const ids = namedIds(operation);
+  if (!ids.length || ids.length > 10000) return 'layer';
+  const known = new Set(layers.map(l => l.id.toUpperCase()));
+  return ids.every(id => typeof id === 'string' && known.has(id.toUpperCase())) ? '' : 'layer';
+}
+
+// Grouping and merging also require the layers to be siblings.
+function checkSiblings(operation, layers) {
+  const ids = namedIds(operation).map(id => layers.find(l => l.id.toUpperCase() === String(id).toUpperCase()));
+  if (ids.some(l => !l)) return 'layer';
+  const parents = new Set(ids.map(l => l.parentID?.toUpperCase() ?? ''));
+  if (parents.size > 1) return 'siblings';
+  return '';
+}
 
 // The box a text or shape is rendered into. The editor needs every side to be
 // at least 16, and the renderer refuses more than 16 million pixels, so the
@@ -140,11 +240,40 @@ function schema() {
     '{"kind":"adjustment","id":"<adjustment layer id>","hue":0,"saturation":0,"lightness":0}',
     '{"kind":"effect","id":"<layer id>","effect":"shadow","opacity":0.6}',
     '{"kind":"effect","id":"<layer id>","effect":"shadow","remove":true}',
+    '{"kind":"lock","id":"<layer id>","field":"content","value":true}   // also "position", "appearance", "alpha"',
+    '{"kind":"rasterize","id":"<layer id>"}   // turns text or a shape into plain pixels',
+    '{"kind":"applyMask","id":"<layer id>"}   // bakes the mask into the pixels and drops it',
+    '{"kind":"ungroup","id":"<group id>"}',
+    '{"kind":"transformMask","id":"<layer id>","field":"origin","value":[x,y]}   // the layer must already have a mask',
+    '{"kind":"group","ids":["<layer id>","<layer id>"],"name":"new group"}   // the layers must share a parent',
+    '{"kind":"arrange","ids":[".","."],"operation":"left","reference":"selection"}',
+    '{"kind":"moveLayers","ids":["<layer id>"],"delta":[dx,dy]}',
+    '{"kind":"transformLayers","ids":[".","."],"field":"size","value":[w,h]}',
+    '{"kind":"canvas","width":1920,"height":1080}   // x, y optional; shifts all layers to match the new origin',
+    '{"kind":"imageSize","width":960,"height":540}   // resamples every layer; nearest optional',
+    '{"kind":"flipCanvas","axis":"horizontal"}   // or "vertical"',
     '',
     `Blend modes (exactly): ${BLEND_MODES.join(', ')}`,
     `Adjustment kinds (exactly): ${ADJUSTMENT_KINDS.join(', ')}`,
     `Layer effects (exactly): ${EFFECT_KINDS.join(', ')}`,
-    `Blend modes, adjustment kinds, and effects must be spelled exactly as listed.`
+    `arrange operations (exactly): ${ARRANGE_OPERATIONS.join(', ')}`,
+    `arrange references (exactly): ${ARRANGE_REFERENCES.join(', ')}`,
+    `transform fields (exactly): ${TRANSFORM_FIELDS.join(', ')}`,
+    `lock fields (exactly): ${LOCK_FIELDS.join(', ')}`,
+    'Every enumeration must be spelled exactly as listed, or the editor rejects the operation.'
+  ].join('\n');
+}
+
+// The editor offers more than the assistant is given. Saying so keeps the model
+// from promising something it cannot deliver, and from inventing a substitute
+// that appears to work but means nothing.
+function cannot() {
+  const lines = Object.entries(EXCLUDED_OPERATIONS).map(([kind, why]) => `- ${kind}: ${why}`);
+  return [
+    '',
+    'You cannot do the following, because the editor needs information that is not',
+    'in this conversation. Say so plainly if you are asked for one:',
+    ...lines
   ].join('\n');
 }
 
@@ -154,6 +283,7 @@ export function systemPrompt({ layers = [], filters = [] }) {
     'Turn the request into operations on the layers of the project described below.',
     '',
     schema(),
+    cannot(),
     filters.length ? `\nFilters (exactly): ${filters.join(', ')}` : '',
     '',
     describeLayers(layers),
@@ -203,7 +333,9 @@ export function readResponse(payload) {
 export function checkOperation(operation, layers) {
   const kind = operation?.kind;
   if (!ASSISTANT_OPERATIONS.includes(kind)) return 'operation';
-  const ids = new Set(layers.map(l => l.id.toUpperCase()));
+  const byId = new Map(layers.map(l => [l.id.toUpperCase(), l]));
+  const named = operation.id ?? namedIds(operation)[0];
+
   if (kind === 'add') {
     if (!['pixels', 'group', 'adjustment'].includes(operation.type)) return 'type';
     if (operation.type === 'adjustment' && !ADJUSTMENT_KINDS.includes(operation.adjustment)) return 'adjustment';
@@ -213,14 +345,27 @@ export function checkOperation(operation, layers) {
   // the id is only looked up when the answer supplies one.
   if (kind === 'styled') {
     if (!['text', 'shape'].includes(operation.type)) return 'type';
-    if (operation.id !== undefined && (typeof operation.id !== 'string' || !ids.has(operation.id.toUpperCase()))) return 'layer';
+    if (operation.id !== undefined && (typeof operation.id !== 'string' || !byId.has(operation.id.toUpperCase()))) return 'layer';
     if (operation.origin !== undefined && !pair(operation.origin)) return 'value';
     const problem = styledStyle(operation.type, operation.style, null).error;
     if (problem) return problem === 'content' || problem === 'fontSize' ? problem : 'style';
     return '';
   }
-  const known = operation.id ?? operation.ids?.[0];
-  if (typeof known !== 'string' || !ids.has(known.toUpperCase())) return 'layer';
+  // Canvas-wide operations name no layers at all.
+  if (DOCUMENT_OPERATIONS.includes(kind)) return CHECKS[kind](operation);
+  // Grouping, merging, aligning and moving act on a set of layers.
+  if (SET_OPERATIONS.includes(kind)) {
+    const missing = checkSet(operation, layers);
+    if (missing) return missing;
+    if (kind === 'group') {
+      const siblings = checkSiblings(operation, layers);
+      if (siblings) return siblings;
+    }
+    return CHECKS[kind](operation);
+  }
+
+  if (typeof named !== 'string' || !byId.has(named.toUpperCase())) return 'layer';
+  const layer = byId.get(named.toUpperCase());
   if (kind === 'appearance' || kind === 'transform') {
     const test = FIELDS[kind]?.[operation.field];
     if (!test || !test(operation.value)) return 'value';
@@ -229,14 +374,13 @@ export function checkOperation(operation, layers) {
   if (kind === 'effect' && !EFFECT_KINDS.includes(operation.effect)) return 'effect';
   if (kind === 'reorder' && ![1, -1].includes(operation.direction)) return 'value';
   if (kind === 'parent' && operation.parentID !== undefined) {
-    const group = layers.find(l => l.id.toUpperCase() === String(operation.parentID).toUpperCase());
-    if (!group || !group.isGroup || group.id.toUpperCase() === known.toUpperCase()) return 'group';
+    const group = byId.get(String(operation.parentID).toUpperCase());
+    if (!group || !group.isGroup || group.id.toUpperCase() === named.toUpperCase()) return 'group';
   }
-  if (kind === 'adjustment') {
-    const layer = layers.find(l => l.id.toUpperCase() === known.toUpperCase());
-    if (!layer?.adjustment) return 'adjustmentLayer';
-  }
-  return '';
+  if (kind === 'adjustment' && !layer.adjustment) return 'adjustmentLayer';
+  if ((kind === 'applyMask' || kind === 'transformMask') && !layer.maskFile) return 'noMask';
+  if (kind === 'ungroup' && !layer.isGroup) return 'group';
+  return CHECKS[kind] ? CHECKS[kind](operation) : '';
 }
 
 // Splits a model answer into what the panel may run and what it should report.

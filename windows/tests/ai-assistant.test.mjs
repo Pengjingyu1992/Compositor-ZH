@@ -4,7 +4,7 @@ import { mkdtemp, rm, writeFile, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { ADJUSTMENT_KINDS, BLEND_MODES, EFFECT_KINDS } from '../packages/comp-bridge/capabilities.mjs';
-import { systemPrompt, requestBody, readResponse, checkOperations, checkOperation, styledStyle, DEFAULT_MODEL } from '../packages/platform/ai-assistant.mjs';
+import { systemPrompt, requestBody, readResponse, checkOperations, checkOperation, canonicalOperation, styledStyle, ASSISTANT_OPERATIONS, EXCLUDED_OPERATIONS, TRANSFORM_FIELDS, DEFAULT_MODEL } from '../packages/platform/ai-assistant.mjs';
 import { checkEndpoint, checkModel, getAiSettings, setAiSettings } from '../packages/platform/ai-settings.mjs';
 import { IDS } from './fixtures.mjs';
 
@@ -103,6 +103,109 @@ test('operations are checked against the live layer list before anything runs', 
 test('the accepted list never exceeds the operation budget', () => {
   const many = Array.from({ length: 40 }, () => ({ kind: 'delete', id: IDS[0] }));
   assert.equal(checkOperations(many, layers).accepted.length, 20);
+});
+
+test('every operation is either offered or explained, and never both', () => {
+  const prompt = systemPrompt({ layers, filters: FILTERS });
+  for (const kind of ASSISTANT_OPERATIONS) {
+    assert.ok(prompt.includes(`"kind":"${kind}"`), `${kind} is offered but missing from the prompt`);
+    assert.equal(EXCLUDED_OPERATIONS[kind], undefined, `${kind} is offered and refused at the same time`);
+  }
+  // The model is told what it cannot do, and why, so it can say so plainly.
+  for (const [kind, why] of Object.entries(EXCLUDED_OPERATIONS)) {
+    assert.ok(prompt.includes(kind), `${kind} is missing from the cannot list`);
+    assert.ok(prompt.includes(why), `the reason for ${kind} is missing`);
+  }
+  assert.ok(prompt.includes(`transform fields (exactly): ${TRANSFORM_FIELDS.join(', ')}`));
+  // Something the editor has but the assistant does not is still refused.
+  assert.equal(checkOperation({ kind: 'merge', ids: [IDS[0]] }, layers), 'operation');
+  assert.equal(checkOperation({ kind: 'stroke', id: IDS[0] }, layers), 'operation');
+});
+
+test('the layer, set and document operations are checked in their documented shape', () => {
+  const valid = [
+    { kind: 'lock', id: IDS[0], field: 'content', value: true },
+    { kind: 'lock', id: IDS[1], field: 'alpha', value: false },
+    { kind: 'rasterize', id: IDS[0] },
+    { kind: 'applyMask', id: IDS[1] },
+    { kind: 'transformMask', id: IDS[1], field: 'origin', value: [1, 2] },
+    { kind: 'ungroup', id: IDS[2] },
+    { kind: 'group', ids: [IDS[0], IDS[1]], name: 'G' },
+    { kind: 'arrange', ids: [IDS[0], IDS[1]], operation: 'left', reference: 'selection' },
+    { kind: 'arrange', ids: [IDS[0]], operation: 'vcenter', reference: 'canvas' },
+    { kind: 'arrange', ids: [IDS[0], IDS[1]], operation: 'hgap', reference: 'keyObject', keyID: IDS[1] },
+    { kind: 'moveLayers', ids: [IDS[0]], delta: [10, -10] },
+    { kind: 'transformLayers', ids: [IDS[0], IDS[1]], field: 'size', value: [100, 50] },
+    { kind: 'canvas', width: 800, height: 600 },
+    { kind: 'canvas', width: 800, height: 600, x: 20, y: 30 },
+    { kind: 'imageSize', width: 320, height: 240 },
+    { kind: 'flipCanvas', axis: 'horizontal' }
+  ];
+  for (const operation of valid) assert.equal(checkOperation(operation, layers), '', JSON.stringify(operation));
+
+  const invalid = [
+    [{ kind: 'lock', id: IDS[0], field: 'size', value: true }, 'value'],
+    [{ kind: 'lock', id: IDS[0], field: 'content', value: 'yes' }, 'value'],
+    [{ kind: 'applyMask', id: IDS[0] }, 'noMask'],
+    [{ kind: 'transformMask', id: IDS[0], field: 'origin', value: [1, 2] }, 'noMask'],
+    [{ kind: 'transformMask', id: IDS[1], field: 'opacity', value: 1 }, 'value'],
+    [{ kind: 'ungroup', id: IDS[0] }, 'group'],
+    [{ kind: 'group', ids: [] }, 'layer'],
+    [{ kind: 'group', ids: [IDS[0], 'nope'] }, 'layer'],
+    [{ kind: 'group', ids: [IDS[0], IDS[1]], name: 'x'.repeat(300) }, 'value'],
+    [{ kind: 'arrange', ids: [IDS[0]], operation: 'middle', reference: 'canvas' }, 'value'],
+    [{ kind: 'arrange', ids: [IDS[0]], operation: 'left', reference: 'keyObject' }, 'value'],
+    [{ kind: 'moveLayers', ids: [IDS[0]], delta: 5 }, 'value'],
+    [{ kind: 'canvas', width: 0, height: 100 }, 'value'],
+    [{ kind: 'canvas', width: 99999, height: 100 }, 'value'],
+    [{ kind: 'imageSize', width: 320 }, 'value'],
+    [{ kind: 'flipCanvas', axis: 'diagonal' }, 'value']
+  ];
+  for (const [operation, reason] of invalid) {
+    assert.equal(checkOperation(operation, layers), reason, `${JSON.stringify(operation)} should report ${reason}`);
+  }
+});
+
+test('grouping requires the layers to share a parent', () => {
+  const parented = [
+    { id: IDS[0], name: 'a', isVisible: true },
+    { id: IDS[1], name: 'b', isVisible: true },
+    { id: IDS[2], name: 'g', isVisible: true, isGroup: true },
+    { id: '00000000-0000-4000-8000-000000000004', name: 'c', isVisible: true, parentID: IDS[2] },
+    { id: '00000000-0000-4000-8000-000000000005', name: 'd', isVisible: true, parentID: IDS[2] }
+  ];
+  // Both at the root, or both inside the same group: allowed.
+  assert.equal(checkOperation({ kind: 'group', ids: [IDS[0], IDS[1]] }, parented), '');
+  assert.equal(checkOperation({ kind: 'group', ids: ['00000000-0000-4000-8000-000000000004', '00000000-0000-4000-8000-000000000005'] }, parented), '');
+  // A root layer and one inside a group: not siblings, so the editor refuses.
+  assert.equal(checkOperation({ kind: 'group', ids: [IDS[0], '00000000-0000-4000-8000-000000000004'] }, parented), 'siblings');
+  // A group and its own child are not siblings either.
+  assert.equal(checkOperation({ kind: 'group', ids: [IDS[2], '00000000-0000-4000-8000-000000000004'] }, parented), 'siblings');
+});
+
+test('ids are put back to the spelling the project uses before they are sent', () => {
+  // The editor matches ids exactly, so a re-cased id would come back as 'stale'.
+  const grouped = canonicalOperation({ kind: 'group', ids: [IDS[0].toLowerCase(), IDS[1].toLowerCase()], name: 'G' }, layers);
+  assert.deepEqual(grouped.ids, [IDS[0], IDS[1]]);
+  assert.ok('id' in grouped, 'id stays present so the editor cannot retarget the operation');
+  assert.equal(grouped.id, undefined);
+
+  const parented = canonicalOperation({ kind: 'parent', id: IDS[0].toLowerCase(), parentID: IDS[2].toLowerCase() }, layers);
+  assert.equal(parented.id, IDS[0]);
+  assert.equal(parented.parentID, IDS[2]);
+
+  const arranged = canonicalOperation({ kind: 'arrange', ids: [IDS[0].toLowerCase()], operation: 'left', reference: 'keyObject', keyID: IDS[1].toLowerCase() }, layers);
+  assert.equal(arranged.keyID, IDS[1]);
+
+  const created = canonicalOperation({ kind: 'styled', type: 'text', style: { content: 'x' } }, layers);
+  assert.ok('id' in created);
+  assert.equal(created.id, undefined);
+
+  // An id that is not in the project is left unresolved, and then refused.
+  assert.equal(canonicalOperation({ kind: 'delete', id: 'nope' }, layers).id, undefined);
+  assert.equal(checkOperation({ kind: 'delete', id: 'nope' }, layers), 'layer');
+  // Operations that already use exact ids are untouched.
+  assert.equal(canonicalOperation({ kind: 'rename', id: IDS[0], name: 'N' }, layers).id, IDS[0]);
 });
 
 test('a text layer is normalised into everything the renderer needs', () => {

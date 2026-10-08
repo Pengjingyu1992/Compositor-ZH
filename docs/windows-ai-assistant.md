@@ -33,6 +33,54 @@ POST {endpoint}/chat/completions
 { "model": …, "temperature": 0, "messages": [ {system}, {user} ] }
 ```
 
+## What it can do
+
+The assistant is offered 24 of the editor's 29 operations:
+
+| Group | Operations |
+|---|---|
+| Layers | `appearance` (visibility, opacity, blend mode), `rename`, `transform`, `reorder`, `duplicate`, `delete`, `parent`, `lock`, `rasterize`, `ungroup` |
+| New layers | `add` (pixels, group, adjustment), `styled` (text and shapes) |
+| Pixels | `filter`, `adjustment`, `effect`, `applyMask` |
+| Sets of layers | `group`, `arrange`, `moveLayers`, `transformLayers` |
+| The document | `canvas`, `imageSize`, `flipCanvas` |
+
+## What it deliberately cannot do, and why
+
+Being explicit about this matters more than covering everything: a model that
+promises something it cannot deliver, or invents a substitute that appears to
+work, is worse than one that says "I can't do that". Each of these needs
+information that is not in the conversation, and the prompt tells the model so.
+
+| Operation | Why not |
+|---|---|
+| `selection`, `selectionMask` | A selection is made by pointing at the canvas; the model cannot see or make one. |
+| `fill`, `gradient`, `clear` | They act on a selection. With none, they would fill or erase the whole layer. |
+| `bucket` | It seeds from a pixel of the canvas. |
+| `stroke` | It is a freehand path drawn over the canvas. |
+| `pixels` | It is raw pixel data. |
+| `guides` | Guides are dragged out of the rulers. |
+| `merge` | It needs the layers composited into one image, which is the editor's own merge path. Doing it in the panel would duplicate that path, including its blend-mode and effective-opacity rules; extracting it is better done on its own. |
+| `batch`, `duplicateTree`, `importPixels` | Internal compositions of operations already offered: the panel already applies operations in order, `duplicate` already copies a group with its children, and `add` with type `pixels` covers the last. |
+
+## How a request is checked
+
+A model's answer is untrusted input, so every operation is checked against the
+live layer list before anything runs, and the result is reported per operation:
+
+- **The ids are resolved, not trusted.** The editor matches ids exactly
+  (`m.layers.find(l => l.id === op.id)`), so an id the model re-cased would come
+  back as an opaque `stale`. Every id an operation names — `id`, `ids`,
+  `parentID`, `maskSourceID`, `keyID` — is mapped back to the spelling the
+  project uses first.
+- **`id` is always present**, including when it is `undefined`. The editor's own
+  `edit()` fills in the selected layer when that key is missing, which would
+  retarget the operation at whatever happens to be selected.
+- **Enumerations must match exactly** and values must be in range, checked here
+  so the panel can say which part failed instead of passing on an opaque error.
+- **Set operations must be possible**: the layers must exist, and `group` needs
+  them to share a parent, which is what the editor requires too.
+
 ## Security
 
 The assistant is deliberately narrow, because a model's output is untrusted
@@ -52,9 +100,12 @@ input.
   range. A rejected operation is reported and skipped.
 - **The allowlist is small on purpose.** The assistant may change layer
   appearance, names, transforms, order, parenting, duplication, deletion,
-  filters, adjustments, effects, and it may create or restyle **text and shape
-  layers**. It has no operation for opening, saving, importing, exporting, or
-  writing files, so it cannot reach the filesystem even if it is asked to.
+  filters, adjustments, effects, locking, rasterizing, masks and ungrouping; it
+  may create text, shape, group, pixel and adjustment layers; it may align,
+  move and transform sets of layers; and it may resize or flip the document. It
+  has no operation for opening, saving, importing, exporting, or writing files,
+  so it cannot reach the filesystem even if it is asked to. The operations it is
+  not offered are listed above, with the reason for each.
 - **A text or shape layer is rendered by the editor, not by the model.** The
   model supplies the parameters (content, font size, colour, alignment, box);
   the panel renders them with the same `renderText`/`renderShape` the editor's

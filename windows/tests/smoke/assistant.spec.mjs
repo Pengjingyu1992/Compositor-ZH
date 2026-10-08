@@ -214,6 +214,40 @@ test('the assistant can add a text layer and a shape layer',async()=>{
   await expect(page.getByTestId('ai-layer')).toHaveCount(2);
 });
 
+test('a set operation and a canvas operation reach the editor',async()=>{
+  await page.getByTestId('ai-settings').click();
+  const dialog=page.getByRole('dialog',{name:'AI 设置'});
+  await dialog.getByLabel('接口地址').fill(`http://127.0.0.1:${stub.address().port}/v1`);
+  await dialog.getByLabel('模型').fill('stub-model');
+  await dialog.getByLabel('API 密钥').fill('test-key');
+  await dialog.getByTestId('ai-save-settings').click();
+  await expect(dialog).toBeHidden();
+
+  // The ids are deliberately re-cased: the editor matches them exactly, so the
+  // panel has to put them back to the spelling the project uses.
+  answer={reply:'做好了',ops:[
+    {kind:'group',ids:[IDS[0].toLowerCase(),IDS[1].toLowerCase()],name:'新组'},
+    {kind:'flipCanvas',axis:'horizontal'}
+  ]};
+  await page.getByTestId('ai-prompt').fill('把这两层建个组然后水平翻转');
+  await page.getByTestId('ai-send').click();
+
+  const log=page.locator('.assistant-log');
+  await expect(log).toContainText('group');
+  await expect(log).toContainText('flipCanvas');
+  // Neither is refused, which is what a stale id would have produced.
+  await expect(log).not.toContainText('项目中找不到这个图层');
+  await expect(log).not.toContainText('编辑器拒绝了');
+  // The two fixture layers now sit inside a new group, so three rows are listed.
+  await expect(page.getByTestId('ai-layer')).toHaveCount(3);
+  await expect(page.getByTestId('ai-layer').filter({hasText:'新组'})).toBeVisible();
+
+  await page.screenshot({path:path.join(root,'test-results/assistant-group-preview.png')});
+  await page.getByTestId('ai-undo').click();
+  await page.getByTestId('ai-undo').click();
+  await expect(page.getByTestId('ai-layer')).toHaveCount(2);
+});
+
 test('without a key the panel says so and never reaches the network',async()=>{
   await page.getByTestId('ai-prompt').fill('隐藏背景');
   await page.getByTestId('ai-send').click();

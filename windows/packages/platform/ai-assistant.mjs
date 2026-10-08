@@ -17,7 +17,7 @@ export const MAX_OPERATIONS = 20;
 export const ASSISTANT_OPERATIONS = [
   'appearance', 'rename', 'transform', 'reorder', 'duplicate', 'delete', 'parent',
   'add', 'styled', 'filter', 'adjustment', 'effect',
-  'lock', 'rasterize', 'applyMask', 'ungroup', 'transformMask',
+  'lock', 'rasterize', 'applyMask', 'ungroup', 'transformMask', 'clip', 'mask',
   'group', 'arrange', 'moveLayers', 'transformLayers',
   'canvas', 'imageSize', 'flipCanvas'
 ];
@@ -65,11 +65,12 @@ const ARRANGE_OPERATIONS = ['left', 'hcenter', 'right', 'top', 'vcenter', 'botto
 const ARRANGE_REFERENCES = ['selection', 'canvas', 'keyObject'];
 const LOCK_FIELDS = ['content', 'position', 'appearance', 'alpha'];
 const TRANSFORM_FIELDS = ['origin', 'size', 'rotation', 'flipX', 'flipY', 'sampling'];
+const MASK_ACTIONS = ['add', 'remove', 'toggle', 'invert', 'link'];
 const SURFACE_LIMIT = 30000;
 
 // Exported so the prompt, the tests and the documentation all read the same
 // enumerations rather than restating them.
-export { ARRANGE_OPERATIONS, ARRANGE_REFERENCES, LOCK_FIELDS, TRANSFORM_FIELDS };
+export { ARRANGE_OPERATIONS, ARRANGE_REFERENCES, LOCK_FIELDS, TRANSFORM_FIELDS, MASK_ACTIONS };
 
 const named = (v) => v === undefined || (typeof v === 'string' && v.length > 0 && v.length <= 256);
 const surface = (op) => finite(op.width, 1, SURFACE_LIMIT) && finite(op.height, 1, SURFACE_LIMIT);
@@ -245,6 +246,9 @@ function schema() {
     '{"kind":"applyMask","id":"<layer id>"}   // bakes the mask into the pixels and drops it',
     '{"kind":"ungroup","id":"<group id>"}',
     '{"kind":"transformMask","id":"<layer id>","field":"origin","value":[x,y]}   // the layer must already have a mask',
+    '{"kind":"clip","id":"<layer id>","sourceID":"<layer id>"}   // omit sourceID to stop clipping',
+    '{"kind":"mask","id":"<layer id>","action":"add"}   // also "remove", "toggle", "invert", "link"',
+    '{"kind":"mask","id":"<layer id>","action":"link","value":true}',
     '{"kind":"group","ids":["<layer id>","<layer id>"],"name":"new group"}   // the layers must share a parent',
     '{"kind":"arrange","ids":[".","."],"operation":"left","reference":"selection"}',
     '{"kind":"moveLayers","ids":["<layer id>"],"delta":[dx,dy]}',
@@ -379,6 +383,23 @@ export function checkOperation(operation, layers) {
   }
   if (kind === 'adjustment' && !layer.adjustment) return 'adjustmentLayer';
   if ((kind === 'applyMask' || kind === 'transformMask') && !layer.maskFile) return 'noMask';
+  if (kind === 'clip') {
+    // The editor stores the source without checking it, so it is checked here.
+    if (layer.isGroup) return 'group';
+    if (operation.sourceID !== undefined) {
+      const source = byId.get(String(operation.sourceID).toUpperCase());
+      if (!source || source.id.toUpperCase() === named.toUpperCase()) return 'layer';
+    }
+    return '';
+  }
+  if (kind === 'mask') {
+    if (!MASK_ACTIONS.includes(operation.action)) return 'value';
+    // Everything but add and remove needs a mask to already be there.
+    if (!['add', 'remove'].includes(operation.action) && !layer.maskFile) return 'noMask';
+    if (operation.action === 'add' && layer.maskFile) return 'alreadyMasked';
+    if (operation.action === 'link' && typeof operation.value !== 'boolean') return 'value';
+    return '';
+  }
   if (kind === 'ungroup' && !layer.isGroup) return 'group';
   return CHECKS[kind] ? CHECKS[kind](operation) : '';
 }

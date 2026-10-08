@@ -105,6 +105,35 @@ test('the accepted list never exceeds the operation budget', () => {
   assert.equal(checkOperations(many, layers).accepted.length, 20);
 });
 
+test('clipping and masks are checked against the layer they name', () => {
+  const valid = [
+    { kind: 'clip', id: IDS[0], sourceID: IDS[1] },
+    { kind: 'clip', id: IDS[0] },                              // omitting sourceID stops the clip
+    { kind: 'mask', id: IDS[0], action: 'add' },
+    { kind: 'mask', id: IDS[0], action: 'remove' },
+    { kind: 'mask', id: IDS[1], action: 'toggle' },            // IDS[1] already has a mask
+    { kind: 'mask', id: IDS[1], action: 'invert' },
+    { kind: 'mask', id: IDS[1], action: 'link', value: true }
+  ];
+  for (const operation of valid) assert.equal(checkOperation(operation, layers), '', JSON.stringify(operation));
+
+  const invalid = [
+    // A group cannot be clipped, and a layer cannot be clipped to itself.
+    [{ kind: 'clip', id: IDS[2] }, 'group'],
+    [{ kind: 'clip', id: IDS[0], sourceID: IDS[0] }, 'layer'],
+    [{ kind: 'clip', id: IDS[0], sourceID: 'nope' }, 'layer'],
+    [{ kind: 'mask', id: IDS[0], action: 'blur' }, 'value'],
+    // Everything but add and remove needs a mask that is already there.
+    [{ kind: 'mask', id: IDS[0], action: 'toggle' }, 'noMask'],
+    [{ kind: 'mask', id: IDS[0], action: 'link' }, 'noMask'],
+    [{ kind: 'mask', id: IDS[1], action: 'add' }, 'alreadyMasked'],
+    [{ kind: 'mask', id: IDS[1], action: 'link' }, 'value']
+  ];
+  for (const [operation, reason] of invalid) {
+    assert.equal(checkOperation(operation, layers), reason, `${JSON.stringify(operation)} should report ${reason}`);
+  }
+});
+
 test('every operation is either offered or explained, and never both', () => {
   const prompt = systemPrompt({ layers, filters: FILTERS });
   for (const kind of ASSISTANT_OPERATIONS) {

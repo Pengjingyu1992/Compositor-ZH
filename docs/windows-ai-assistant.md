@@ -35,13 +35,14 @@ POST {endpoint}/chat/completions
 
 ## What it can do
 
-The assistant is offered 24 of the editor's 29 operations:
+The assistant is offered 26 of the editor's 39 operations:
 
 | Group | Operations |
 |---|---|
 | Layers | `appearance` (visibility, opacity, blend mode), `rename`, `transform`, `reorder`, `duplicate`, `delete`, `parent`, `lock`, `rasterize`, `ungroup` |
 | New layers | `add` (pixels, group, adjustment), `styled` (text and shapes) |
 | Pixels | `filter`, `adjustment`, `effect`, `applyMask` |
+| Masks | `clip` (clip to another layer), `mask` (add, remove, toggle, invert, link), `transformMask` |
 | Sets of layers | `group`, `arrange`, `moveLayers`, `transformLayers` |
 | The document | `canvas`, `imageSize`, `flipCanvas` |
 

@@ -220,7 +220,13 @@ nonisolated enum EdgeColorDecontamination {
                         guard nx >= 0, ny >= 0, nx < width, ny < height, levels[ny * width + nx] > 0.98 else { continue }
                         let p = input + ny * stride + nx * 4; guard p[3] > 0 else { continue }
                         let blend = min(1, amount) * Double(1 - coverage)
-                        for c in 0..<3 { target[c] = UInt8(max(0, min(Double(target[3]), (Double(target[c]) * (1 - blend) + Double(p[c]) / Double(p[3]) * Double(target[3]) * blend).rounded()))) }
+                        let alpha = Double(target[3])
+                        for c in 0..<3 {
+                            let retained: Double = Double(target[c]) * (1 - blend)
+                            let neighbor: Double = Double(p[c]) / Double(p[3]) * alpha * blend
+                            let value: Double = (retained + neighbor).rounded()
+                            target[c] = UInt8(max(0, min(alpha, value)))
+                        }
                         break search
                     }
                 }

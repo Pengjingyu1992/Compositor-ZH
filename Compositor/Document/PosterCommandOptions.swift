@@ -101,7 +101,9 @@ extension EditorSession {
         for y in 0..<asset.image.height { for x in 0..<asset.image.width {
             let p = input + y * rgba.bytesPerRow + x * 4
             // Premultiplied RGB makes transparent pixels hide even when their stored color is white.
-            output[y * context.bytesPerRow + x] = UInt8((54 * Int(p[0]) + 183 * Int(p[1]) + 19 * Int(p[2]) + 128) >> 8)
+            let red: Int = 54 * Int(p[0]), green: Int = 183 * Int(p[1]), blue: Int = 19 * Int(p[2])
+            let luminance: Int = (red + green + blue + 128) >> 8
+            output[y * context.bytesPerRow + x] = UInt8(luminance)
         } }
         guard let image = context.makeImage() else { throw ExportError.render }
         document?.layers[index].mask = LayerMask(asset: try LayerMask.asset(from: image))

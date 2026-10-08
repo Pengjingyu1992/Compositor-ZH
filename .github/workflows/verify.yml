@@ -30,10 +30,9 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - run: ./scripts/check-localization.zsh
       - run: ./scripts/build-clt.zsh
-      - run: ./scripts/check-shortcuts-clt.zsh
-      - run: ./scripts/check-first-batch-clt.zsh
-      - run: ./scripts/check-liquify-clt.zsh
+      # The poster runner executes poster, liquify, first-batch and shortcut checks together.
       - run: ./scripts/check-poster-clt.zsh
+      - run: python3 scripts/check-poster-cli.py build/clt/Compositor.app/Contents/MacOS/compositor-cli
 
   unit:
     name: Xcode unit tests

@@ -138,7 +138,9 @@ import Testing
         for file in files {
             let cg = CGImageSourceCreateWithURL(file as CFURL,nil)!, image = CGImageSourceCreateImageAtIndex(cg,0,nil)!
             dimensions.insert(image.width)
-            check("export sanitized path", file.deletingLastPathComponent() == destination && !file.lastPathComponent.contains(":"))
+            let parent = file.deletingLastPathComponent().resolvingSymlinksInPath().standardizedFileURL.path
+            let expectedParent = destination.resolvingSymlinksInPath().standardizedFileURL.path
+            check("export sanitized path", parent == expectedParent && !file.lastPathComponent.contains(":"))
         }
         check("export aspect dimensions", dimensions == [96,48])
         export.individualLayers = true; export.format = .jpeg

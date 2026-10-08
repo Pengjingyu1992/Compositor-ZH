@@ -2,8 +2,8 @@ import Foundation
 import ImageIO
 import UniformTypeIdentifiers
 
-nonisolated enum BatchExportFormat: String, CaseIterable, Sendable { case png = "PNG", jpeg = "JPEG" }
-nonisolated struct BatchExportOptions: Sendable {
+nonisolated enum BatchExportFormat: String, Codable, CaseIterable, Sendable { case png = "PNG", jpeg = "JPEG" }
+nonisolated struct BatchExportOptions: Codable, Sendable {
     var longSides = [0, 1080, 2048]
     var format: BatchExportFormat = .png
     var quality: Double = 0.9
@@ -46,7 +46,8 @@ actor BatchImageExporter {
         return ProjectSnapshot(manifest: manifest, images: snapshot.images, masks: snapshot.masks)
     }
     func export(_ snapshot: ProjectSnapshot, selected: Set<UUID>, name: String,
-                options: BatchExportOptions, folder: URL) async throws -> URL {
+                options: BatchExportOptions, folder: URL,
+                progress: (@Sendable (Int, Int) async -> Void)? = nil) async throws -> URL {
         guard options.isValid else { throw ProjectError.invalid }
         let fm = FileManager.default
         let run = "Export-" + ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-") + "-" + UUID().uuidString.prefix(8)
@@ -61,9 +62,19 @@ actor BatchImageExporter {
             guard !candidates.isEmpty, candidates.count <= 100 else { throw ProjectError.invalid }
             targets = try candidates.map { ($0.name + "-" + $0.id.uuidString.prefix(8), try Self.isolate($0.id, in: snapshot)) }
         } else { targets = [(name, snapshot)] }
-        var names = Set<String>()
+        var targetNames = Set<String>()
+        let total = targets.count * Set(options.longSides.map { $0 == 0 ? max(snapshot.manifest.width, snapshot.manifest.height) : $0 }).count
+        var count = 0
+        await progress?(count, total)
         for (targetName, target) in targets {
             try Task.checkCancellation()
+            let baseName = Self.safeName(options.prefix + targetName)
+            var uniqueName = baseName, suffix = 1
+            while !targetNames.insert(uniqueName.lowercased()).inserted {
+                uniqueName = String(baseName.prefix(100)) + "-" + String(suffix)
+                suffix += 1
+            }
+            var dimensions = Set<String>()
             let raster = try await ImageExporter.shared.render(target)
             for side in options.longSides {
                 try Task.checkCancellation()
@@ -71,6 +82,8 @@ actor BatchImageExporter {
                 let width = max(1, Int((Double(raster.image.width) * factor).rounded()))
                 let height = max(1, Int((Double(raster.image.height) * factor).rounded()))
                 guard width * height <= DocumentLimits.maxSurfacePixels else { throw ExportError.tooLarge }
+                let dimension = width.description + "x" + height.description
+                guard dimensions.insert(dimension).inserted else { continue }
                 let data = try autoreleasepool {
                     let context = try BrushRaster.context(width: width, height: height, mask: false)
                     if options.format == .jpeg { context.setFillColor(gray: 1, alpha: 1); context.fill(CGRect(x: 0, y: 0, width: width, height: height)) }
@@ -85,9 +98,10 @@ actor BatchImageExporter {
                     guard CGImageDestinationFinalize(writer) else { throw ExportError.encode }
                     return encoded as Data
                 }
-                let file = Self.safeName(options.prefix + targetName) + "_" + width.description + "x" + height.description + "." + (options.format == .png ? "png" : "jpg")
-                guard names.insert(file.lowercased()).inserted else { continue }
+                let file = uniqueName + "_" + dimension + "." + (options.format == .png ? "png" : "jpg")
                 try data.write(to: stage.appendingPathComponent(file), options: [.atomic])
+                count += 1
+                await progress?(count, total)
             }
         }
         try Task.checkCancellation()
@@ -108,6 +122,7 @@ extension EditorSession {
     func openBatchExport() {
         guard canEditLayers, let snapshot = projectSnapshot(), let owner = beginOwnedEdit() else { return }
         batchExportResult = nil
+        batchExportCompleted = 0; batchExportTotal = 0
         batchExportDraft = BatchExportDraft(owner: owner, snapshot: snapshot, selected: selectedLayerIDs,
             name: projectURL?.deletingPathExtension().lastPathComponent ?? L10n.text("Untitled"))
     }
@@ -115,14 +130,32 @@ extension EditorSession {
         guard let draft = batchExportDraft, !batchExportRunning else { return }
         batchExportDraft = nil; releaseEdit(draft.owner)
     }
+    func startBatchExport(_ options: BatchExportOptions, folder: URL, draftID: UUID) {
+        guard batchExportDraft?.id == draftID, batchExportTask == nil, !batchExportRunning else { return }
+        batchExportTask = Task { [weak self] in
+            guard let self else { return }
+            await self.exportBatch(options, folder: folder)
+            self.batchExportTask = nil
+        }
+    }
+    func stopBatchExport() { batchExportTask?.cancel() }
     func exportBatch(_ options: BatchExportOptions, folder: URL) async {
         guard let draft = batchExportDraft, ownsEdit(draft.owner), !batchExportRunning else { return }
         batchExportRunning = true
+        batchExportResult = nil; batchExportCompleted = 0; batchExportTotal = 0
         let access = folder.startAccessingSecurityScopedResource()
         defer { batchExportRunning = false; if access { folder.stopAccessingSecurityScopedResource() } }
         do {
-            batchExportResult = try await BatchImageExporter.shared.export(draft.snapshot, selected: draft.selected,
-                name: draft.name, options: options, folder: folder).path
-        } catch { brushError = error.localizedDescription }
+            let output = try await BatchImageExporter.shared.export(draft.snapshot, selected: draft.selected,
+                name: draft.name, options: options, folder: folder) { [weak self] completed, total in
+                    await self?.updateBatchExportProgress(draftID: draft.id, completed: completed, total: total)
+                }
+            batchExportResult = L10n.format("Exported to %@", output.path)
+        } catch is CancellationError { batchExportResult = L10n.text("Export cancelled. No output folder was created.") }
+        catch { brushError = error.localizedDescription }
+    }
+    private func updateBatchExportProgress(draftID: UUID, completed: Int, total: Int) {
+        guard batchExportDraft?.id == draftID else { return }
+        batchExportCompleted = completed; batchExportTotal = total
     }
 }

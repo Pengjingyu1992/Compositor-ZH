@@ -139,7 +139,7 @@ struct RoundThreeTests {
         do { try await store.write(preserved, record: oldRecord); #expect(false) } catch { #expect(error is RecoveryError) }
         #expect(try Data(contentsOf: entry.url.appendingPathComponent("recovery.json")) == futureBytes)
         try Data("broken".utf8).write(to: entry.url.appendingPathComponent("recovery.json"), options: .atomic)
-        #expect(try await store.entries().count == 11)
+        #expect(try await store.entries().count == ProjectManifest.supported.count)
         #expect(FileManager.default.fileExists(atPath: entry.url.path))
         do { try await store.write(preserved, record: oldRecord); #expect(false) } catch { #expect(error is RecoveryError) }
         #expect(try Data(contentsOf: entry.url.appendingPathComponent("recovery.json")) == Data("broken".utf8))
@@ -149,7 +149,7 @@ struct RoundThreeTests {
         try Data("damaged pixels".utf8).write(to: imageURL, options: .atomic)
         do { try await store.write(preserved, record: oldRecord); #expect(false) } catch { #expect(error is RecoveryError) }
         #expect(try Data(contentsOf: imageURL) == Data("damaged pixels".utf8))
-        try await store.remove(entry.url); #expect(try await store.entries().count == 10)
+        try await store.remove(entry.url); #expect(try await store.entries().count == ProjectManifest.supported.count - 1)
     }
 
     @Test func recoveryRestoresIntoIndependentDirtyDraftAndKeepsSourceUntilDurable() async throws {

@@ -243,11 +243,12 @@ struct FirstBatchRegressionChecks {
         recoverySession.document = session.document
         recoverySession.history.markUnsaved()
         let recoverySnapshot = recoverySession.projectSnapshot()!
-        let recovery = RecoveryStore(directory: root.appendingPathComponent("Recovery"))
+        let recoveryDirectory = root.appendingPathComponent("Recovery")
+        let recovery = RecoveryStore(directory: recoveryDirectory)
         let record = RecoveryRecord(documentID: recoverySession.document!.id, revision: recoverySession.history.currentRevision,
             projectVersion: recoverySnapshot.manifest.version, title: "Regression", originalPath: nil, date: Date())
         try await recovery.write(recoverySnapshot, record: record)
-        let recoveryURL = recovery.directory.appendingPathComponent(record.documentID.uuidString + ".comp")
+        let recoveryURL = recoveryDirectory.appendingPathComponent(record.documentID.uuidString + ".comp")
         let recovered = try await recovery.load(recoveryURL)
         check("recovery keeps dirty state", recoverySession.isModified)
         check("recovery preserves layers and format", recovered.manifest.layers.count == recoverySnapshot.manifest.layers.count && recovered.manifest.version == ProjectManifest.current)

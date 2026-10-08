@@ -1,7 +1,7 @@
 import AppKit
 import UniformTypeIdentifiers
 
-nonisolated enum LUTSpace: String, CaseIterable, Sendable { case sRGB = "Encoded sRGB", linear = "Linear sRGB" }
+nonisolated enum LUTSpace: String, Codable, CaseIterable, Sendable { case sRGB = "Encoded sRGB", linear = "Linear sRGB" }
 nonisolated struct ColorLUTSettings: Equatable, Sendable {
     var table: ColorLUT?
     var strength: Double = 100
@@ -59,14 +59,33 @@ nonisolated struct ColorLUT: Equatable, Sendable {
         return Self(name: name, size: size, is1D: one, minimum: minimum, maximum: maximum, values: values)
     }
     func sample(_ color: [Double]) -> [Double] {
-        let p = (0..<3).map { min(Double(size - 1), max(0, (color[$0] - minimum[$0]) / (maximum[$0] - minimum[$0]) * Double(size - 1))) }
-        let low = p.map { Int(floor($0)) }, high = low.map { min(size - 1, $0 + 1) }
-        let weight = (0..<3).map { p[$0] - Double(low[$0]) }
-        if is1D { return (0..<3).map { values[low[$0]][$0] * (1 - weight[$0]) + values[high[$0]][$0] * weight[$0] } }
-        var result = [0.0, 0, 0]
+        let last = Double(size - 1)
+        var low = [Int](repeating: 0, count: 3)
+        var high = low
+        var weight = [Double](repeating: 0, count: 3)
+        for c in 0..<3 {
+            let span: Double = maximum[c] - minimum[c]
+            let position: Double = (color[c] - minimum[c]) / span * last
+            let bounded: Double = min(last, max(0, position))
+            low[c] = Int(floor(bounded)); high[c] = min(size - 1, low[c] + 1)
+            weight[c] = bounded - Double(low[c])
+        }
+        var result = [Double](repeating: 0, count: 3)
+        if is1D {
+            for c in 0..<3 {
+                let lower: Double = values[low[c]][c] * (1 - weight[c])
+                let upper: Double = values[high[c]][c] * weight[c]
+                result[c] = lower + upper
+            }
+            return result
+        }
         for z in 0...1 { for y in 0...1 { for x in 0...1 {
-            let index = (x == 0 ? low[0] : high[0]) + size * ((y == 0 ? low[1] : high[1]) + size * (z == 0 ? low[2] : high[2]))
-            let w = (x == 0 ? 1 - weight[0] : weight[0]) * (y == 0 ? 1 - weight[1] : weight[1]) * (z == 0 ? 1 - weight[2] : weight[2])
+            let ix = x == 0 ? low[0] : high[0], iy = y == 0 ? low[1] : high[1], iz = z == 0 ? low[2] : high[2]
+            let index = ix + size * (iy + size * iz)
+            let wx: Double = x == 0 ? 1 - weight[0] : weight[0]
+            let wy: Double = y == 0 ? 1 - weight[1] : weight[1]
+            let wz: Double = z == 0 ? 1 - weight[2] : weight[2]
+            let w: Double = wx * wy * wz
             for c in 0..<3 { result[c] += values[index][c] * w }
         } } }
         return result

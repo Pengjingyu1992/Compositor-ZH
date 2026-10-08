@@ -39,6 +39,13 @@ final class CanvasTextView: NSTextView {
         super.mouseDown(with: event)
     }
     override func keyDown(with event: NSEvent) {
+        if hasMarkedText() {
+            // Candidate navigation and Escape belong to the input method until composition ends.
+            holdsSelection = false
+            super.keyDown(with: event)
+            NSCursor.setHiddenUntilMouseMoves(false)
+            return
+        }
         guard let event = ShortcutSettings.shared.textEvent(event) else { return }
         if event.keyCode == 53 { editor?.canvas?.session.cancelText(); return }
         // Option with the arrows sets spacing, as in Photoshop: left and right the tracking, up and down the

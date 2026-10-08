@@ -99,8 +99,11 @@ struct TypeControls: View {
                         .help("Line height, baseline to baseline. Empty or 0 is Auto: 120% of the font size.")
                 }
             }.scrollIndicators(.hidden)
-            if NSFont(name: session.currentTextStyle.fontName, size: session.currentTextStyle.fontSize) == nil {
-                Image(systemName: "exclamationmark.triangle").help("Font unavailable; the saved appearance is retained until editing uses a system fallback.")
+            let missingFonts = session.currentTextStyle.unavailableFontNames
+            let missingFontList = missingFonts.joined(separator: ", ")
+            if !missingFonts.isEmpty {
+                Image(systemName: "exclamationmark.triangle")
+                    .help(L10n.format("Unavailable fonts: %@. The saved appearance is retained until editing uses a system fallback.", missingFontList))
             }
             if session.textDraft != nil {
                 Button("Cancel") { session.cancelText() }

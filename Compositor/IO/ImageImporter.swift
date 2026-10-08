@@ -52,9 +52,19 @@ actor ImageImporter {
 
     /// `flattenedPhotoshop`: a PSD or PSB with no layer records (only a background), read as its merged image.
     func decode(_ url: URL, remainingPixels: Int = DocumentLimits.documentPixelBudget, flattenedPhotoshop: Bool = false) throws -> ImportedImage {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary) else { throw ImageImportError.unreadable }
+        return try decode(source, name: url.deletingPathExtension().lastPathComponent, remainingPixels: remainingPixels, flattenedPhotoshop: flattenedPhotoshop)
+    }
+
+    func decode(_ data: Data, name: String, remainingPixels: Int) throws -> ImportedImage {
+        guard !data.isEmpty, data.count <= 16 * 1024 * 1024,
+              let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary) else { throw ImageImportError.unreadable }
+        return try decode(source, name: name, remainingPixels: remainingPixels, flattenedPhotoshop: false)
+    }
+
+    private func decode(_ source: CGImageSource, name: String, remainingPixels: Int, flattenedPhotoshop: Bool) throws -> ImportedImage {
         try autoreleasepool {
-            guard let source = CGImageSourceCreateWithURL(url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary),
-                  let identifier = CGImageSourceGetType(source) as String?,
+            guard let identifier = CGImageSourceGetType(source) as String?,
                   let type = UTType(identifier) else { throw ImageImportError.unreadable }
             let photoshop = flattenedPhotoshop ? [UTType.photoshopImage, .photoshopLargeImage] : []
             guard ([UTType.jpeg, .png, .heic, .tiff] + photoshop).contains(where: { type.conforms(to: $0) }) else {
@@ -64,7 +74,8 @@ actor ImageImporter {
                   let width = properties[kCGImagePropertyPixelWidth] as? Int,
                   let height = properties[kCGImagePropertyPixelHeight] as? Int,
                   width > 0, height > 0 else { throw ImageImportError.unreadable }
-            guard width <= DocumentLimits.maxSide, height <= DocumentLimits.maxSide, width * height <= remainingPixels else {
+            guard width <= DocumentLimits.maxSide, height <= DocumentLimits.maxSide,
+                  width * height <= min(remainingPixels, DocumentLimits.maxSurfacePixels) else {
                 throw ImageImportError.tooLarge
             }
             guard let decoded = CGImageSourceCreateImageAtIndex(source, 0, [kCGImageSourceShouldCacheImmediately: true] as CFDictionary) else {
@@ -80,7 +91,7 @@ actor ImageImporter {
             guard let thumbnail = context.createCGImage(preview, from: preview.extent.integral, format: .RGBA8, colorSpace: sRGB) else {
                 throw ImageImportError.unreadable
             }
-            return ImportedImage(image: image, thumbnail: thumbnail, name: url.deletingPathExtension().lastPathComponent)
+            return ImportedImage(image: image, thumbnail: thumbnail, name: name)
         }
     }
 

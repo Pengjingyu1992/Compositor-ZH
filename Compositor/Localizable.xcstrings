@@ -17200,6 +17200,86 @@
           }
         }
       }
+    },
+    "Unavailable fonts: %@. The saved appearance is retained until editing uses a system fallback.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unavailable fonts: %@. The saved appearance is retained until editing uses a system fallback."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不可用字体：%@。编辑前保留已保存的外观，编辑时使用系统替代字体。"
+          }
+        }
+      }
+    },
+    "Scroll to inspect enlarged edges.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scroll to inspect enlarged edges."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "滚动查看放大后的边缘。"
+          }
+        }
+      }
+    },
+    "Export cancelled. No output folder was created.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export cancelled. No output folder was created."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导出已取消，未创建输出文件夹。"
+          }
+        }
+      }
+    },
+    "Exporting %lld of %lld files": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exporting %lld of %lld files"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在导出第 %lld 个文件，共 %lld 个"
+          }
+        }
+      }
+    },
+    "Cancel Export": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel Export"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消导出"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

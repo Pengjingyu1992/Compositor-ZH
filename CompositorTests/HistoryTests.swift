@@ -38,6 +38,7 @@ struct HistoryTests {
         session.createDocument(width: 800, height: 600)
         session.addBlankLayer()
         let id = try #require(session.activeLayerID)
+        let originalName = try #require(session.activeLayer?.name)
         session.history.markSaved()
         #expect(!session.isModified)
         session.renameLayer(id, to: "Changed")
@@ -46,7 +47,7 @@ struct HistoryTests {
         #expect(!session.isModified)
         let count = session.history.undoCount
         session.zoom(to: 2)
-        session.renameLayer(id, to: "Layer 1")
+        session.renameLayer(id, to: originalName)
         session.renameLayer(id, to: "   ")
         session.reorderLayers(from: IndexSet(integer: 0), to: 1)
         #expect(session.history.undoCount == count)

@@ -37,11 +37,15 @@ nonisolated struct LayerTextStyle: Codable, Equatable, Sendable {
     var fontRuns: [LayerTextFontRun]? = nil
     var isValid: Bool {
         content.utf16.count <= 100_000 && boxIsValid
+        && !fontName.isEmpty && fontName.count <= 200 && !fontName.contains(where: \.isNewline)
         && fontSize.isFinite && (1...2000).contains(fontSize)
         && [red, green, blue].allSatisfy { $0.isFinite && (0...1).contains($0) }
         && tracking.isFinite && (-100...1000).contains(tracking)
         && leading.isFinite && (0...5000).contains(leading)
         && colorRunsAreValid && fontRunsAreValid
+    }
+    var unavailableFontNames: [String] {
+        Set([fontName] + (fontRuns ?? []).map(\.fontName)).filter { NSFont(name: $0, size: fontSize) == nil }.sorted()
     }
     private var colorRunsAreValid: Bool {
         guard let colorRuns else { return true }

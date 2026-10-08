@@ -165,7 +165,7 @@ extension EditorSession {
     }
 
     func groupSelectedLayers() {
-        guard canEditLayers, allowsSelectedLayerEdits(.structure, descendants: true), let document, document.layers.count < 10_000 else { return }
+        guard canGroupSelectedLayers, let document else { return }
         let byID = Dictionary(uniqueKeysWithValues: document.layers.map { ($0.id, $0) })
         let selected = selectedLayerIDs.intersection(Set(byID.keys))
         func ancestors(_ id: UUID) -> [UUID?] {

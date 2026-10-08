@@ -18,6 +18,27 @@ import Testing
             let c = try BrushRaster.copy(image); let p = c.data!.assumingMemoryBound(to: UInt8.self) + y * c.bytesPerRow + x * 4
             return Array(UnsafeBufferPointer(start: p, count: 4))
         }
+        let grouping = EditorSession(); grouping.createDocument(width: 32, height: 24)
+        let emptyDocument = grouping.document
+        check("empty canvas permits folder creation", grouping.canGroupSelectedLayers)
+        grouping.groupSelectedLayers()
+        check("empty folder created", grouping.activeLayer?.isGroup == true && grouping.document?.layers.count == 1)
+        grouping.undo(); check("empty folder creation undo", grouping.document == emptyDocument)
+        grouping.redo(); check("empty folder creation redo", grouping.activeLayer?.isGroup == true)
+        grouping.selectLayer(nil); grouping.groupSelectedLayers()
+        check("deselected canvas creates another folder", grouping.document?.layers.count == 2)
+        grouping.toggleSelectedLayerLock(.all)
+        let lockedDocument = grouping.document, lockedRevision = grouping.history.currentRevision
+        grouping.groupSelectedLayers()
+        check("locked grouping remains refused", !grouping.canGroupSelectedLayers && grouping.document == lockedDocument && grouping.history.currentRevision == lockedRevision)
+        let arranging = EditorSession(); arranging.document = CanvasDocument(width: 32, height: 24, layers: [try LiquifyRegressionChecks.fixture(8, 8)])
+        let arrangeID = arranging.document!.layers[0].id
+        arranging.selectLayer(arrangeID); arranging.toggleSelectedLayerLock(.position)
+        check("valid position lock retains refusal", arranging.arrangeLayers(.left) == .rejected(.locked))
+        arranging.selectedLayerIDs = [UUID()]
+        let arrangeDocument = arranging.document, arrangeRevision = arranging.history.currentRevision
+        check("missing arrange target has accurate refusal", arranging.arrangeLayers(.left) == .rejected(.arrangeTarget))
+        check("missing arrange target preserves state", arranging.document == arrangeDocument && arranging.history.currentRevision == arrangeRevision)
         let red = FillColor(red: 1, green: 0, blue: 0), blue = FillColor(red: 0, green: 0, blue: 1)
         var fill = LayerFillStyle(kind: .linear, stops: [FillStop(position: 0, color: red), FillStop(position: 1, color: blue)], angle: 0)
         let gradient = try fill.render(width: 100, height: 80)
@@ -138,12 +159,25 @@ import Testing
         for file in files {
             let cg = CGImageSourceCreateWithURL(file as CFURL,nil)!, image = CGImageSourceCreateImageAtIndex(cg,0,nil)!
             dimensions.insert(image.width)
-            check("export sanitized path", file.deletingLastPathComponent() == destination && !file.lastPathComponent.contains(":"))
+            let parent = file.deletingLastPathComponent().resolvingSymlinksInPath().standardizedFileURL.path
+            let expectedParent = destination.resolvingSymlinksInPath().standardizedFileURL.path
+            check("export sanitized path", parent == expectedParent && !file.lastPathComponent.contains(":"))
         }
         check("export aspect dimensions", dimensions == [96,48])
         export.individualLayers = true; export.format = .jpeg
         let individual = try await BatchImageExporter.shared.export(snap, selected: [fillID], name: "Poster", options: export, folder: output)
         check("selected-layer JPEG", try FileManager.default.contentsOfDirectory(atPath: individual.path).allSatisfy { $0.hasSuffix(".jpg") })
+        let duplicate = try LiquifyRegressionChecks.fixture(128, 96)
+        let collisionSession = EditorSession()
+        collisionSession.document = CanvasDocument(width: 128, height: 96, layers: [fixture, duplicate])
+        let collisionSnapshot = collisionSession.projectSnapshot()!
+        let collision = try await BatchImageExporter.shared.export(collisionSnapshot, selected: [fixture.id, duplicate.id], name: "Poster",
+            options: BatchExportOptions(longSides: [0], prefix: String(repeating: "前", count: 120), individualLayers: true), folder: output)
+        check("long prefixes preserve all selected layer exports", try FileManager.default.contentsOfDirectory(atPath: collision.path).count == 2)
+        let nativeSide = max(snap.manifest.width, snap.manifest.height)
+        let deduplicated = try await BatchImageExporter.shared.export(snap, selected: [], name: "Poster",
+            options: BatchExportOptions(longSides: [0, nativeSide]), folder: output)
+        check("equivalent export sizes deduplicated per layer", try FileManager.default.contentsOfDirectory(atPath: deduplicated.path).count == 1)
         do { _ = try await BatchImageExporter.shared.export(snap, selected: [], name: "Bad", options: export, folder: output); check("invalid export rejected", false) } catch { check("invalid export rejected", true) }
         check("failed export removes partial directories", try FileManager.default.contentsOfDirectory(atPath: output.path).allSatisfy { !$0.hasSuffix(".partial") })
         let current = session.document!, rev = session.history.currentRevision
@@ -160,6 +194,103 @@ import Testing
         check("stale session state rejected", staleLocks.errorCode == "stale_locks")
         let locked = await session.executePosterBatch(PosterBatchRequest(documentID: current.id, expectedRevision: session.history.currentRevision, commands: [PosterCommand(kind: .invert)]))
         check("batch respects content lock", locked.errorCode == "locked")
+        let commandSession = EditorSession()
+        commandSession.document = CanvasDocument(width: 128, height: 96, layers: [fixture])
+        commandSession.selectLayer(fixture.id)
+        func execute(_ commands: [PosterCommand]) async -> PosterBatchResult {
+            await commandSession.executePosterBatch(PosterBatchRequest(documentID: commandSession.document!.id,
+                expectedRevision: commandSession.history.currentRevision, commands: commands))
+        }
+        let encoded = try await ImageExporter.shared.pngData(commandSession.projectSnapshot()!)
+        let imported = await execute([PosterCommand(kind: .addImage, name: "Imported", imageData: encoded)])
+        check("command imports image", imported.status == "changed" && commandSession.document!.layers.count == 2)
+        let importedID = commandSession.activeLayerID!
+        let maskOutcome = await execute([PosterCommand(kind: .setMask, maskData: encoded)])
+        check("command imports normalized mask", maskOutcome.status == "changed" && LayerMask.isValid(commandSession.activeLayer!.mask!.asset.image))
+        let maskBytes = try GuidedMatte.levels(of: commandSession.activeLayer!.mask!.asset.image, width: 128, height: 96)
+        let inputPixels = try bytes(source)
+        check("command mask uses luminance and alpha", maskBytes.enumerated().allSatisfy { index, value in
+            let p = index * 4
+            let red: Int = 54 * Int(inputPixels[p]), green: Int = 183 * Int(inputPixels[p+1]), blue: Int = 19 * Int(inputPixels[p+2])
+            let expected: Int = (red + green + blue + 128) >> 8
+            return abs(value * 255 - Float(expected)) <= 1
+        })
+        let maskIndex = commandSession.document!.layers.firstIndex { $0.id == importedID }!
+        commandSession.document!.layers[maskIndex].mask!.isLinked = false
+        let originalPlacement = commandSession.activeLayer!.transform
+        var moved = originalPlacement; moved.origin.x += 15
+        let transformed = await execute([PosterCommand(kind: .transform, transform: moved)])
+        check("command transform preserves unlinked mask placement", transformed.status == "changed" && commandSession.activeLayer!.mask!.placement == originalPlacement)
+        let clearMask = await execute([PosterCommand(kind: .setMask, clearMask: true)])
+        check("command clears mask", clearMask.status == "changed" && commandSession.activeLayer!.mask == nil)
+        let halftone = await execute([PosterCommand(kind: .filter, filter: "Color Halftone", halftone: ColorHalftoneSettings(size: 8, cyan: 10, magenta: 60, yellow: 20, black: 40, shape: .line, strength: 60))])
+        check("command full halftone parameters", halftone.status == "changed")
+        let preInvalid = commandSession.document
+        let badHalftone = await execute([PosterCommand(kind: .filter, filter: "Color Halftone", halftone: ColorHalftoneSettings(size: .infinity))])
+        check("command invalid halftone rolls back", badHalftone.errorCode == "invalid" && commandSession.document == preInvalid)
+        let noLUT = await execute([PosterCommand(kind: .filter, filter: "Color Lookup")])
+        check("command missing LUT rejected", noLUT.errorCode == "invalid")
+        let withLUT = await execute([PosterCommand(kind: .filter, filter: "Color Lookup", lut: PosterLUT(cube: identity, strength: 50, space: .linear))])
+        check("command LUT accepts cube and space", ["changed", "unchanged"].contains(withLUT.status))
+        let bandSettings = try PosterSelectiveColor(adjustments: ["Reds": [20,0,0,0], "Blues": [0,0,30,0]], relative: false).settings()
+        check("command selective bands", bandSettings.adjustments[.reds] == [20,0,0,0] && !bandSettings.relative)
+        do { _ = try PosterSelectiveColor(adjustments: ["Unknown": [0,0,0,0]]).settings(); check("command unknown band rejected", false) }
+        catch { check("command unknown band rejected", true) }
+        let beforeRefine = commandSession.document!
+        let refined = await execute([PosterCommand(kind: .refineEdges, edge: PosterEdgeOptions(strokes: [PosterEdgeStroke(mode: "Hide", diameter: 20, strength: 1, points: [CGPoint(x: 30,y: 30)])]))])
+        check("command local edge brush copy", refined.status == "changed" && commandSession.document!.layers.count == beforeRefine.layers.count + 1 && commandSession.activeLayer!.mask != nil)
+        commandSession.undo()
+        check("command edge single undo", commandSession.document == beforeRefine)
+        let visibility = await execute([PosterCommand(kind: .visibility, layerID: importedID, visible: false)])
+        check("command visibility", visibility.status == "changed" && commandSession.activeLayer!.isVisible == false)
+        commandSession.selectedLayerIDs = Set(commandSession.document!.layers.map(\.id))
+        let countBeforeRemove = commandSession.document!.layers.count
+        let removed = await execute([PosterCommand(kind: .remove)])
+        check("implicit command targets active layer only", removed.status == "changed" && commandSession.document!.layers.count == countBeforeRemove - 1)
+        check("missing run font reported", {
+            var value = text; value.fontRuns = [LayerTextFontRun(location: 0, length: 1, fontName: "Missing-Poster-Font")]
+            return value.unavailableFontNames.contains("Missing-Poster-Font")
+        }())
+        edgeSession.redo()
+        edgeSession.selectLayer(edgeSession.document!.layers.last!.id)
+        let firstPreview = edge.previewImage
+        check("edge preview reused for zoom", edge.previewImage === firstPreview)
+        let fillSession = EditorSession(); fillSession.createNewProject(width: 64, height: 64)
+        fillSession.openFillLayer(); await fillSession.applyFillLayer(fillSession.fillLayerDraft!)
+        fillSession.beginEdgeRefinement(); await fillSession.applyEdgeRefinement()
+        check("mask-only refinement preserves editable fill copy", fillSession.activeLayer?.liveFill != nil)
+        var editableText = LayerTextStyle(); editableText.content = "中文 ABC"; editableText.fontSize = 20
+        let textAdded = await execute([PosterCommand(kind: .addText, text: editableText)])
+        editableText.content = "叠绘海报 Mixed 中文"
+        let textEdited = await execute([PosterCommand(kind: .editText, text: editableText)])
+        check("command edits live text", textAdded.status == "changed" && textEdited.status == "changed" && commandSession.activeLayer?.liveText?.style == editableText)
+        let cancelledFolder = output.appendingPathComponent("cancelled-export", isDirectory: true)
+        try FileManager.default.createDirectory(at: cancelledFolder, withIntermediateDirectories: false)
+        let cancelled = Task { try await BatchImageExporter.shared.export(snap, selected: [], name: "Cancelled", options: BatchExportOptions(), folder: cancelledFolder) }
+        cancelled.cancel()
+        do { _ = try await cancelled.value; check("batch cancellation throws", false) }
+        catch is CancellationError { check("batch cancellation throws", true) }
+        check("batch cancellation cleans staging", try FileManager.default.contentsOfDirectory(atPath: cancelledFolder.path).isEmpty)
+        let partialCancelled = Task {
+            try await BatchImageExporter.shared.export(snap, selected: [], name: "Partial", options: BatchExportOptions(longSides: [0,48,24]), folder: cancelledFolder) { completed, _ in
+                if completed == 1 { withUnsafeCurrentTask { $0?.cancel() } }
+            }
+        }
+        do { _ = try await partialCancelled.value; check("batch cancellation after first file throws", false) }
+        catch is CancellationError { check("batch cancellation after first file throws", true) }
+        check("batch cancellation after first file cleans outputs", try FileManager.default.contentsOfDirectory(atPath: cancelledFolder.path).isEmpty)
+        let imeSession = EditorSession(); imeSession.createNewProject(width: 320, height: 180)
+        imeSession.beginText(in: CGRect(x: 0, y: 0, width: 280, height: 160))
+        let imeCanvas = CanvasView(session: imeSession)
+        let editor = InlineTextEditor(canvas: imeCanvas)
+        editor.synchronize(imeSession.textDraft!)
+        editor.textView.setMarkedText("nihao", selectedRange: NSRange(location: 5, length: 0), replacementRange: NSRange(location: NSNotFound, length: 0))
+        check("native composition marked text retained", editor.textView.hasMarkedText())
+        var refreshed = imeSession.textDraft!; refreshed.style.red = 1; imeSession.textDraft = refreshed
+        editor.synchronize(refreshed)
+        check("style refresh preserves native composition", editor.textView.hasMarkedText() && editor.textView.string == "nihao")
+        editor.textView.insertText("你好", replacementRange: editor.textView.markedRange())
+        check("native composition commits CJK", !editor.textView.hasMarkedText() && editor.textView.string == "你好")
         if large {
             let big = try LiquifyRegressionChecks.fixture(3840,2160).asset!.image
             for (name, operation) in [("Halftone 4K", { try ColorHalftoneSettings().apply(big, scale: 1) }), ("LUT 4K", { try ColorLUTSettings(table: lut).apply(big) })] {

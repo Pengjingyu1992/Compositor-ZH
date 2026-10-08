@@ -50,7 +50,7 @@ struct SelectionEditTests {
         session.selectTool(.brush)
         session.beginBrush(at: CGPoint(x: 5, y: 20))
         // Refused out loud, not silently: the selection that's in the way can't be seen.
-        #expect(session.brushError?.contains("Deselect") == true)
+        #expect(session.brushError?.contains(L10n.text("Deselect")) == true)
         session.brushError = nil
         session.continueBrush(at: CGPoint(x: 95, y: 20))
         await session.finishBrush()

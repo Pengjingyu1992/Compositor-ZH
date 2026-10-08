@@ -30,6 +30,10 @@ nonisolated enum EdgeBackground: String, CaseIterable, Sendable {
     var createsCopy = true
     var isApplying = false
     var isPainting = false
+    var zoom: Double = 1
+    var pan: CGSize = .zero
+    private var revision: UInt64 = 0
+    @ObservationIgnored private var previewCache: (key: [Double], image: CGImage)?
     private var lastPoint: CGPoint?
     private let guide: [Float]
     private var guided: [Float] = []
@@ -94,24 +98,31 @@ nonisolated enum EdgeBackground: String, CaseIterable, Sendable {
             } }
         }
         lastPoint = point
+        revision &+= 1
     }
     func endStroke() { isPainting = false; lastPoint = nil }
-    func undo() { guard canUndo, let value = past.popLast() else { return }; future.append(levels); levels = value }
-    func redo() { guard canRedo, let value = future.popLast() else { return }; past.append(levels); levels = value; trim() }
+    func undo() { guard canUndo, let value = past.popLast() else { return }; future.append(levels); levels = value; revision &+= 1 }
+    func redo() { guard canRedo, let value = future.popLast() else { return }; past.append(levels); levels = value; trim(); revision &+= 1 }
     func replaceMask(_ mask: CGImage) throws {
         guard !isApplying, !isPainting else { return }
-        past.append(levels); future.removeAll(); levels = try GuidedMatte.levels(of: mask, width: width, height: height); trim()
+        past.append(levels); future.removeAll(); levels = try GuidedMatte.levels(of: mask, width: width, height: height); trim(); revision &+= 1
     }
     var previewImage: CGImage? {
+        let key = [Double(revision), feather, shift, contrast, decontaminate, background == .mask ? 1 : 0]
+        if let cached = previewCache, cached.key == key { return cached.image }
         guard let mask = try? EdgeRefinement.renderMask(levels, width: width, height: height, feather: feather * Double(width) / Double(source.width), shift: shift * Double(width) / Double(source.width), contrast: contrast),
               let context = try? BrushRaster.context(width: width, height: height, mask: false) else { return nil }
         if background == .mask { BrushRaster.draw(mask, in: CGRect(x: 0, y: 0, width: width, height: height), mask: false, context: context) }
         else {
+            guard let cleaned = try? EdgeColorDecontamination.apply(previewSource, mask: mask,
+                amount: ImageAdjustmentPixels.clamp(decontaminate, 0...100, 0) / 100) else { return nil }
             context.saveGState(); context.translateBy(x: 0, y: CGFloat(height)); context.scaleBy(x: 1, y: -1)
             context.clip(to: CGRect(x: 0, y: 0, width: width, height: height), mask: mask)
-            context.draw(previewSource, in: CGRect(x: 0, y: 0, width: width, height: height)); context.restoreGState()
+            context.draw(cleaned, in: CGRect(x: 0, y: 0, width: width, height: height)); context.restoreGState()
         }
-        return context.makeImage()
+        guard let image = context.makeImage() else { return nil }
+        previewCache = (key, image)
+        return image
     }
     nonisolated static func renderMask(_ levels: [Float], width: Int, height: Int, feather: Double, shift: Double, contrast: Double) throws -> CGImage {
         guard width > 0, height > 0, width * height <= 1536 * 1536, levels.count == width * height,
@@ -143,6 +154,7 @@ extension EditorSession {
         let image = edit.previewSource
         do {
             let mask = try await Task.detached(priority: .userInitiated) { try SubjectRemoval.subjectMask(image, under: nil, settings: FilterSettings()) }.value
+            try Task.checkCancellation()
             edit.isApplying = false
             guard edgeRefinement === edit, ownsEdit(edit.owner) else { return }
             try edit.replaceMask(mask)
@@ -173,14 +185,16 @@ extension EditorSession {
                 let cleaned = try EdgeColorDecontamination.apply(source, mask: mask, amount: decontaminate / 100)
                 return (try LayerMask.asset(from: mask), cleaned, try PixelInvert.thumbnail(of: cleaned))
             }.value
+            try Task.checkCancellation()
             guard edgeRefinement === edit, ownsEdit(edit.owner), allowsLayerEdit(edit.layer.id, .content) else { edit.isApplying = false; return }
             beginEdit("Refine Layer Edges")
             if copy {
-                var layer = ImageLayer(id: UUID(), asset: ImportedImage(image: result.1, thumbnail: result.2, name: edit.layer.name),
+                let layer = ImageLayer(id: UUID(), asset: ImportedImage(image: result.1, thumbnail: result.2, name: edit.layer.name),
                     name: L10n.format("%@ — Refined", edit.layer.name), isVisible: true, transform: edit.layer.transform,
                     parentID: edit.layer.parentID, opacity: edit.layer.opacity, blendMode: edit.layer.blendMode,
-                    mask: LayerMask(asset: result.0), maskSourceID: edit.layer.maskSourceID, effects: edit.layer.effects)
-                layer.shape = nil; layer.text = nil
+                    mask: LayerMask(asset: result.0), maskSourceID: edit.layer.maskSourceID,
+                    shape: decontaminate == 0 ? edit.layer.shape : nil, effects: edit.layer.effects,
+                    text: decontaminate == 0 ? edit.layer.text : nil, fill: decontaminate == 0 ? edit.layer.fill : nil)
                 document?.layers.insert(layer, at: index + 1); document?.layers[index].isVisible = false; activeLayerID = layer.id
             } else { document?.layers[index].mask = LayerMask(asset: result.0) }
             endEdit(); edit.isApplying = false; edgeRefinement = nil; releaseEdit(edit.owner)
@@ -206,7 +220,13 @@ nonisolated enum EdgeColorDecontamination {
                         guard nx >= 0, ny >= 0, nx < width, ny < height, levels[ny * width + nx] > 0.98 else { continue }
                         let p = input + ny * stride + nx * 4; guard p[3] > 0 else { continue }
                         let blend = min(1, amount) * Double(1 - coverage)
-                        for c in 0..<3 { target[c] = UInt8(max(0, min(Double(target[3]), (Double(target[c]) * (1 - blend) + Double(p[c]) / Double(p[3]) * Double(target[3]) * blend).rounded()))) }
+                        let alpha = Double(target[3])
+                        for c in 0..<3 {
+                            let retained: Double = Double(target[c]) * (1 - blend)
+                            let neighbor: Double = Double(p[c]) / Double(p[3]) * alpha * blend
+                            let value: Double = (retained + neighbor).rounded()
+                            target[c] = UInt8(max(0, min(alpha, value)))
+                        }
                         break search
                     }
                 }

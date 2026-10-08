@@ -17,7 +17,8 @@ extension EditorSession {
         canEditLayers && selectedLayerIDs.count == 1 && activeLayerID.map { !effectiveLocks(for: $0).contains(.all) } == true
     }
     var canGroupSelectedLayers: Bool {
-        canEditLayers && (document?.layers.count ?? 10_000) < 10_000 && allowsSelectedLayerEdits(.structure, descendants: true)
+        canEditLayers && (document?.layers.count ?? 10_000) < 10_000
+            && (selectedLayerIDs.isEmpty || allowsSelectedLayerEdits(.structure, descendants: true))
     }
     var canDeleteLayerTarget: Bool {
         guard canEditLayers, activeLayer != nil else { return false }

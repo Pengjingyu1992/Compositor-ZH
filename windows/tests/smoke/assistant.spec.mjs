@@ -6,7 +6,7 @@ import os from 'node:os';
 import {fileURLToPath} from 'node:url';
 import {fixture,IDS} from '../fixtures.mjs';
 const root=fileURLToPath(new URL('../../',import.meta.url));
-let temp,project,instance,page,stub,received,answer,settingsDirectory,answerDelay,releaseAnswer;
+let temp,project,instance,page,stub,received,answer,settingsDirectory,answerDelay,releaseAnswer,saves;
 // A loopback stub stands in for the model service. It keeps the whole path -
 // settings, IPC, prompt assembly, parsing, checking, applying - under test
 // without a network, a real key, or a vendor.
@@ -37,7 +37,7 @@ test.beforeEach(async()=>{
   project=path.join(temp,'assistant.comp');
   await fixture(project,m=>{m.width=640;m.height=420;m.layers[0].name='背景 / Background';m.layers[1].name='色彩 / Color';return m;});
   answer={reply:'好的',ops:[]};
-  answerDelay=undefined;releaseAnswer=undefined;
+  answerDelay=undefined;releaseAnswer=undefined;saves=0;
   const started=await startStub();stub=started.server;
   instance=await _electron.launch({timeout:30000,executablePath:path.join(root,'release/win-unpacked/Compositor.exe'),args:['--use-angle=swiftshader','--enable-unsafe-swiftshader'],env:cleanEnv()});
   page=await instance.firstWindow();
@@ -64,9 +64,12 @@ async function send(ops){
   await expect(page.getByTestId('ai-prompt')).toBeEnabled();
 }
 async function savedManifest(){
-  const file=path.join(temp,'saved.comp');
+  const file=path.join(temp,`saved-${++saves}.comp`);
   await instance.evaluate(({dialog},file)=>{dialog.showSaveDialog=async()=>({canceled:false,filePath:file});},file);
-  await page.getByTestId('save-project').click();
+  // An opened fixture already has a location. Use Save As to choose this copy.
+  await instance.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].webContents.send('editor:saveAs'));
+  await expect.poll(async()=>{try{return await readFile(path.join(file,'manifest.json'),'utf8');}catch{return '';}}).not.toBe('');
+  await expect(page.getByTestId('ai-prompt')).toBeEnabled();
   await expect(page.locator('.badge')).toContainText('已保存');
   return JSON.parse(await readFile(path.join(file,'manifest.json'),'utf8'));
 }
@@ -132,15 +135,19 @@ test('losing the GPU blocks assistant visual edits and retains the saved preview
   await writeFile(path.join(project,'QuickLook/Preview.jpg'),preview);
   // Capture the engine's real WebGL surface when the fixture is reopened.
   await page.evaluate(()=>{
-    const original=HTMLCanvasElement.prototype.getContext;
     window.testGl=[];
-    HTMLCanvasElement.prototype.getContext=function(type,...args){
-      const value=original.call(this,type,...args);
-      if(type==='webgl2'&&value&&!window.testGl.includes(value))window.testGl.push(value);
-      return value;
-    };
+    for(const Canvas of [HTMLCanvasElement,OffscreenCanvas]){
+      const original=Canvas.prototype.getContext;
+      Canvas.prototype.getContext=function(type,...args){
+        const value=original.call(this,type,...args);
+        if(type==='webgl2'&&value&&!window.testGl.includes(value))window.testGl.push(value);
+        return value;
+      };
+    }
   });
   await page.getByTestId('open-project').click();
+  await expect(page.getByTestId('ai-prompt')).toBeEnabled();
+  await expect.poll(()=>page.evaluate(()=>window.testGl.filter(gl=>!gl.isContextLost()).length)).toBeGreaterThan(0);
   await expect(page.getByTestId('rendered-canvas')).toBeVisible();
   await page.evaluate(()=>{
     if(!window.testGl.length)throw new Error('No engine WebGL context');

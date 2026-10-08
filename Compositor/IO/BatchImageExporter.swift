@@ -62,12 +62,19 @@ actor BatchImageExporter {
             guard !candidates.isEmpty, candidates.count <= 100 else { throw ProjectError.invalid }
             targets = try candidates.map { ($0.name + "-" + $0.id.uuidString.prefix(8), try Self.isolate($0.id, in: snapshot)) }
         } else { targets = [(name, snapshot)] }
-        var names = Set<String>()
+        var targetNames = Set<String>()
         let total = targets.count * Set(options.longSides.map { $0 == 0 ? max(snapshot.manifest.width, snapshot.manifest.height) : $0 }).count
         var count = 0
         await progress?(count, total)
         for (targetName, target) in targets {
             try Task.checkCancellation()
+            let baseName = Self.safeName(options.prefix + targetName)
+            var uniqueName = baseName, suffix = 1
+            while !targetNames.insert(uniqueName.lowercased()).inserted {
+                uniqueName = String(baseName.prefix(100)) + "-" + String(suffix)
+                suffix += 1
+            }
+            var dimensions = Set<String>()
             let raster = try await ImageExporter.shared.render(target)
             for side in options.longSides {
                 try Task.checkCancellation()
@@ -75,6 +82,8 @@ actor BatchImageExporter {
                 let width = max(1, Int((Double(raster.image.width) * factor).rounded()))
                 let height = max(1, Int((Double(raster.image.height) * factor).rounded()))
                 guard width * height <= DocumentLimits.maxSurfacePixels else { throw ExportError.tooLarge }
+                let dimension = width.description + "x" + height.description
+                guard dimensions.insert(dimension).inserted else { continue }
                 let data = try autoreleasepool {
                     let context = try BrushRaster.context(width: width, height: height, mask: false)
                     if options.format == .jpeg { context.setFillColor(gray: 1, alpha: 1); context.fill(CGRect(x: 0, y: 0, width: width, height: height)) }
@@ -89,8 +98,7 @@ actor BatchImageExporter {
                     guard CGImageDestinationFinalize(writer) else { throw ExportError.encode }
                     return encoded as Data
                 }
-                let file = Self.safeName(options.prefix + targetName) + "_" + width.description + "x" + height.description + "." + (options.format == .png ? "png" : "jpg")
-                guard names.insert(file.lowercased()).inserted else { continue }
+                let file = uniqueName + "_" + dimension + "." + (options.format == .png ? "png" : "jpg")
                 try data.write(to: stage.appendingPathComponent(file), options: [.atomic])
                 count += 1
                 await progress?(count, total)

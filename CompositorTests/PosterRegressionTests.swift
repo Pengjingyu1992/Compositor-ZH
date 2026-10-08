@@ -144,6 +144,17 @@ import Testing
         export.individualLayers = true; export.format = .jpeg
         let individual = try await BatchImageExporter.shared.export(snap, selected: [fillID], name: "Poster", options: export, folder: output)
         check("selected-layer JPEG", try FileManager.default.contentsOfDirectory(atPath: individual.path).allSatisfy { $0.hasSuffix(".jpg") })
+        let duplicate = try LiquifyRegressionChecks.fixture(128, 96)
+        let collisionSession = EditorSession()
+        collisionSession.document = CanvasDocument(width: 128, height: 96, layers: [fixture, duplicate])
+        let collisionSnapshot = collisionSession.projectSnapshot()!
+        let collision = try await BatchImageExporter.shared.export(collisionSnapshot, selected: [fixture.id, duplicate.id], name: "Poster",
+            options: BatchExportOptions(longSides: [0], prefix: String(repeating: "前", count: 120), individualLayers: true), folder: output)
+        check("long prefixes preserve all selected layer exports", try FileManager.default.contentsOfDirectory(atPath: collision.path).count == 2)
+        let nativeSide = max(snap.manifest.width, snap.manifest.height)
+        let deduplicated = try await BatchImageExporter.shared.export(snap, selected: [], name: "Poster",
+            options: BatchExportOptions(longSides: [0, nativeSide]), folder: output)
+        check("equivalent export sizes deduplicated per layer", try FileManager.default.contentsOfDirectory(atPath: deduplicated.path).count == 1)
         do { _ = try await BatchImageExporter.shared.export(snap, selected: [], name: "Bad", options: export, folder: output); check("invalid export rejected", false) } catch { check("invalid export rejected", true) }
         check("failed export removes partial directories", try FileManager.default.contentsOfDirectory(atPath: output.path).allSatisfy { !$0.hasSuffix(".partial") })
         let current = session.document!, rev = session.history.currentRevision

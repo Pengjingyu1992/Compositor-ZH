@@ -132,6 +132,12 @@ import Testing
         check("PSD padded vector accepted",PSDVector.model(from:paddedVector,canvas:CGSize(width:480,height:320)) == readPath)
         paddedVector.append(1)
         check("PSD invalid vector trailing bytes refused",PSDVector.model(from:paddedVector,canvas:CGSize(width:480,height:320)) == nil)
+        let boundaryPath = VectorPathStyle(contours:[VectorContour(anchors:[
+            PathAnchor(point:CGPoint(x:CGFloat(128).nextDown,y:0)), PathAnchor(point:.zero)])])
+        do {
+            _ = try PSDEditableWriter.vector(boundaryPath,transform:LayerTransform(origin:.zero,size:CGSize(width:1,height:1)),canvas:CGSize(width:1,height:1))
+            check("PSD rounded fixed-point overflow refused",false)
+        } catch { check("PSD rounded fixed-point overflow refused",true) }
         vector.contours = [outer]; vector.evenOdd = false
         let psdSession = EditorSession(); psdSession.createDocument(width:480,height:320)
         let fill = LayerFillStyle(kind:.linear)

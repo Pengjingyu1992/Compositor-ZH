@@ -51,7 +51,9 @@ nonisolated enum PSDEditableWriter {
             let p = point.applying(mapping)
             for value in [p.y/canvas.height, p.x/canvas.width] {
                 guard value.isFinite, value >= -128, value < 128 else { throw PSDExportError.tooLarge }
-                b.i32(Int32((value * 16777216).rounded()))
+                let fixed = (value * 16777216).rounded()
+                guard fixed >= CGFloat(Int32.min), fixed <= CGFloat(Int32.max) else { throw PSDExportError.tooLarge }
+                b.i32(Int32(fixed))
             }
         }
         for contour in path.contours {

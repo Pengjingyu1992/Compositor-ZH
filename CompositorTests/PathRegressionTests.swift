@@ -120,6 +120,14 @@ import Testing
         catch { check("overflow text explicitly refused",true) }
         text.pathLayout = nil; text.warp = TextWarp(bend:0.25)
         check("arc warp rendered",try EditorSession.textImage(text).width == 360)
+        let missingLengths = PSDText.parse(extra:["TySh":PSDFixture.tySh(text:"Hello",secondSize:48)])
+        check("PSD missing style lengths reports fallback",missingLengths?.notes.contains(PSDText.firstStyleNote) == true)
+        let mixedSize = PSDText.parse(extra:["TySh":PSDFixture.tySh(text:"Hello",secondSize:48,runLengths:[2,3])])
+        check("PSD mixed run sizes reports fallback",mixedSize?.notes.contains(PSDText.firstStyleNote) == true)
+        let mixedLeading = PSDText.parse(extra:["TySh":PSDFixture.tySh(text:"Hello",leading:30,secondLeading:48,runLengths:[2,3])])
+        check("PSD mixed run leading reports fallback",mixedLeading?.style.leading == 30 && mixedLeading?.notes.contains(PSDText.firstStyleNote) == true)
+        let mixedScale = PSDText.parse(extra:["TySh":PSDFixture.tySh(text:"Hello",secondHorizontalScale:1.2,runLengths:[2,3])])
+        check("PSD mixed run scale reports fallback",mixedScale?.notes.contains(PSDText.firstStyleNote) == true)
         let transformed = LayerTransform(origin:CGPoint(x:12,y:18),size:CGSize(width:100,height:100),rotation:30,flipX:true)
         let psdVector = try PSDEditableWriter.vector(vector,transform:transformed,canvas:CGSize(width:480,height:320))
         let readPath = PSDVector.model(from:psdVector,canvas:CGSize(width:480,height:320))!

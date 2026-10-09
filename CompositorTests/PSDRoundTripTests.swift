@@ -631,10 +631,10 @@ struct PSDRoundTripTests {
     }
 
     @Test func photoshopTextReportsLeadingOnlyStyleDifferences() {
-        let byLeading = PSDText.parse(extra: ["TySh": PSDFixture.tySh(text: "Hello", leading: 30, secondLeading: 48)])
+        let byLeading = PSDText.parse(extra: ["TySh": PSDFixture.tySh(text: "Hello", leading: 30, secondLeading: 48, runLengths: [2,3])])
         #expect(byLeading?.style.leading == 30)
         #expect(byLeading?.notes.contains(PSDText.firstStyleNote) == true)
-        let byScale = PSDText.parse(extra: ["TySh": PSDFixture.tySh(text: "Hello", secondHorizontalScale: 1.2)])
+        let byScale = PSDText.parse(extra: ["TySh": PSDFixture.tySh(text: "Hello", secondHorizontalScale: 1.2, runLengths: [2,3])])
         #expect(byScale?.notes.contains(PSDText.firstStyleNote) == true)
     }
 

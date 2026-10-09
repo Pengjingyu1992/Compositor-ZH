@@ -1,8 +1,10 @@
 import CoreGraphics
 import Foundation
+#if !PATH_CLT_CHECKS
 @testable import Compositor
+#endif
 
-/// Builds tiny Photoshop files for reader tests. Not part of the app; Compositor does not write PSD.
+/// Builds tiny Photoshop files independently of the app's PSD writer for reader tests.
 nonisolated enum PSDFixture {
     static func data(_ document: PSDDocument, composite: CGImage, largeDocument: Bool = false,
                      extras: [UUID: [String: Data]] = [:]) throws -> Data {
@@ -243,6 +245,7 @@ nonisolated enum PSDFixture {
                      fauxBold: Bool = false, fauxItalic: Bool = false, vertical: Bool = false, warp: Bool = false,
                      secondSize: Double? = nil, secondLeading: Double? = nil,
                      secondHorizontalScale: Double? = nil, secondVerticalScale: Double? = nil,
+                     runLengths: [Int]? = nil,
                      tx: Double = 40, ty: Double = 50,
                      xx: Double = 1, xy: Double = 0, yx: Double = 0, yy: Double = 1,
                      bounds: (CGFloat, CGFloat, CGFloat, CGFloat)? = nil,
@@ -261,14 +264,14 @@ nonisolated enum PSDFixture {
         if let glyphBounds {
             items.append(("boundingBox", rectItem(glyphBounds)))
         }
-        items.append(("EngineData", rawItem(Data(engine(text: text, font: font, fontSize: fontSize, red: red, green: green, blue: blue, justification: justification, tracking: tracking, leading: leading, fauxBold: fauxBold, fauxItalic: fauxItalic, secondSize: secondSize, secondLeading: secondLeading, secondHorizontalScale: secondHorizontalScale, secondVerticalScale: secondVerticalScale).utf8))))
+        items.append(("EngineData", rawItem(Data(engine(text: text, font: font, fontSize: fontSize, red: red, green: green, blue: blue, justification: justification, tracking: tracking, leading: leading, fauxBold: fauxBold, fauxItalic: fauxItalic, secondSize: secondSize, secondLeading: secondLeading, secondHorizontalScale: secondHorizontalScale, secondVerticalScale: secondVerticalScale, runLengths: runLengths).utf8))))
         block.descriptor(classID: "TxLr", items: items)
         block.u16(1)
         block.descriptor(classID: "warp", items: [("warpStyle", enumItem(type: "warpStyle", value: warp ? "warpArc" : "warpNone"))])
         return block.data
     }
 
-    private static func engine(text: String, font: String, fontSize: Double, red: Double, green: Double, blue: Double, justification: Int, tracking: Double, leading: Double?, fauxBold: Bool, fauxItalic: Bool, secondSize: Double?, secondLeading: Double?, secondHorizontalScale: Double?, secondVerticalScale: Double?) -> String {
+    private static func engine(text: String, font: String, fontSize: Double, red: Double, green: Double, blue: Double, justification: Int, tracking: Double, leading: Double?, fauxBold: Bool, fauxItalic: Bool, secondSize: Double?, secondLeading: Double?, secondHorizontalScale: Double?, secondVerticalScale: Double?, runLengths: [Int]?) -> String {
         let run = { (size: Double, runLeading: Double?, horizontal: Double, vertical: Double) in """
 <<
 /StyleSheet
@@ -326,6 +329,7 @@ nonisolated enum PSDFixture {
 [
 \(runs)
 ]
+\(runLengths.map { "/RunLengthArray [ " + $0.map(String.init).joined(separator: " ") + " ]" } ?? "")
 >>
 >>
 /ResourceDict

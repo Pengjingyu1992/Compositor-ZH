@@ -189,11 +189,27 @@ nonisolated enum PSDText {
             notes.append(fauxNote)
         }
         if runs.count > 1, runs.dropFirst().contains(where: { signature($0) != signature(first) }) {
-            let lengths = array(walk(engine,"EngineDict","StyleRun","RunLengthArray"))
+            let firstSignature = signature(first)
+            let losesStyle = runs.dropFirst().contains { run in
+                let sign = signature(run)
+                return sign.size != firstSignature.size || sign.tracking != firstSignature.tracking
+                    || sign.leading != firstSignature.leading || sign.autoLeading != firstSignature.autoLeading
+                    || sign.horizontalScale != firstSignature.horizontalScale || sign.verticalScale != firstSignature.verticalScale
+                    || sign.bold != firstSignature.bold || sign.italic != firstSignature.italic
+            }
+            let rawLengths = array(walk(engine,"EngineDict","StyleRun","RunLengthArray"))
+            let lengths = rawLengths.compactMap { value -> Int? in
+                guard let count = number(value), count.isFinite, count >= 0, count <= 100_001,
+                      count.rounded() == count else { return nil }
+                return Int(count)
+            }
+            let textLength = style.content.utf16.count, totalLength = lengths.reduce(0,+)
+            let completeRanges = rawLengths.count == runs.count && lengths.count == rawLengths.count
+                && (textLength...textLength+1).contains(totalLength)
+            if losesStyle || !completeRanges { notes.append(firstStyleNote) }
             var offset = 0, colors: [LayerTextColorRun] = [], faces: [LayerTextFontRun] = []
-            for (index,run) in runs.enumerated() {
-                guard index < lengths.count, let count = number(lengths[index]), count.isFinite, count >= 0, count <= 100_001 else { break }
-                let length = min(Int(count), max(0,style.content.utf16.count-offset)), sign = signature(run)
+            for (index,run) in runs.enumerated() where completeRanges {
+                let length = min(lengths[index], max(0,textLength-offset)), sign = signature(run)
                 if length > 0 {
                     if sign.red != Double(style.red) || sign.green != Double(style.green) || sign.blue != Double(style.blue) {
                         colors.append(LayerTextColorRun(location:offset,length:length,red:CGFloat(sign.red),green:CGFloat(sign.green),blue:CGFloat(sign.blue)))
@@ -203,7 +219,6 @@ nonisolated enum PSDText {
                     }
                 }
                 offset += length
-                if sign.size != points || sign.tracking != tracking || sign.autoLeading != auto { notes.append(firstStyleNote) }
             }
             style.colorRuns = colors.isEmpty ? nil : colors; style.fontRuns = faces.isEmpty ? nil : faces
         }

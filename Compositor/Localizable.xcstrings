@@ -18823,17 +18823,12 @@
       }
     },
     "Start see-through, or with a white or black Background layer. Click to switch.": {
+      "extractionState": "manual",
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Start see-through, or with a white or black Background layer. Click to switch."
-          }
-        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "以透明画布、白色或黑色背景图层开始。点击切换。"
+            "value": "选择透明画布，或以白色、黑色背景图层开始。点击切换。"
           }
         }
       }
@@ -18983,13 +18978,8 @@
       }
     },
     "Units: pixels, inches, centimeters or millimeters. Click to switch.": {
+      "extractionState": "manual",
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Units: pixels, inches, centimeters or millimeters. Click to switch."
-          }
-        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",

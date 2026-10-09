@@ -54,7 +54,7 @@ final class CompositorApplicationDelegate: NSObject, NSApplicationDelegate {
         }
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             // Match the key regardless of Shift so an uppercase letter stays text too.
-            guard ShortcutChord(event)?.key == ShortcutSettings.shared.native("f").key,
+            guard ShortcutChord(event).key == ShortcutSettings.shared.native("f").key,
                   event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
                   let text = NSApp.keyWindow?.firstResponder as? NSText else { return event }
             text.keyDown(with: event)

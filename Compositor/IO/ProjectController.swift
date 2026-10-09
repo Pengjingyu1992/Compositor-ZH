@@ -41,26 +41,66 @@ final class ProjectController {
     private var writing: Task<Bool, Never>?
     func finishWriting() async { if let writing { _ = await writing.value } }
 
+    /// File › Export PNG…: the flattened canvas, lossless, straight to a save panel.
     func exportPNG() async {
         guard session.document != nil, begin() else { return }
         defer { session.isProjectBusy = false }
         guard let snapshot = session.projectSnapshot() else { return }
-        let panel = NSSavePanel()
-        panel.allowedContentTypes = [.png]
-        panel.canCreateDirectories = true
-        panel.isExtensionHidden = false
-        panel.title = L10n.text("Export PNG")
-        panel.nameFieldStringValue = (session.projectURL?.deletingPathExtension().lastPathComponent ?? "Untitled") + ".png"
-        let response: NSApplication.ModalResponse
-        if let window { response = await panel.beginSheetModal(for: window) }
-        else { response = await panel.begin() }
-        guard response == .OK, let url = panel.url else { return }
+        guard let url = await savePanel(for: .png) else { return }
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
         do { try await ImageExporter.shared.exportPNG(snapshot, to: url) }
         catch { await showError("Couldn’t export PNG", error: error) }
     }
 
+    /// File › Export As…: PNG, JPEG or a one-page PDF, at the canvas's size or scaled, previewed first. Export JPEG…
+    /// opens it on JPEG.
+    func exportAs(start: ExportFormat? = nil) async {
+        guard let window, session.document != nil, begin() else { return }
+        defer { session.isProjectBusy = false }
+        guard let snapshot = session.projectSnapshot() else { return }
+        do {
+            let raster = try await ImageExporter.shared.render(snapshot)
+            let chosen: (data: Data, format: ExportFormat)? = await withCheckedContinuation { continuation in
+                let sheet = NSWindow()
+                sheet.styleMask = [.titled, .fullSizeContentView]
+                sheet.title = L10n.text("Export As")
+                sheet.contentViewController = NSHostingController(rootView: ExportAsSheet(
+                    raster: raster, session: session, format: start ?? lastExportFormat) { chosen in
+                    window.endSheet(sheet)
+                    sheet.orderOut(nil)
+                    // Release the hosted view and its closure after dismissal.
+                    sheet.contentViewController = nil
+                    continuation.resume(returning: chosen)
+                })
+                window.beginSheet(sheet)
+            }
+            guard let chosen else { return }
+            lastExportFormat = chosen.format
+            guard let url = await savePanel(for: chosen.format) else { return }
+            let scoped = url.startAccessingSecurityScopedResource()
+            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+            try await ImageExporter.shared.write(chosen.data, to: url)
+        } catch { await showError("Couldn’t export", error: error) }
+    }
+
+    /// The format Export As last used, offered first next time.
+    private var lastExportFormat = ExportFormat.png
+
+    /// Where an export goes: the project's name, with the format's extension.
+    private func savePanel(for format: ExportFormat) async -> URL? {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [format.type]
+        panel.canCreateDirectories = true
+        panel.isExtensionHidden = false
+        panel.title = L10n.format("Export %@", L10n.text(format.rawValue))
+        panel.nameFieldStringValue = (session.projectURL?.deletingPathExtension().lastPathComponent ?? L10n.text("Untitled"))
+            + "." + (format.type.preferredFilenameExtension ?? format.rawValue.lowercased())
+        let response: NSApplication.ModalResponse
+        if let window { response = await panel.beginSheetModal(for: window) }
+        else { response = await panel.begin() }
+        return response == .OK ? panel.url : nil
+    }
     func canvasSize() async {
         guard let window, let document = session.document, begin() else { return }
         defer { session.isProjectBusy = false }
@@ -155,39 +195,6 @@ final class ProjectController {
         session.showsGrid = original.shown
         session.layoutGrid = settings?.0 ?? original.grid
         session.gridAppearance = settings?.1 ?? original.appearance
-    }
-
-    func exportJPEG() async {
-        guard let window, session.document != nil, begin() else { return }
-        defer { session.isProjectBusy = false }
-        guard let snapshot = session.projectSnapshot() else { return }
-        do {
-            let raster = try await ImageExporter.shared.render(snapshot)
-            let data: Data? = await withCheckedContinuation { continuation in
-                let sheet = NSWindow()
-                sheet.styleMask = [.titled, .fullSizeContentView]
-                sheet.title = L10n.text("Export JPEG")
-                sheet.contentViewController = NSHostingController(rootView: JPEGExportSheet(raster: raster, session: session) { data in
-                    window.endSheet(sheet)
-                    sheet.orderOut(nil)
-                    // Release the hosted view and its closure after dismissal.
-                    sheet.contentViewController = nil
-                    continuation.resume(returning: data)
-                })
-                window.beginSheet(sheet)
-            }
-            guard let data else { return }
-            let panel = NSSavePanel()
-            panel.allowedContentTypes = [.jpeg]
-            panel.canCreateDirectories = true
-            panel.isExtensionHidden = false
-            panel.title = L10n.text("Export JPEG")
-            panel.nameFieldStringValue = (session.projectURL?.deletingPathExtension().lastPathComponent ?? "Untitled") + ".jpg"
-            guard await panel.beginSheetModal(for: window) == .OK, let url = panel.url else { return }
-            let scoped = url.startAccessingSecurityScopedResource()
-            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-            try await ImageExporter.shared.write(data, to: url)
-        } catch { await showError("Couldn’t export JPEG", error: error) }
     }
 
     private func saveCurrent(asNew: Bool = false) async -> Bool {
@@ -397,5 +404,18 @@ final class ProjectController {
             request.completion.resume()
         }
         processing = false
+    }
+}
+
+/// What File › Export As… writes.
+enum ExportFormat: String, CaseIterable {
+    case png = "PNG", jpeg = "JPEG", pdf = "PDF", cmykTIFF = "CMYK TIFF"
+    var type: UTType {
+        switch self {
+        case .png: .png
+        case .jpeg: .jpeg
+        case .pdf: .pdf
+        case .cmykTIFF: .tiff
+        }
     }
 }

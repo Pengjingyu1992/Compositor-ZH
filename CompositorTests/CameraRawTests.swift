@@ -699,4 +699,92 @@ struct CameraRawTests {
     private func peakIndex(_ bins: [Double]) -> Int {
         bins.enumerated().max { $0.element < $1.element }?.offset ?? -1
     }
+
+    /// Color noise reduction blurs a saturation plane in which clear pixels must count as zero, as the luma plane's
+    /// do. Left unwritten, they held whatever that memory held before, so the pixels beside a clear area changed from
+    /// run to run.
+    @Test func colorNoiseReductionIgnoresWhatClearPixelsHeld() throws {
+        var settings = CameraRawSettings()
+        settings.detail.noiseColor = 60
+        let context = try BrushRaster.context(width: 97, height: 61, mask: false)
+        let bytes = try #require(context.data).assumingMemoryBound(to: UInt8.self)
+        for y in 0..<61 {
+            for x in 0..<97 {
+                let p = y * context.bytesPerRow + x * 4
+                let alpha = x < 30 ? 0 : 255
+                bytes[p] = UInt8((x * 7 + y * 3) % 256 * alpha / 255); bytes[p + 1] = UInt8((x * x + y * 5) % 256 * alpha / 255)
+                bytes[p + 2] = UInt8((x * 2 + y * y) % 256 * alpha / 255); bytes[p + 3] = UInt8(alpha)
+            }
+        }
+        let picture = try #require(context.makeImage())
+        func pixels(_ image: CGImage) throws -> Data { try #require(image.dataProvider?.data) as Data }
+        let first = try pixels(try settings.apply(picture))
+        // Leaves saturation values in freed memory the size of the kernel's planes.
+        let red = try BrushRaster.context(width: 97, height: 61, mask: false)
+        red.setFillColor(CGColor(srgbRed: 1, green: 0, blue: 0.2, alpha: 1))
+        red.fill(CGRect(x: 0, y: 0, width: 97, height: 61))
+        let saturated = try #require(red.makeImage())
+        for _ in 0..<4 { _ = try settings.apply(saturated) }
+        #expect(try pixels(try settings.apply(picture)) == first)
+    }
+
+    /// Color noise reduction takes the random color out of grain and keeps its brightness: speckle of every hue over
+    /// a gray goes most of the way back to the gray at 100. Blurring saturation alone, each speck kept its own hue and
+    /// the speckle stayed.
+    @Test func colorNoiseReductionRemovesColorGrainNotBrightness() throws {
+        let context = try BrushRaster.context(width: 120, height: 120, mask: false)
+        let bytes = try #require(context.data).assumingMemoryBound(to: UInt8.self)
+        var seed: UInt32 = 12345
+        for y in 0..<120 { for x in 0..<120 {
+            let p = y * context.bytesPerRow + x * 4
+            for c in 0..<3 { seed = seed &* 1664525 &+ 1013904223; bytes[p + c] = UInt8(64 + Int(seed >> 25)) }
+            bytes[p + 3] = 255
+        } }
+        let grain = try #require(context.makeImage())
+        func measure(_ image: CGImage) throws -> (color: Double, brightness: Double) {
+            let copy = try BrushRaster.copy(image)
+            let d = try #require(copy.data).assumingMemoryBound(to: UInt8.self)
+            var color = 0.0, brightness = 0.0
+            for y in 10..<110 { for x in 10..<110 {
+                let p = y * copy.bytesPerRow + x * 4
+                let r = Double(d[p]), g = Double(d[p + 1]), b = Double(d[p + 2])
+                color += max(r, g, b) - min(r, g, b); brightness += 0.2126 * r + 0.7152 * g + 0.0722 * b
+            } }
+            return (color / 10_000, brightness / 10_000)
+        }
+        var settings = CameraRawSettings()
+        let before = try measure(settings.apply(grain))
+        settings.detail.noiseColor = 100
+        let after = try measure(settings.apply(grain))
+        #expect(after.color < before.color * 0.25, "color speckle \(before.color) → \(after.color)")
+        #expect(abs(after.brightness - before.brightness) < 1, "brightness \(before.brightness) → \(after.brightness)")
+    }
+
+    /// Shadows and Highlights keep tones in order: a gray ramp from black to white still rises after either at ±100,
+    /// with black and white where they were. Shadows +100 once lifted black to middle gray, above the tones over it,
+    /// and lifted dark areas broke into blotches of color.
+    @Test func shadowsAndHighlightsKeepTonesInOrder() throws {
+        let ramp = try BrushRaster.context(width: 256, height: 1, mask: false)
+        for x in 0..<256 {
+            let level = CGFloat(x) / 255
+            ramp.setFillColor(CGColor(srgbRed: level, green: level, blue: level, alpha: 1))
+            ramp.fill(CGRect(x: x, y: 0, width: 1, height: 1))
+        }
+        let image = try #require(ramp.makeImage())
+        func levels(shadows: Double, highlights: Double) throws -> [Int] {
+            var settings = CameraRawSettings()
+            settings.shadows = shadows
+            settings.highlights = highlights
+            let row: [[Int]] = try pixels(settings.apply(image))
+            return row.map { $0[1] }
+        }
+        for (shadows, highlights) in [(100.0, 0.0), (-100.0, 0.0), (0.0, 100.0), (0.0, -100.0)] {
+            let out = try levels(shadows: shadows, highlights: highlights)
+            let rising = zip(out, out.dropFirst()).allSatisfy { pair in pair.1 >= pair.0 }
+            #expect(rising, "shadows \(shadows), highlights \(highlights): tones out of order")
+            #expect(out[0] <= 2 && out[255] >= 253, "black \(out[0]), white \(out[255])")
+        }
+        let lifted = try levels(shadows: 100, highlights: 0)
+        #expect(lifted[45] >= 45 + 20, "shadows +100 lifts the dark tones: 45 → \(lifted[45])")
+    }
 }

@@ -4,6 +4,7 @@ import SwiftUI
 struct CompositorApp: App {
     @NSApplicationDelegateAdaptor(CompositorApplicationDelegate.self) private var applicationDelegate
     @State private var languageSettings = LanguageSettings()
+    @AppStorage("navigator.visible") private var showsNavigator = false
     private var session: EditorSession { applicationDelegate.session }
     var body: some Scene {
         Window("Compositor", id: "editor") {
@@ -89,10 +90,15 @@ struct CompositorApp: App {
                     Button("Export PNG…") { Task { await applicationDelegate.projects.exportPNG() } }
                         .configuredKeyboardShortcut("e", modifiers: [.command, .shift])
                         .disabled(session.document == nil || !applicationDelegate.projects.canStart)
-                    Button("Export JPEG…") { Task { await applicationDelegate.projects.exportJPEG() } }
+                    // Export As on JPEG.
+                    Button("Export JPEG…") { Task { await applicationDelegate.projects.exportAs(start: .jpeg) } }
                         .configuredKeyboardShortcut("s", modifiers: [.command, .option, .shift])
                         .disabled(session.document == nil || !applicationDelegate.projects.canStart)
                     Button("Export PSD…") { Task { await applicationDelegate.projects.exportPSD() } }
+                        .disabled(session.document == nil || !applicationDelegate.projects.canStart)
+                    // PNG, JPEG or PDF, sized and previewed; ⌥⇧⌘W, as Photoshop's Export As.
+                    Button("Export As…") { Task { await applicationDelegate.projects.exportAs() } }
+                        .configuredKeyboardShortcut("w", modifiers: [.command, .option, .shift])
                         .disabled(session.document == nil || !applicationDelegate.projects.canStart)
                     Divider()
                     Button("Close") {
@@ -111,7 +117,18 @@ struct CompositorApp: App {
                         Button("Check for Updates…") { applicationDelegate.checkForUpdates() }
                     }
                     CommandGroup(after: .toolbar) {
-                        // With a dialog's preview open (Export JPEG), these zoom that preview rather than the canvas.
+                        Button("Search Commands…") {
+                            CommandPaletteController.shared.toggle(session: session, over: applicationDelegate.projects.window)
+                        }
+                        .configuredKeyboardShortcut("f", modifiers: [.command])
+                        // A plain F, shown as menus show keys; the app hands an F meant for a text field to the field
+                        // first (see CompositorApplicationDelegate).
+                        Toggle("Toggle Fullscreen", isOn: Binding(get: { session.canvasOnly },
+                                                            set: { _ in applicationDelegate.toggleCanvasOnly() }))
+                            .configuredNativeShortcut("f")
+                            .disabled(!session.canvasOnly && !session.canToggleCanvasOnly)
+                        Divider()
+                        // With a dialog's preview open (Export As), these zoom that preview rather than the canvas.
                         Button("Fit Canvas") {
                             if let edit = session.liquify { edit.zoom = 1; edit.pan = .zero }
                             else if let preview = session.previewZoom { preview(.fit) } else { session.fit() }
@@ -132,10 +149,17 @@ struct CompositorApp: App {
                         }
                             .configuredKeyboardShortcut("-").disabled(session.document == nil)
                         Toggle("History", isOn: Binding(get: { session.showsHistory }, set: { session.showsHistory = $0 }))
+                        Group {
+                            Button("Print Setup…") { session.showsPrintSetup = true }
+                                .disabled(!session.canEditLayers || !applicationDelegate.projects.canStart || session.colorPicker != nil)
+                            Toggle("CMYK Print Preview", isOn: Binding(get: { session.showsPrintProof }, set: { session.showsPrintProof = $0 }))
+                                .disabled(session.document == nil || session.printSettings.profile == nil)
+                            Toggle("Gamut Warning", isOn: Binding(get: { session.showsPrintGamutWarning }, set: { session.showsPrintGamutWarning = $0 }))
+                                .disabled(!session.showsPrintProof || session.printSettings.profile?.supportsGamutWarning != true)
+                        }
+                        Toggle("Navigator (300% and above)", isOn: $showsNavigator)
                         Toggle("Pixel Grid (800% and above)", isOn: Binding(get: { session.showsPixelGrid },
                                                                               set: { session.showsPixelGrid = $0 }))
-                        Toggle("Snap", isOn: Binding(get: { session.snappingEnabled },
-                                                     set: { session.snappingEnabled = $0 }))
                         Toggle("Show Transform Controls", isOn: Binding(get: { session.showsTransformControls },
                                                                           set: { session.showsTransformControls = $0 }))
                             .configuredKeyboardShortcut("h").disabled(session.tool != .move || session.document == nil)
@@ -293,6 +317,10 @@ struct CompositorApp: App {
                         .disabled(session.document == nil || !applicationDelegate.projects.canStart)
                     Group {
                         Divider()
+                        Button("Rotate Canvas 90° Clockwise") { session.rotateCanvas(clockwise: true) }
+                            .disabled(!session.canRotateCanvas)
+                        Button("Rotate Canvas 90° Counterclockwise") { session.rotateCanvas(clockwise: false) }
+                            .disabled(!session.canRotateCanvas)
                         Button("Flip Canvas Horizontal") { session.flipCanvas(horizontally: true) }
                             .disabled(!session.canEditLayers)
                         Button("Flip Canvas Vertical") { session.flipCanvas(horizontally: false) }
@@ -302,6 +330,11 @@ struct CompositorApp: App {
                 CommandMenu("Filter") {
                     Button("Advanced Liquify…") { session.beginLiquify() }
                         .configuredKeyboardShortcut("x", modifiers: [.command, .shift]).disabled(!session.canLiquify)
+                    Button(session.lastFilter.map { L10n.format("Last Filter: %@", L10n.text($0.rawValue)) } ?? L10n.text("Last Filter")) {
+                        Task { await session.repeatLastFilter() }
+                    }
+                        // Keep macOS fullscreen on ⌃⌘F; ⌥⌘F repeats the filter.
+                        .configuredKeyboardShortcut("f", modifiers: [.command, .option]).disabled(!session.canRepeatLastFilter)
                     Divider()
                     ForEach(FilterKind.allCases.filter { $0 != .contentAwareFill && !$0.isImageAdjustment }, id: \.self) { kind in
                         Button(L10n.text(kind.rawValue) + "…") { session.beginFilter(kind) }

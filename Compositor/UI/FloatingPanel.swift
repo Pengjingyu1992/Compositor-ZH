@@ -137,7 +137,7 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
 
     /// The document window, never the panel itself. A docked panel is key while it is open, and
     /// neither main nor key is set while the app is in the background — so fall back to the
-    /// frontmost ordinary window rather than centring the panel somewhere unrelated.
+    /// frontmost ordinary window rather than centering the panel somewhere unrelated.
     private func documentWindow() -> NSWindow? {
         if let candidate = NSApp.mainWindow ?? NSApp.keyWindow, candidate !== panel { return candidate }
         return NSApp.windows.first { $0 !== panel && $0.isVisible && !($0 is NSPanel) }

@@ -545,39 +545,41 @@ nonisolated enum LayerEffectsRenderer {
         if let stroke, !stroke.inside { try drawStroke(stroke) }
         // Source-over preserves effects beneath transparent pixels. BrushRaster.draw uses .copy,
         // which would erase the stroke/shadow everywhere inside the source's rectangular bounds.
-        context.saveGState()
-        context.translateBy(x: placed.minX, y: placed.maxY)
-        context.scaleBy(x: 1, y: -1)
-        context.setBlendMode(.normal)
-        context.draw(shown, in: CGRect(origin: .zero, size: placed.size))
-        context.restoreGState()
-        // Over the pixels: a flat color, then a shadow inside the layer's own edges.
-        if let overlay = effects.colorOverlay, overlay.isEnabled, overlay.opacity > 0,
-           let shape = try? coverage(shown, in: placed, size: CGSize(width: width, height: height), blur: 0) {
-            fill(overlay.color, alpha: overlay.opacity, coverage: shape, in: full, context: context)
+        // The layer's own pixels, recolored by a color overlay, then an inner glow and an inner shadow, each keeping
+        // the pixels' alpha as Photoshop's do, so a translucent pixel takes them fully and the effects beneath stay
+        // untinted.
+        let layer = try BrushRaster.context(width: width, height: height, mask: false)
+        BrushRaster.draw(shown, in: placed, mask: false, context: layer)
+        if let overlay = effects.colorOverlay, overlay.isEnabled, overlay.opacity > 0 {
+            recolor(layer, overlay.color, alpha: overlay.opacity, amount: nil, in: full)
         }
-        try drawPosterEffects(effects, shown: shown, placed: placed, full: full, context: context)
+        try drawPosterEffects(effects, shown: shown, placed: placed, full: full, context: layer)
         if let innerGlow = effects.innerGlow, innerGlow.isEnabled, innerGlow.opacity > 0,
            let insideGlow = try? innerGlowCoverage(shown, placed: placed, size: CGSize(width: width, height: height), glow: innerGlow) {
-            fill(innerGlow.color, alpha: innerGlow.opacity, coverage: insideGlow, in: full, context: context)
+            recolor(layer, innerGlow.color, alpha: innerGlow.opacity, amount: insideGlow, in: full)
         }
         if let inner = effects.innerShadow, inner.isEnabled, inner.opacity > 0,
            let inside = try? innerCoverage(shown, placed: placed, size: CGSize(width: width, height: height), shadow: inner) {
-            fill(inner.color, alpha: inner.opacity, coverage: inside, in: full, context: context)
+            recolor(layer, inner.color, alpha: inner.opacity, amount: inside, in: full)
         }
+        guard let styled = layer.makeImage() else { throw ExportError.render }
+        context.saveGState()
+        context.translateBy(x: 0, y: full.height)
+        context.scaleBy(x: 1, y: -1)
+        context.setBlendMode(.normal)
+        context.draw(styled, in: full)
+        context.restoreGState()
         if let stroke, stroke.inside { try drawStroke(stroke) }
         guard let result = context.makeImage() else { throw ExportError.render }
         return (result, inset)
     }
 
-    /// An inner glow's coverage: the source shape softened inward, kept to the layer's own shape.
+    /// How strongly an inner glow falls on each pixel: strongest at the layer's edges, fading inward. It's the
+    /// strength before the layer's own alpha, which the glow keeps as it recolors the pixels (see `recolor`).
     static func innerGlowCoverage(_ image: CGImage, placed: CGRect, size: CGSize, glow: InnerGlowEffect) throws -> CGImage {
         let width = Int(size.width), height = Int(size.height)
-        let shape = try coverage(image, in: placed, size: size, blur: 0)
         let blurred = try coverage(image, in: placed, size: size, blur: glow.size)
-        var inside = try GuidedMatte.levels(of: shape, width: width, height: height)
-        let outside = try GuidedMatte.levels(of: blurred, width: width, height: height)
-        for i in inside.indices { inside[i] = max(0, min(1, inside[i] * (1 - outside[i]))) }
+        let inside = try GuidedMatte.levels(of: blurred, width: width, height: height).map { max(0, min(1, 1 - $0)) }
         return try GuidedMatte.image(inside, width: width, height: height)
     }
 
@@ -595,21 +597,32 @@ nonisolated enum LayerEffectsRenderer {
         return result
     }
 
+    /// Moves the pixels' color toward `color` by `alpha`, scaled by `amount` where given, keeping their alpha:
+    /// source-atop, so a half-transparent pixel takes the color fully.
+    static func recolor(_ context: CGContext, _ color: PaletteColor, alpha: Double, amount: CGImage?, in rect: CGRect) {
+        context.saveGState()
+        context.setBlendMode(.sourceAtop)
+        if let amount { fill(color, alpha: alpha, coverage: amount, in: rect, context: context) }
+        else {
+            context.setFillColor(CGColor(srgbRed: color.red, green: color.green, blue: color.blue, alpha: CGFloat(alpha)))
+            context.fill(rect)
+        }
+        context.restoreGState()
+    }
+
     /// A shadow's coverage for one piece of a layer: its shape, moved and softened.
     static func shadowCoverage(_ pixels: CGImage, in size: CGSize, offset: CGSize, blur: CGFloat) throws -> CGImage {
         let placed = CGRect(origin: .zero, size: CGSize(width: pixels.width, height: pixels.height))
         return try coverage(pixels, in: placed.offsetBy(dx: offset.width, dy: offset.height), size: size, blur: blur)
     }
 
-    /// An inner shadow's coverage: what lies outside the layer, moved and softened, kept to the layer's own shape.
+    /// How strongly an inner shadow falls on each pixel: what lies outside the layer, moved and softened. Like
+    /// `innerGlowCoverage`, it's the strength before the layer's own alpha.
     static func innerCoverage(_ image: CGImage, placed: CGRect, size: CGSize, shadow: InnerShadowEffect) throws -> CGImage {
         let width = Int(size.width), height = Int(size.height)
-        let shape = try coverage(image, in: placed, size: size, blur: 0)
         let moved = try coverage(image, in: placed.offsetBy(dx: shadow.offset.width, dy: shadow.offset.height),
                                  size: size, blur: shadow.blur)
-        var inside = try GuidedMatte.levels(of: shape, width: width, height: height)
-        let outside = try GuidedMatte.levels(of: moved, width: width, height: height)
-        for i in inside.indices { inside[i] = max(0, min(1, inside[i] * (1 - outside[i]))) }
+        let inside = try GuidedMatte.levels(of: moved, width: width, height: height).map { max(0, min(1, 1 - $0)) }
         return try GuidedMatte.image(inside, width: width, height: height)
     }
 

@@ -102,10 +102,32 @@ actor ImageExporter {
     }
 
     func pngData(_ snapshot: ProjectSnapshot) throws -> Data {
-        let raster = try render(snapshot)
-        return try encode(raster.image, type: .png, properties: [
+        try pngData(render(snapshot))
+    }
+
+    func pngData(_ raster: ExportRaster) throws -> Data {
+        try encode(raster.image, type: .png, properties: [
             kCGImagePropertyDPIWidth: raster.resolution, kCGImagePropertyDPIHeight: raster.resolution
         ] as CFDictionary)
+    }
+
+    /// The flattened canvas at another size, for Export As: resampled at high quality, keeping its resolution, so a
+    /// smaller copy is a smaller print too.
+    func resized(_ raster: ExportRaster, width: Int, height: Int) throws -> ExportRaster {
+        guard width != raster.image.width || height != raster.image.height else { return raster }
+        guard (1...DocumentLimits.maxSide).contains(width), (1...DocumentLimits.maxSide).contains(height),
+              width * height <= DocumentLimits.maxSurfacePixels else { throw ExportError.tooLarge }
+        try Task.checkCancellation()
+        return try autoreleasepool {
+            guard let space = CGColorSpace(name: CGColorSpace.sRGB),
+                  let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8,
+                                          bytesPerRow: width * 4, space: space,
+                                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { throw ExportError.render }
+            context.interpolationQuality = .high
+            context.draw(raster.image, in: CGRect(x: 0, y: 0, width: width, height: height))
+            guard let image = context.makeImage() else { throw ExportError.render }
+            return ExportRaster(image: image, resolution: raster.resolution)
+        }
     }
 
     private func encode(_ image: CGImage, type: UTType, properties: CFDictionary? = nil) throws -> Data {
@@ -150,8 +172,71 @@ actor ImageExporter {
         }
     }
 
+    /// The picture over a solid color, as a page with that background shows it.
+    func flattened(_ raster: ExportRaster, over background: CGColor) throws -> CGImage {
+        let image = raster.image
+        guard let context = CGContext(data: nil, width: image.width, height: image.height, bitsPerComponent: 8,
+                                      bytesPerRow: image.width * 4, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                      bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else { throw ExportError.render }
+        let bounds = CGRect(x: 0, y: 0, width: image.width, height: image.height)
+        context.setFillColor(background)
+        context.fill(bounds)
+        context.draw(image, in: bounds)
+        guard let flattened = context.makeImage() else { throw ExportError.render }
+        return flattened
+    }
+
+    /// The same profile and intent as the canvas proof, embedded in a lossless four-channel TIFF.
+    func cmykTIFF(_ raster: ExportRaster, settings: PrintSettings) throws -> JPEGResult {
+        guard let profile = settings.profile else { throw CMYKError.profile }
+        try Task.checkCancellation()
+        return try autoreleasepool {
+            let conversion = try CMYKConversion(profile: profile, intent: settings.intent)
+            let image = try conversion.image(raster.image, background: settings.background)
+            try Task.checkCancellation()
+            let data = try encode(image, type: .tiff, properties: [
+                kCGImagePropertyDPIWidth: raster.resolution, kCGImagePropertyDPIHeight: raster.resolution,
+                kCGImagePropertyTIFFDictionary: [kCGImagePropertyTIFFCompression: 5]
+            ] as CFDictionary)
+            guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+                  let preview = CGImageSourceCreateImageAtIndex(source, 0, nil),
+                  preview.colorSpace?.model == .cmyk else { throw ExportError.encode }
+            return JPEGResult(data: data, preview: try conversion.preview(preview))
+        }
+    }
+
     func exportPNG(_ snapshot: ProjectSnapshot, to url: URL) throws {
         let data = try pngData(snapshot)
+        try write(data, to: url)
+    }
+
+    /// One page the document's printed size (its pixels at its resolution), holding the flattened canvas at full
+    /// resolution. Core Graphics keeps the pixels lossless, and transparency stays transparent, as in a PNG.
+    func pdfData(_ snapshot: ProjectSnapshot) throws -> Data {
+        try pdfData(render(snapshot))
+    }
+
+    /// `background` fills the page under the picture; nil leaves it clear, as a viewer then shows its own paper.
+    func pdfData(_ raster: ExportRaster, background: CGColor? = nil) throws -> Data {
+        let pointsPerPixel = 72 / (raster.resolution > 0 ? raster.resolution : 72)
+        var page = CGRect(x: 0, y: 0, width: CGFloat(raster.image.width) * pointsPerPixel,
+                          height: CGFloat(raster.image.height) * pointsPerPixel)
+        let data = NSMutableData()
+        guard let consumer = CGDataConsumer(data: data),
+              let context = CGContext(consumer: consumer, mediaBox: &page, nil) else { throw ExportError.encode }
+        context.beginPDFPage(nil)
+        if let background {
+            context.setFillColor(background)
+            context.fill(page)
+        }
+        context.draw(raster.image, in: page)
+        context.endPDFPage()
+        context.closePDF()
+        return data as Data
+    }
+
+    func exportPDF(_ snapshot: ProjectSnapshot, to url: URL) throws {
+        let data = try pdfData(snapshot)
         try write(data, to: url)
     }
 

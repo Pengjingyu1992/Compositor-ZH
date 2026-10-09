@@ -149,6 +149,19 @@ extension EditorSession {
         if valid != selectedLayerIDs { commitTransform(); resolveGradient() }
         activeLayerID = primary.flatMap { valid.contains($0) ? $0 : nil } ?? valid.first
         selectedLayerIDs = valid
+        revealActiveLayer()
+    }
+
+    /// Open the active layer's ancestors so a canvas selection can be seen in the Layers panel.
+    func revealActiveLayer() {
+        guard !collapsedGroupIDs.isEmpty, let activeLayerID else { return }
+        let byID = Dictionary(uniqueKeysWithValues: (document?.layers ?? []).map { ($0.id, $0) })
+        var parent = byID[activeLayerID]?.parentID
+        var seen: Set<UUID> = [activeLayerID]
+        while let id = parent, seen.insert(id).inserted {
+            collapsedGroupIDs.remove(id)
+            parent = byID[id]?.parentID
+        }
     }
 
     /// Cmd-Shift-click on the canvas: adds a layer to the selection, or takes it out again when it is already in it.

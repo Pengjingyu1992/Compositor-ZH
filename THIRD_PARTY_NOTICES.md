@@ -6,6 +6,7 @@
 - Source: <https://github.com/robbietilton/Compositor>
 - License: **MIT**, retained verbatim in [LICENSE](LICENSE) and bundled as `Compositor-LICENSE.txt`.
 - This repository contains a modified version of the native editor. The Chinese localization and improvements do not change ownership of the original work.
+- Custom crop ratios, WebP import and CMYK proofing/TIFF export incorporate contributions by **Lens-lzy**, adapted from Compositor PRs [#241](https://github.com/robbietilton/Compositor/pull/241), [#244](https://github.com/robbietilton/Compositor/pull/244) and [#245](https://github.com/robbietilton/Compositor/pull/245). Exact revisions are recorded in [UPSTREAM.md](UPSTREAM.md).
 
 ## Pentrado
 

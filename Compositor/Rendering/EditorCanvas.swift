@@ -7,6 +7,9 @@ struct EditorCanvas: NSViewRepresentable {
     func updateNSView(_ view: CanvasView, context: Context) {
         view.consumeFocusRequest(session.canvasFocusRequest)
         _ = session.showsTransformControls // observed here so ⌘H redraws the transform box at once
+        _ = session.printSettings
+        _ = session.showsPrintProof
+        _ = session.showsPrintGamutWarning
         _ = session.showsGrid
         _ = session.layoutGrid
         _ = session.gridAppearance
@@ -523,6 +526,8 @@ final class CanvasView: NSView {
             /// Where the mask shows when placed apart from the layer.
             let maskPlacement: LayerTransform?
         }
+        let printSettings: PrintSettings?
+        let gamutWarning: Bool
         let brushRevision: Int
         let pixelGrid: Bool
         let documentID: UUID?
@@ -565,7 +570,7 @@ final class CanvasView: NSView {
         // Worked out once: each asks for the whole layer hierarchy, which on a document of hundreds of layers is too much
         // to redo for every layer on every event.
         let visible = document?.effectiveVisibleIDs ?? []
-        let state = DisplayState(brushRevision: session.brushRevision, pixelGrid: session.showsPixelGrid, documentID: document?.id, size: document?.size, renderBounds: renderBounds, viewport: session.viewport,
+        let state = DisplayState(printSettings: session.showsPrintProof ? session.printSettings : nil, gamutWarning: session.showsPrintGamutWarning, brushRevision: session.brushRevision, pixelGrid: session.showsPixelGrid, documentID: document?.id, size: document?.size, renderBounds: renderBounds, viewport: session.viewport,
             layers: (document.map { $0.layers.contains(where: { $0.maskSourceID != nil }) ? $0.layers : $0.renderLayers } ?? []).filter { $0.asset != nil || $0.adjustment != nil }.map {
                 DisplayState.Layer(id: $0.id, transform: session.displayedTransform(for: $0),
                                    imageID: $0.asset.map { ObjectIdentifier($0.image) }, maskID: $0.mask?.enabledImage.map { ObjectIdentifier($0) }, maskSourceID: $0.maskSourceID, parentID: $0.parentID, visible: visible.contains($0.id), opacity: opacities[$0.id] ?? $0.opacity, blendMode: session.displayedBlendMode(for: $0), adjustment: $0.adjustment, effects: $0.effects,
@@ -581,7 +586,8 @@ final class CanvasView: NSView {
             if let previous = displayedState, previous.documentID == state.documentID,
                previous.size == state.size, previous.viewport == state.viewport,
                previous.renderBounds == state.renderBounds, previous.layers == state.layers,
-               previous.folderMasks == state.folderMasks,
+               previous.folderMasks == state.folderMasks, previous.printSettings == state.printSettings,
+               previous.gamutWarning == state.gamutWarning,
                let stroke = session.brushStroke, let document,
                let dirty = stroke.dirtyDocumentRect {
                 let origin = session.viewport.viewPoint(from: dirty.origin, documentSize: document.size)
@@ -858,12 +864,15 @@ final class CanvasView: NSView {
         }
     }
 
+    /// The gray around the canvas, black in Canvas Only (F).
+    private var surround: CGFloat { session.canvasOnly ? 0 : 0.105 }
+
     override func draw(_ dirtyRect: NSRect) {
         // The grid and a text frame being dragged follow the pixels under them.
         if lines.frame != bounds { lines.frame = bounds }
         lines.needsDisplay = true
         if drawOnGPU(dirtyRect) { return }
-        NSColor(white: 0.105, alpha: 1).setFill()
+        NSColor(white: surround, alpha: 1).setFill()
         dirtyRect.fill()
         guard let document = session.document,
               let context = NSGraphicsContext.current?.cgContext else { return }
@@ -900,6 +909,8 @@ final class CanvasView: NSView {
         }
         if session.viewport.zoom >= Self.crispZoom, !visible.isNull, !visible.isEmpty {
             drawDocumentPixels(covering: visible, clippedTo: pixels, document: document, in: context)
+        } else if session.showsPrintProof, session.printSettings.profile != nil, session.maskAloneLayer == nil {
+            drawPrintProof(covering: visible, document: document, in: context)
         } else {
             // Draw native-resolution assets into the same document/view mapping as navigation.
             // The AppKit view is flipped; flip each image locally so its top stays at the top.
@@ -1382,7 +1393,11 @@ final class CanvasView: NSView {
         guard !region.isNull, region.width >= 1, region.height >= 1,
               let raster = try? BrushRaster.context(width: Int(region.width), height: Int(region.height), mask: false) else { return }
         drawLayers(document, scale: 1, center: { CGPoint(x: $0.x - region.minX, y: $0.y - region.minY) }, in: raster)
-        guard let image = raster.makeImage() else { return }
+        guard var image = raster.makeImage() else { return }
+        if session.showsPrintProof, session.printSettings.profile != nil, session.maskAloneLayer == nil {
+            guard let proof = proofImage(image) else { return }
+            image = proof
+        }
         let origin = viewport.viewPoint(from: region.origin, documentSize: document.size)
         let target = CGRect(origin: origin, size: CGSize(width: region.width * viewport.pointsPerPixel,
                                                          height: region.height * viewport.pointsPerPixel))
@@ -1391,6 +1406,48 @@ final class CanvasView: NSView {
         context.translateBy(x: target.minX, y: target.maxY)
         context.scaleBy(x: 1, y: -1)
         context.draw(image, in: CGRect(origin: .zero, size: target.size))
+        context.restoreGState()
+    }
+
+    private var printConversion: (id: UUID, intent: CMYKIntent, conversion: CMYKConversion)?
+
+    private func proofImage(_ image: CGImage) -> CGImage? {
+        guard let profile = session.printSettings.profile else { return nil }
+        do {
+            if printConversion?.id != profile.id || printConversion?.intent != session.printSettings.intent {
+                printConversion = (profile.id, session.printSettings.intent,
+                    try CMYKConversion(profile: profile, intent: session.printSettings.intent))
+            }
+            return try printConversion!.conversion.proof(image, background: session.printSettings.background,
+                warning: session.showsPrintGamutWarning && profile.supportsGamutWarning)
+        } catch {
+            let message = error.localizedDescription
+            DispatchQueue.main.async { [weak self] in
+                self?.session.showsPrintProof = false
+                self?.session.printProofError = message
+                self?.needsDisplay = true
+            }
+            return nil
+        }
+    }
+
+    /// Proof the composite, not individual layers. Only the visible viewport is rasterized, including live edits.
+    private func drawPrintProof(covering view: CGRect, document: CanvasDocument, in context: CGContext) {
+        guard !view.isNull, !view.isEmpty else { return }
+        let backing = session.viewport.backingScale
+        let width = Int(ceil(view.width * backing)), height = Int(ceil(view.height * backing))
+        guard width > 0, height > 0, width * height <= DocumentLimits.maxSurfacePixels,
+              let raster = try? BrushRaster.context(width: width, height: height, mask: false) else { return }
+        raster.scaleBy(x: backing, y: backing)
+        drawLayers(document, scale: session.viewport.pointsPerPixel, center: {
+            let point = self.session.viewport.viewPoint(from: $0, documentSize: document.size)
+            return CGPoint(x: point.x - view.minX, y: point.y - view.minY)
+        }, in: raster)
+        guard let image = raster.makeImage(), let proof = proofImage(image) else { return }
+        context.saveGState()
+        context.translateBy(x: view.minX, y: view.minY + CGFloat(height) / backing)
+        context.scaleBy(x: 1, y: -1)
+        context.draw(proof, in: CGRect(x: 0, y: 0, width: CGFloat(width) / backing, height: CGFloat(height) / backing))
         context.restoreGState()
     }
 
@@ -1798,6 +1855,11 @@ final class CanvasView: NSView {
         }
         if spaceHeld || session.tool == .hand {
             lastDragPoint = point
+            // Held closed for the whole drag, as a crop or transform drag holds its cursor: Space repeats while it's
+            // held, and each repeat put the open hand back.
+            dragCursor = .closedHand
+            cursorLockWindow = window
+            cursorLockWindow?.disableCursorRects()
             NSCursor.closedHand.set()
         } else if session.tool.isBrushTool, let document = session.document {
             let pixel = session.viewport.documentPoint(from: point, documentSize: document.size)
@@ -2112,6 +2174,9 @@ final class CanvasView: NSView {
             if session.transformEdit?.persistent == false { session.commitTransform() }
         }
         lastDragPoint = nil
+        releaseDragCursor()
+        // Still holding Space (or on the Hand tool), the hand opens again as the button comes up.
+        if spaceHeld || session.tool == .hand { NSCursor.openHand.set() }
         // Leaving mid-drag keeps the drag's cursor, so a drag released outside the canvas (over
         // the Layers panel, say) must put the arrow back itself.
         if session.document != nil {
@@ -2567,7 +2632,8 @@ extension CanvasView {
     /// run — the Metal view is hidden and the frame is drawn as before.
     func drawOnGPU(_ dirtyRect: NSRect) -> Bool {
         // Only on screen: a snapshot of the view (a test's, or a print) is drawn with Core Graphics.
-        guard allowsGPU, !snapshotting, !Self.gpuDisabled, window != nil, NSGraphicsContext.current?.isDrawingToScreen == true,
+        guard !(session.showsPrintProof && session.printSettings.profile != nil && session.maskAloneLayer == nil),
+              allowsGPU, !snapshotting, !Self.gpuDisabled, window != nil, NSGraphicsContext.current?.isDrawingToScreen == true,
               let renderer = GPUCanvasRenderer.shared, let document = session.document else {
             return hideGPUView(dirtyRect)
         }
@@ -2639,7 +2705,7 @@ extension CanvasView {
         func gray(_ white: CGFloat, alpha: CGFloat = 1) -> CIImage {
             CIImage(color: CIColor(red: white, green: white, blue: white, alpha: alpha))
         }
-        var frame = gray(0.105).cropped(to: full)
+        var frame = gray(surround).cropped(to: full)
         guard rect.intersects(full) else { return frame }
         // The document's shadow, then its checkerboard: 10-point squares from its top-left corner.
         let shadow = CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: 0.35)).cropped(to: rect)

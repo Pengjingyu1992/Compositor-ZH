@@ -2,17 +2,101 @@ import SwiftUI
 import AppKit
 import ImageIO
 
+/// The units New Canvas sizes can be typed in. Print units turn into pixels at the chosen DPI.
+nonisolated enum NewCanvasUnit: String, CaseIterable, Sendable {
+    case pixels = "px", inches = "in", centimeters = "cm", millimeters = "mm"
+
+    /// The unit written out, for the summary line's pill.
+    var name: String {
+        switch self {
+        case .pixels: "Pixels"
+        case .inches: "Inches"
+        case .centimeters: "Centimeters"
+        case .millimeters: "Millimeters"
+        }
+    }
+    /// The next unit, for the pill: px → in → cm → mm → px.
+    var next: NewCanvasUnit { Self.allCases[(Self.allCases.firstIndex(of: self)! + 1) % Self.allCases.count] }
+    private var perInch: Double? {
+        switch self {
+        case .pixels: nil
+        case .inches: 1
+        case .centimeters: 2.54
+        case .millimeters: 25.4
+        }
+    }
+    /// Whole pixels for a typed size, or nil when it isn't a size a canvas can have.
+    func pixels(_ text: String, resolution: Double) -> Int? {
+        guard let value = Double(text.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: ".")),
+              value.isFinite, value > 0 else { return nil }
+        let pixels = perInch.map { (value / $0 * resolution).rounded() } ?? value
+        guard pixels == pixels.rounded(), (1...Double(DocumentLimits.maxSide)).contains(pixels) else { return nil }
+        return Int(pixels)
+    }
+    /// A pixel size written in this unit: whole pixels, or print sizes to two decimals at most.
+    func text(_ pixels: Int, resolution: Double) -> String {
+        guard let perInch else { return String(pixels) }
+        return (Double(pixels) / resolution * perInch).formatted(.number.precision(.fractionLength(0...2)).grouping(.never)
+            .locale(Locale(identifier: "en_US_POSIX")))
+    }
+}
+
+/// What a new canvas starts as: see-through, or a Background layer of white or black.
+nonisolated enum NewCanvasBackground: String, CaseIterable, Sendable {
+    case transparent, white, black
+    var title: String {
+        switch self {
+        case .transparent: L10n.text("Transparent canvas")
+        case .white: L10n.text("White canvas")
+        case .black: L10n.text("Black canvas")
+        }
+    }
+    var next: NewCanvasBackground { Self.allCases[(Self.allCases.firstIndex(of: self)! + 1) % Self.allCases.count] }
+    var color: CGColor? {
+        switch self {
+        case .transparent: nil
+        case .white: CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 1)
+        case .black: CGColor(srgbRed: 0, green: 0, blue: 0, alpha: 1)
+        }
+    }
+}
+
 struct NewCanvasSheet: View {
     let session: EditorSession
-    var onCreate: ((Int, Int) -> Void)? = nil
+    var onCreate: ((Int, Int, Double, CGColor?) -> Void)? = nil
     var onOpen: (() -> Void)? = nil
     @State private var width = "1920"
     @State private var height = "1080"
+    /// Always starting from the common case: remembered print settings turned the default 1920 × 1080 into inches,
+    /// a canvas far too big to make.
+    @State private var unit = NewCanvasUnit.pixels
+    @State private var resolution = 72.0
+    @State private var background = NewCanvasBackground.transparent
     @State private var suggestedClipboardSize = false
     @FocusState private var focusedField: Field?
     private enum Field { case width, height }
+    private var pixelWidth: Int? { unit.pixels(width, resolution: resolution) }
+    private var pixelHeight: Int? { unit.pixels(height, resolution: resolution) }
     private var valid: Bool {
-        CanvasDocument.validDimension(width) != nil && CanvasDocument.validDimension(height) != nil
+        guard let width = pixelWidth, let height = pixelHeight else { return false }
+        return background == .transparent || width * height <= DocumentLimits.maxSurfacePixels
+    }
+    private var resolutionHelp: String {
+        let size = unit != .pixels ? pixelWidth.flatMap { w in pixelHeight.map { h in L10n.format(" · %lld DPI: %lld × %lld pixels", Int(resolution), w, h) } } : nil
+        return L10n.text("Resolution: 72 for screens, 300 for print. Click to switch.") + (size ?? "")
+    }
+    /// Shows the sizes in another unit, the same canvas written differently.
+    private func switchUnit(to new: NewCanvasUnit) {
+        if let w = pixelWidth, let h = pixelHeight {
+            width = new.text(w, resolution: resolution)
+            height = new.text(h, resolution: resolution)
+        }
+        unit = new
+    }
+    /// Fills in a size given in pixels, written in the unit in use.
+    private func setPixels(_ w: Int, _ h: Int) {
+        width = unit.text(w, resolution: resolution)
+        height = unit.text(h, resolution: resolution)
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
@@ -62,17 +146,41 @@ struct NewCanvasSheet: View {
                 .accessibilityIdentifier("swapCanvasDimensions")
                 dimension("Height", text: $height, field: .height)
             }
-            Text(valid ? L10n.text("Transparent canvas · sRGB") : L10n.format("Enter whole numbers from 1 to %@ pixels.", DocumentLimits.maxSide.formatted()))
-                .font(.callout).foregroundStyle(valid ? Color.secondary : Color.orange)
+            // The settings are pills, each changed the same way: click to step to the next choice.
+            HStack(spacing: 4) {
+                CyclePill(background.title, help: "Start see-through, or with a white or black Background layer. Click to switch.") {
+                    background = background.next
+                }
+                .accessibilityIdentifier("canvasBackground")
+                Text("·")
+                CyclePill(L10n.text(unit.name), help: "Units: pixels, inches, centimeters or millimeters. Click to switch.") {
+                    switchUnit(to: unit.next)
+                }
+                .accessibilityIdentifier("canvasUnit")
+                Text("·")
+                // In print units the pixels follow the DPI; in pixels, the DPI is just stored with the file. The pixel
+                // size it makes is in the pill's hover text, out of the way until it's wanted.
+                CyclePill("\(Int(resolution)) DPI", help: resolutionHelp) {
+                    resolution = resolution == 300 ? 72 : 300
+                }
+                .accessibilityIdentifier("canvasResolution")
+            }
+            .font(.callout).foregroundStyle(.secondary)
+            if !valid {
+                Text(background != .transparent && pixelWidth != nil && pixelHeight != nil
+                     ? L10n.format("Filled canvases support up to %lld megapixels.", DocumentLimits.maxSurfaceMegapixels)
+                     : unit == .pixels ? L10n.format("Enter whole numbers from 1 to %@ pixels.", DocumentLimits.maxSide.formatted())
+                     : L10n.format("Enter a size up to %@ pixels at this DPI.", DocumentLimits.maxSide.formatted()))
+                    .font(.callout).foregroundStyle(.orange)
+            }
             HStack(spacing: 10) {
                 Button("Open project") { onOpen?() }.buttonStyle(.bordered)
                 Button("Import image") { session.showsImporter = true }.buttonStyle(.bordered)
                 Spacer()
                 Button("Create canvas") {
-                    guard let w = CanvasDocument.validDimension(width),
-                          let h = CanvasDocument.validDimension(height) else { return }
-                    if let onCreate { onCreate(w, h) }
-                    else { session.createDocument(width: w, height: h, emptyLayer: true) }
+                    guard let w = pixelWidth, let h = pixelHeight else { return }
+                    if let onCreate { onCreate(w, h, resolution, background.color) }
+                    else { session.createDocument(width: w, height: h, emptyLayer: true, resolution: resolution, background: background.color) }
                 }
                 .configuredNativeShortcut(.return).buttonStyle(.borderedProminent)
                 .disabled(!valid).accessibilityIdentifier("createCanvas")
@@ -86,17 +194,16 @@ struct NewCanvasSheet: View {
                 if session.skipsInitialClipboardCanvasSize {
                     session.skipsInitialClipboardCanvasSize = false
                 } else if let size = Self.clipboardDimensions() {
-                    width = String(size.width)
-                    height = String(size.height)
+                    setPixels(size.width, size.height)
                 }
             }
             focusedField = .width
         }
     }
-    /// The preset the fields match, or nil (Custom); choosing one fills them in.
+    /// The preset the fields match, or nil (Custom); choosing one fills them in, in the unit in use.
     private var preset: Binding<CanvasPreset?> {
-        Binding(get: { CanvasPreset.all.first { String($0.width) == width && String($0.height) == height } },
-                set: { if let chosen = $0 { width = String(chosen.width); height = String(chosen.height) } })
+        Binding(get: { CanvasPreset.all.first { $0.width == pixelWidth && $0.height == pixelHeight } },
+                set: { if let chosen = $0 { setPixels(chosen.width, chosen.height) } })
     }
 
     static func clipboardDimensions(_ pasteboard: NSPasteboard = .general) -> (width: Int, height: Int)? {
@@ -122,10 +229,30 @@ struct NewCanvasSheet: View {
                 TextField(L10n.text(title), text: text).textFieldStyle(.plain)
                     .focused($focusedField, equals: field)
                     .accessibilityIdentifier(title.lowercased() + "Input")
-                Text("px").foregroundStyle(.secondary)
+                Text(unit.rawValue).foregroundStyle(.secondary)
             }
             .padding(12).background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 7))
         }
+    }
+}
+
+/// A setting that steps through its few values when clicked, shown as plain text that gains a soft pill on hover.
+private struct CyclePill: View {
+    let title: String
+    let help: String
+    let action: () -> Void
+    @State private var hovering = false
+    init(_ title: String, help: String, action: @escaping () -> Void) { self.title = title; self.help = help; self.action = action }
+    var body: some View {
+        Button(action: action) {
+            Text(title).foregroundStyle(.secondary).monospacedDigit()
+                .padding(.horizontal, 6).padding(.vertical, 2)
+                .background(.quaternary.opacity(hovering ? 1 : 0), in: Capsule())
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help(help)
     }
 }
 

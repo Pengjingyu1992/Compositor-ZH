@@ -33,8 +33,13 @@ nonisolated struct RawDevelopSettings: Equatable, Sendable {
 
 nonisolated enum RawImporter {
     /// One context for every develop: building a CIContext allocates GPU resources, and the sheet
-    /// develops again on each slider move.
-    private static let context = CIContext(options: [.useSoftwareRenderer: false])
+    /// develops again on each slider move. Half-float in linear light throughout, named rather than left to
+    /// Core Image's defaults, so nothing is rounded before the final 8-bit pixels.
+    private static let context = CIContext(options: [
+        .useSoftwareRenderer: false,
+        .workingFormat: CIFormat.RGBAh,
+        .workingColorSpace: CGColorSpace(name: CGColorSpace.extendedLinearSRGB)!,
+    ])
 
     /// Developing a RAW is seconds of work, so only one runs at a time and the caller waits its
     /// turn. Without this a dragged slider starts a render per pixel moved and they all pile up.
@@ -109,9 +114,28 @@ nonisolated enum RawImporter {
         filter.neutralTint = settings.tint
         filter.boostAmount = settings.boost
         guard let output = filter.outputImage else { return nil }
-        return context.createCGImage(output, from: output.extent, format: .RGBA8,
-                                     colorSpace: CGColorSpace(name: CGColorSpace.sRGB)!)
+        return dithered(output, context: context)
     }
+
+    /// The image as 8-bit sRGB pixels, rounded with a little noise rather than straight down. A RAW holds 12–14 bits;
+    /// rounded plainly to 8, a smooth sky came out in visible steps, which curves and levels then pulled further apart.
+    /// Noise of about one 8-bit step, too fine to see, breaks the steps up, as Lightroom does on export. The frame is
+    /// rendered once at 16 bits, then rounded on every core in C: a few tens of milliseconds on a 20-megapixel photo.
+    static func dithered(_ image: CIImage, context: CIContext) -> CGImage? {
+        let extent = image.extent.integral
+        let width = Int(extent.width), height = Int(extent.height)
+        guard width > 0, height > 0, let target = try? BrushRaster.context(width: width, height: height, mask: false),
+              let data = target.data?.assumingMemoryBound(to: UInt8.self) else { return nil }
+        var wide = [UInt16](repeating: 0, count: width * height * 4)
+        wide.withUnsafeMutableBytes { buffer in
+            context.render(image, toBitmap: buffer.baseAddress!, rowBytes: width * 8, bounds: extent, format: .RGBA16,
+                           colorSpace: CGColorSpace(name: CGColorSpace.sRGB)!)
+        }
+        // In C, where the per-pixel work is quick in any build.
+        wide.withUnsafeBufferPointer { dither_quantize16($0.baseAddress!, data, width, height, target.bytesPerRow) }
+        return target.makeImage()
+    }
+
 
     /// The frame's size without developing it, so an oversized file is refused before the work.
     static func pixelSize(_ url: URL) -> (width: Int, height: Int)? {

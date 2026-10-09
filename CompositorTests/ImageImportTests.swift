@@ -36,6 +36,46 @@ struct ImageImportTests {
         #expect(result.thumbnail.height <= 96)
     }
 
+    // 64 × 32 WebP images: opaque red on the left, transparent on the right.
+    @Test(arguments: [
+        "UklGRiYAAABXRUJQVlA4TBkAAAAvP8AHEA8Q8x/zHwyxYDJ/6RB6I/ofVfANAA==", // Lossless
+        "UklGRoYAAABXRUJQVlA4WAoAAAAQAAAAPwAAHwAAQUxQSBQAAAABDzD/ERFCLJjMXzqE3oj+RxV8A1ZQOCBMAAAA8AMAnQEqQAAgAD4xFolDIiEhFgQAIAMEsYBmu0A/AD8AADKMNAliwAD+96KX/9eiUqpf3sP/+Fmfwsz+Fmf/Cc2fv90UD4A2eDkAAA==" // Lossy
+    ])
+    func webPImportPreservesTransparency(encoded: String) async throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".webp")
+        try #require(Data(base64Encoded: encoded)).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+        #expect(UTType.importableImages.contains(.webP))
+        let result = try await ImageImporter.shared.decode(url)
+        #expect(result.image.width == 64)
+        #expect(result.image.height == 32)
+        #expect(result.image.colorSpace?.name == CGColorSpace.sRGB)
+        #expect(result.thumbnail.width <= 96)
+        #expect(result.thumbnail.height <= 96)
+        let context = try #require(CGContext(data: nil, width: 64, height: 32, bitsPerComponent: 8,
+                                             bytesPerRow: 256, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        context.draw(result.image, in: CGRect(x: 0, y: 0, width: 64, height: 32))
+        let bytes = try #require(context.data).assumingMemoryBound(to: UInt8.self)
+        #expect(bytes[0] >= 250)
+        #expect(bytes[3] == 255)
+        #expect(bytes[63 * 4 + 3] == 0)
+        do {
+            _ = try await ImageImporter.shared.decode(url, remainingPixels: 10)
+            Issue.record("Over-budget WebP should fail")
+        } catch ImageImportError.tooLarge { }
+        let session = EditorSession()
+        let provider = NSItemProvider()
+        provider.registerDataRepresentation(forTypeIdentifier: UTType.webP.identifier, visibility: .all) { completion in
+            completion(Data(base64Encoded: encoded), nil)
+            return nil
+        }
+        await ImageFileDrop.importProviders([provider], into: session, at: nil)
+        #expect(session.document?.size == CGSize(width: 64, height: 32))
+        #expect(session.document?.layers.count == 1)
+        #expect(session.importError == nil)
+    }
+
     @Test func orientationAndColorConversion() async throws {
         let url = try fixture(.tiff, orientation: 6, p3: true)
         defer { try? FileManager.default.removeItem(at: url) }

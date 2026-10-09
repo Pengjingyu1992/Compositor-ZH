@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 
 final class CompositorApplicationDelegate: NSObject, NSApplicationDelegate {
     let workspace = ProjectWorkspace(recoveryStore: .shared)

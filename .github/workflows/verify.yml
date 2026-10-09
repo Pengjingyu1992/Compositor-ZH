@@ -24,6 +24,8 @@ permissions:
 jobs:
   clt:
     name: CLT build and localization
+    # Push covers same-repo branches; fork pull requests still receive these checks.
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: macos-26
     timeout-minutes: 30
     steps:
@@ -36,6 +38,7 @@ jobs:
 
   unit:
     name: Xcode unit tests
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: macos-26
     timeout-minutes: 60
     steps:

@@ -201,9 +201,20 @@ nonisolated enum PSDEditableWriter {
         }
         let fonts = [style.fontName] + Set(resolved.map { $0.1 }).subtracting([style.fontName]).sorted()
         let length = content.utf16.count + 1
-        let boundaries = Array(Set([0, content.utf16.count] + (style.fontRuns ?? []).flatMap { [$0.location,$0.location+$0.length] }
-            + (style.colorRuns ?? []).flatMap { [$0.location,$0.location+$0.length] }
-            + resolved.flatMap { [$0.0.location, NSMaxRange($0.0)] })).sorted()
+        var boundarySet: Set<Int> = [0, content.utf16.count]
+        for run in style.fontRuns ?? [] {
+            boundarySet.insert(run.location)
+            boundarySet.insert(run.location + run.length)
+        }
+        for run in style.colorRuns ?? [] {
+            boundarySet.insert(run.location)
+            boundarySet.insert(run.location + run.length)
+        }
+        for (range, _) in resolved {
+            boundarySet.insert(range.location)
+            boundarySet.insert(NSMaxRange(range))
+        }
+        let boundaries = boundarySet.sorted()
         var runs: [(Int, String, PaletteColor)] = []
         for (a,z) in zip(boundaries, boundaries.dropFirst()) where z > a {
             let name = resolved.first { NSLocationInRange(a, $0.0) }?.1 ?? style.fontName(at: a)

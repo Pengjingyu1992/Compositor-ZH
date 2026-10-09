@@ -57,6 +57,12 @@ nonisolated struct PSDRecord: @unchecked Sendable {
     var kind = PSDLayerKind.raster
     var shape: LayerShapeStyle?
     var shapeNotes: [String] = []
+    var effects: LayerEffects?
+    var fill: LayerFillStyle?
+    var effectNotes: [String] = []
+    var vectorMaskEnabled = true
+    var vectorMaskLinked = true
+    var vectorMask: VectorPathStyle?
     /// Parsed Photoshop type, when the `TySh` block maps onto an editable text layer.
     var text: PSDText.Source?
 }

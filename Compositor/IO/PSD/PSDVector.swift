@@ -18,23 +18,31 @@ nonisolated enum PSDVector {
     }
 
     static func live(extra: [String: Data], canvas: CGSize, remainingPixels: Int = DocumentLimits.documentPixelBudget) throws -> Live? {
+        if let origin = origination(extra["vogk"]) { _ = try pixelSize(origin.bounds.size, remainingPixels: remainingPixels) }
         let stroke = extra["vstk"]
         let fillEnabled = stroke.flatMap { bool($0, key: "fillEnabled") } ?? (extra["SoCo"] != nil)
         let strokeEnabled = stroke.flatMap { bool($0, key: "strokeEnabled") } ?? false
-        guard fillEnabled, let fill = extra["SoCo"].flatMap(rgb) else { return nil }
-        guard let origin = origination(extra["vogk"]) ?? sharpRect(from: extra["vmsk"] ?? extra["vsms"], canvas: canvas) else {
-            return nil
+        guard let mask = extra["vmsk"] ?? extra["vsms"], var vector = model(from: mask, canvas: canvas),
+              i32(mask,4) & 5 == 0, let fill = extra["SoCo"].flatMap(rgb), fillEnabled || strokeEnabled else { return nil }
+        vector.roundCaps = stroke.map { $0.range(of: Data("strokeStyleRoundCap".utf8)) != nil } ?? false
+        vector.fillEnabled = fillEnabled; vector.strokeEnabled = strokeEnabled
+        if let stroke { vector.strokeWidth = CGFloat(unit(stroke,key: "strokeStyleLineWidth") ?? 1)
+            if let c = rgb(stroke) { vector.strokeColor = PaletteColor(red:c.r,green:c.g,blue:c.b) }
         }
+        guard vector.isValid else { return nil }
+        let path = vector.path(size: canvas)
+        let margin = strokeEnabled ? ceil(vector.strokeWidth/2+1) : 0
+        let sourceBounds = path.boundingBoxOfPath.insetBy(dx:-margin,dy:-margin).integral
+        let primitive = !strokeEnabled ? origination(extra["vogk"]) : nil
+        let origin = primitive ?? Origination(kind:.path,bounds:sourceBounds)
         var box = origin.bounds.integral
         guard box.origin.x.isFinite, box.origin.y.isFinite else { return nil }
         guard let size = try pixelSize(box.size, remainingPixels: remainingPixels) else { return nil }
         box.size = CGSize(width: size.width, height: size.height)
-        let style = LayerShapeStyle(kind: origin.kind, red: fill.r, green: fill.g, blue: fill.b, cornerRadius: origin.cornerRadius)
-        let image = try EditorSession.shapeImage(style.kind, size: box.size, color: style.color, cornerRadius: style.cornerRadius)
+        vector = vector.mapped { CGPoint(x:($0.x*canvas.width-box.minX)/box.width,y:($0.y*canvas.height-box.minY)/box.height) }
+        let style = LayerShapeStyle(kind: origin.kind, red: fill.r, green: fill.g, blue: fill.b, cornerRadius: origin.cornerRadius, vector: origin.kind == .path ? vector : nil)
+        let image = try EditorSession.shapeImage(style.kind, size: box.size, color: style.color, cornerRadius: style.cornerRadius, vector: vector)
         var notes: [String] = []
-        if strokeEnabled {
-            notes.append("The Photoshop stroke isn’t supported on shape layers and was omitted.")
-        }
         notes.append(contentsOf: origin.notes)
         return Live(style: style, bounds: box, image: image, notes: notes)
     }
@@ -169,48 +177,49 @@ nonisolated enum PSDVector {
         return Origination(kind: .rectangle, bounds: box)
     }
 
-    static func path(from data: Data, canvas: CGSize) -> CGPath? {
-        guard data.count >= 8, canvas.width > 0, canvas.height > 0 else { return nil }
-        let path = CGMutablePath()
+    static func model(from data: Data, canvas: CGSize) -> VectorPathStyle? {
+        guard data.count >= 8, data.count <= 2_000_000, i32(data, 0) == 3,
+              canvas.width > 0, canvas.height > 0 else { return nil }
+        var result = VectorPathStyle(), contour: VectorContour?, remaining = 0
         var offset = 8
-        var remaining = 0
-        var closed = true
-        var first = true
-        var previousOut = CGPoint.zero
         while offset + 26 <= data.count {
-            let type = Int(i16(data, offset))
-            let body = data.subdata(in: offset + 2 ..< offset + 26)
+            let type = Int(i16(data, offset)), body = data.subdata(in: offset+2 ..< offset+26)
             offset += 26
             switch type {
             case 0, 3:
-                if !first, closed { path.closeSubpath() }
-                remaining = Int(i16(body, 0))
-                closed = type == 0
-                first = true
-            case 1, 2, 4, 5:
-                guard remaining > 0, body.count >= 24 else { continue }
+                guard remaining == 0 else { return nil }
+                if let contour { result.contours.append(contour) }
+                remaining = Int(UInt16(bitPattern: i16(body,0)))
+                contour = VectorContour(anchors: [], closed: type == 0)
+                result.evenOdd = i16(body,4) != 2
+            case 1,2,4,5:
+                guard remaining > 0, contour != nil else { return nil }
                 remaining -= 1
-                let incoming = point(body, 0, canvas: canvas)
-                let anchor = point(body, 8, canvas: canvas)
-                let outgoing = point(body, 16, canvas: canvas)
-                if first {
-                    path.move(to: anchor)
-                    first = false
-                } else {
-                    path.addCurve(to: anchor, control1: previousOut, control2: incoming)
+                func p(_ at: Int) -> CGPoint {
+                    let point = point(body,at,canvas: canvas)
+                    return CGPoint(x: point.x/canvas.width,y: point.y/canvas.height)
                 }
-                previousOut = outgoing
-            default:
-                continue
+                contour?.anchors.append(PathAnchor(point:p(8),incoming:p(0),outgoing:p(16),smooth:type == 1 || type == 4))
+            case 6,7: break
+            case 8:
+                // Inverted/full-canvas masks need a complementary contour; retain pixels for now.
+                if i16(body,0) != 0 { return nil }
+            default: return nil
             }
         }
-        if !first, closed { path.closeSubpath() }
-        return path.isEmpty ? nil : path
+        guard remaining == 0, data.count - offset <= 3,
+              data[offset...].allSatisfy({ $0 == 0 }) else { return nil }
+        if let contour { result.contours.append(contour) }
+        return result.isValid ? result : nil
+    }
+
+    static func path(from data: Data, canvas: CGSize) -> CGPath? {
+        model(from:data,canvas:canvas)?.path(size:canvas)
     }
 
     static func rgb(_ data: Data) -> (r: CGFloat, g: CGFloat, b: CGFloat)? {
         guard let r = double(data, key: "Rd  "), let g = double(data, key: "Grn "), let b = double(data, key: "Bl  ") else { return nil }
-        func channel(_ value: Double) -> CGFloat { CGFloat(value > 1 ? min(255, max(0, value)) / 255 : min(1, max(0, value))) }
+        func channel(_ value: Double) -> CGFloat { CGFloat(min(255, max(0, value)) / 255) }
         return (channel(r), channel(g), channel(b))
     }
 

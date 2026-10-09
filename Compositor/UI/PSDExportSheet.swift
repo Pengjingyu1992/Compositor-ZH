@@ -17,7 +17,7 @@ struct PSDExportSheet: View {
                 Text("Flattened PSD").tag(PSDExportMode.flattened)
             }.pickerStyle(.radioGroup)
             Text(mode == .layered
-                 ? L10n.text("Pixel layers, folders, opacity, blend modes, and layer masks remain separate. Transforms are rendered into pixels.")
+                 ? L10n.text("Layers, folders, masks, ordinary horizontal text, single-color paths, and mapped fills, adjustments and effects remain editable. Pixel-layer transforms are baked.")
                  : L10n.text("The visible canvas is exported as one pixel layer. The original project remains editable."))
                 .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             ForEach(PSDWriter.conversionNotes(snapshot), id: \.self) { note in

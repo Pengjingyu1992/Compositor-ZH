@@ -9,7 +9,7 @@ nonisolated enum PSDExportError: LocalizedError {
     case requiresFlattening, tooLarge
     var errorDescription: String? {
         switch self {
-        case .requiresFlattening: L10n.text("Adjustments, layer effects, or nonadjacent clipping links require a flattened PSD in this version.")
+        case .requiresFlattening: L10n.text("Unmapped adjustments, effects, or nonadjacent clipping links require a flattened PSD.")
         case .tooLarge: L10n.text("PSD export exceeds the 512 MB, 10,000 record, or raster size limit. Try a flattened PSD or a smaller document.")
         }
     }
@@ -62,10 +62,15 @@ nonisolated enum PSDWriter {
         var maskBounds: CGRect?
         var maskDefault: UInt8 = 255
         var maskEnabled = true
+        var extra: [(String, Data)] = []
     }
     static func requiresFlattening(_ snapshot: ProjectSnapshot) -> Bool {
         let layers = snapshot.manifest.layers
-        if layers.contains(where: { $0.adjustment != nil || $0.effects?.visible.isEmpty == false }) { return true }
+        if layers.contains(where: { layer in
+            if let a = layer.adjustment, PSDEditableWriter.adjustment(a) == nil { return true }
+            if let e = layer.effects, !PSDEditableWriter.supportsEffects(e) { return true }
+            return false
+        }) { return true }
         for siblings in Dictionary(grouping: layers, by: \.parentID).values {
             var base: UUID?
             for layer in siblings {
@@ -78,14 +83,23 @@ nonisolated enum PSDWriter {
     }
     static func conversionNotes(_ snapshot: ProjectSnapshot) -> [String] {
         var notes: [String] = []
-        if snapshot.manifest.layers.contains(where: { $0.text != nil || $0.shape != nil }) {
-            notes.append("Text and shapes are exported as pixels. Their appearance is preserved, but they are no longer editable text or vector shapes in the PSD.")
+        if snapshot.manifest.layers.contains(where: { $0.text != nil && !PSDEditableWriter.canWriteText($0, snapshot: snapshot) }) {
+            notes.append("Vertical, warped, path-bound, or nonuniformly scaled text is exported as pixels. Ordinary horizontal text retains editable text and font/color runs.")
+        }
+        if snapshot.manifest.layers.contains(where: { $0.fill != nil }) {
+            notes.append("Solid fills and canvas-aligned gradients retain editable PSD fill settings. Patterns and other gradient placements retain pixels.")
+        }
+        if snapshot.manifest.layers.contains(where: { $0.effects != nil || $0.adjustment != nil }) {
+            notes.append("Mapped adjustments and effects retain editable parameters. Rendering can differ between editors; inspect the exported PSD before production use.")
+        }
+        if snapshot.manifest.layers.contains(where: { $0.shape?.vector?.contours.contains(where: { $0.color != nil }) == true }) {
+            notes.append("Multicolor text outlines retain pixels in PSD. Single-color paths remain vector shapes.")
         }
         if snapshot.manifest.layers.contains(where: { $0.maskLinked == false }) {
             notes.append("Independent masks retain their exported position. Mask linking may differ in other editors.")
         }
         if requiresFlattening(snapshot) {
-            notes.append("Adjustments, layer effects, or nonadjacent clipping links require a flattened PSD in this version.")
+            notes.append("Unmapped adjustments, effects, or nonadjacent clipping links require a flattened PSD.")
         }
         return notes
     }
@@ -129,6 +143,7 @@ nonisolated enum PSDWriter {
                           blend: record.isGroup == true ? "pass" : (record.blendMode ?? .normal).psdKey,
                           clipping: record.maskSourceID != nil)
         if record.isGroup == true { layer.section = 1 }
+        else if let adjustment = record.adjustment, let block = PSDEditableWriter.adjustment(adjustment) { layer.extra.append(block) }
         else {
             let bounds = try checkedBounds(record.transform)
             let cost = Int(bounds.width * bounds.height) * 4 + 8
@@ -140,6 +155,25 @@ nonisolated enum PSDWriter {
             } else if record.imageFile != nil { throw ProjectError.missingImage }
             let planes = try rgbaPlanes(c)
             layer.channels = zip([Int16(0), 1, 2, -1], planes).map { ($0, raw($1)) }
+        }
+        let canvas = CGSize(width: snapshot.manifest.width, height: snapshot.manifest.height)
+        if let text = record.text, let image = snapshot.images[record.id]?.image, PSDEditableWriter.canWriteText(record, snapshot: snapshot) {
+            layer.extra.append(("TySh", PSDEditableWriter.text(text, transform: record.transform, image: image)))
+        }
+        if let shape = record.shape, shape.vector?.contours.allSatisfy({ $0.color == nil || $0.color == shape.color }) ?? true {
+            let vector = PSDEditableWriter.shapePath(shape, size: record.transform.size)
+            layer.extra.append(("vmsk", try PSDEditableWriter.vector(vector, transform: record.transform, canvas: canvas)))
+            layer.extra.append(("SoCo", PSDEditableWriter.solid(shape.color)))
+            layer.extra.append(("vstk", PSDEditableWriter.stroke(vector)))
+        } else if let fill = record.fill, let block = PSDEditableWriter.fill(fill, record: record, canvas: canvas) {
+            layer.extra.append(block)
+            let rect = VectorPathStyle.from(CGPath(rect: CGRect(origin: .zero, size: record.transform.size), transform: nil), size: record.transform.size)
+            layer.extra.append(("vmsk", try PSDEditableWriter.vector(rect, transform: record.transform, canvas: canvas)))
+        }
+        if let effects = record.effects { layer.extra.append(("lfx2", PSDEditableWriter.effects(effects))) }
+        if let vector = record.vectorMask, record.shape == nil, record.fill == nil {
+            layer.extra.append(("vmsk", try PSDEditableWriter.vector(vector, transform: record.maskPlacement ?? record.transform,
+                canvas: canvas, enabled: record.maskEnabled ?? true, linked: record.maskLinked ?? true)))
         }
         if let mask = snapshot.mask(for: record) {
             // PSD rectangles are in document coordinates; transformed masks become upright pixel grids.
@@ -158,7 +192,9 @@ nonisolated enum PSDWriter {
             for y in 0..<c.height { plane.append(pixels + y * c.bytesPerRow, count: c.width) }
             layer.maskBounds = bounds; layer.maskEnabled = mask.isEnabled
             layer.maskDefault = UInt8((background * 255).rounded())
-            layer.channels.append((-2, raw(plane)))
+            // The vector is already the complete coverage, so emitting its raster fallback as a second mask would square edge alpha.
+            if !layer.extra.contains(where: { $0.0 == "vmsk" }) || record.shape != nil || record.fill != nil || record.vectorMask == nil { layer.channels.append((-2, raw(plane))) }
+            else { layer.maskBounds = nil }
         } else if record.maskFile != nil { throw ProjectError.missingImage }
         return layer
     }
@@ -205,7 +241,7 @@ nonisolated enum PSDWriter {
             guard layerInfo.data.count < remaining else { throw PSDExportError.tooLarge }
         }
         for layer in layers { for channel in layer.channels { layerInfo.append(channel.data) } }
-        layerInfo.pad(2)
+        layerInfo.pad(4)
         var section = PSDBuffer(); section.block(layerInfo.data); section.u32(0)
         var resources = PSDBuffer(), resolution = PSDBuffer()
         let dpi = UInt32((min(9600, max(1, manifest.resolution ?? 72)) * 65536).rounded())
@@ -243,14 +279,19 @@ nonisolated enum PSDWriter {
         mutating func block(_ value: Data) { u32(UInt32(value.count)); append(value) }
         mutating func rectangle(_ r: CGRect) { i32(Int(r.minY)); i32(Int(r.minX)); i32(Int(r.maxY)); i32(Int(r.maxX)) }
         mutating func extra(_ key: String, _ value: Data) {
-            ascii("8BIM"); ascii(key); block(value); if value.count % 2 != 0 { u8(0) }
+            // Declared lengths include padding: two bytes normally, four for these keys.
+            let alignment = ["luni", "vmsk", "vsms", "GdFl", "curv", "vogk"].contains(key) ? 4 : 2
+            var payload = value
+            payload.append(Data(repeating: 0, count: (alignment - payload.count % alignment) % alignment))
+            ascii("8BIM"); ascii(key); block(payload)
         }
         mutating func record(_ layer: Layer) throws {
             rectangle(layer.bounds); u16(UInt16(layer.channels.count))
             for channel in layer.channels { i16(channel.id); u32(UInt32(channel.data.count)) }
             ascii("8BIM"); ascii(layer.blend)
             u8(UInt8((min(1, max(0, layer.opacity)) * 255).rounded()))
-            u8(layer.clipping ? 1 : 0); u8(layer.visible ? 0 : 2); u8(0)
+            let parameterLayer = layer.section != nil || layer.extra.contains { ["vmsk", "SoCo", "GdFl", "nvrt", "levl", "curv", "expA"].contains($0.0) }
+            u8(layer.clipping ? 1 : 0); u8(8 | (layer.visible ? 0 : 2) | (parameterLayer ? 16 : 0)); u8(0)
             var details = PSDBuffer()
             if let bounds = layer.maskBounds {
                 var mask = PSDBuffer(); mask.rectangle(bounds); mask.u8(layer.maskDefault)
@@ -266,6 +307,7 @@ nonisolated enum PSDWriter {
                 var folder = PSDBuffer(); folder.u32(kind); folder.ascii("8BIM"); folder.ascii(layer.blend)
                 details.extra("lsct", folder.data)
             }
+            for (key, value) in layer.extra { details.extra(key, value) }
             block(details.data)
         }
     }

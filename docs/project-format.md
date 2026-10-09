@@ -1,4 +1,4 @@
-# Compositor project format, versions 1–12
+# Compositor project format, versions 1–13
 
 A `.comp` file is a macOS document package containing `manifest.json` and an `images/` directory of `<layer UUID>.png` assets.
 
@@ -38,13 +38,25 @@ Version 11 lets those letters use different faces too: optional `fontRuns` in th
 
 ### Version 12: editable fills, overlays and typography
 
-Version 12 adds `fill` to pixel layer records, `gradientOverlay`, `patternOverlay` and `bevel` to `effects`, and optional `vertical` plus alignment `Justified` to text. These properties require version 12; declaring them in an older manifest is invalid. Versions 1–11 remain readable. Saving any document now writes version 12, so keep a copy when exchanging with an older macOS build.
+Version 12 adds `fill` to pixel layer records, `gradientOverlay`, `patternOverlay` and `bevel` to `effects`, and optional `vertical` plus alignment `Justified` to text. These properties require version 12; declaring them in an older manifest is invalid. Versions 1–11 remain readable. Version 13 is now the writer version; keep a copy when exchanging with an older build.
 
 `fill` is a `LayerFillStyle`: `kind` (`Solid Color`, `Linear`, `Radial`, `Pattern`); 2–32 ordered `stops` with unique UUID `id`, `position` (0–1) and RGBA `color` (0–1); `angle` (−180…180 degrees); `scale` (0.01…10); `reversed`; `pattern` (`Checkerboard`, `Stripes`, `Dots`); `cellSize` (4…512 local pixels). Solid uses the first stop; patterns use the first two; gradients use all stops. Coordinates are local to the layer. An image is required, and fill cannot coexist with text, shape, group or adjustment metadata. The PNG is the authoritative display fallback. Transform, duplicate, masks, canvas size and crop preserve editability; painting, pixel filters and image resampling rasterize it and omit `fill` on the next save.
 
 Gradient/pattern overlay records carry `enabled` (optional, defaults true), `fill` using the same schema, and `opacity` (0–1). Bevel carries `enabled`, `size` (0–500 local pixels), `depth` (0–1), `angle` (−180…180). The initial bevel is an inner highlight/shadow bevel; it does not encode Photoshop's full contour/material model. Overlays clip to masked source alpha and participate in preview, export, copy, scaling and undo. Text `vertical: true` uses right-to-left Core Text columns and vertical glyph forms; missing/false keeps horizontal layout. `Justified` uses the system paragraph engine (the final paragraph line is not stretched).
 
 Windows' bridge accepts v12 and preserves these records and resources. Its current editor cannot edit these new properties: visible unsupported content requires the saved composite preview and disables visual edits. A missing required preview is an explicit refusal, never permission to silently drop a layer or effect. Windows-native new documents continue to use v11. This bridge update does not add Windows tools or replace its application.
+
+### Version 13: paths, vector masks and text layouts
+
+Version 13 adds `shape.kind = "Path"` with required `shape.vector`, optional layer `vectorMask` (requires `maskFile`), and optional text `pathLayout` / `warp`. All require v13. Earlier projects remain readable; saving writes v13. The Windows bridge accepts and preserves v13, retaining its version on save. Visible unsupported properties require the saved composite preview and block visual editing; new Windows documents remain v11.
+
+`VectorPathStyle` stores `contours`, `evenOdd`, `fillEnabled`, `strokeEnabled`, RGB `strokeColor`, `strokeWidth` (0–5000) and `roundCaps`. Each contour stores `anchors`, `closed`, and optional RGB `color` for glyph color runs. Each anchor stores `point`, optional `incoming`/`outgoing` and `smooth`. CGPoint uses Foundation's two-element JSON array. Coordinates are fractions of the layer rectangle, origin at its top-left, y down; handles may be outside it (finite magnitude ≤1000). Consecutive anchors form a cubic using the previous outgoing and next incoming handle, defaulting absent handles to the anchor. Closed contours include the final cubic back to the first. Up to 10,000 nonempty contours and 40,000 anchors total are allowed. Fill uses winding or even-odd; strokes use round joins and butt/round caps. A path layer has an image, and cannot also be text, fill, group or adjustment.
+
+`vectorMask` uses the same contour geometry and fill rule; colors/strokes do not affect coverage. White inside, black outside, antialiased edges. Its local rectangle is `maskPlacement` when present, otherwise the layer transform. The grayscale PNG remains required. Painting/replacing mask pixels drops this metadata. A disabled or unlinked vector mask retains those existing mask flags.
+
+`text.pathLayout` has `path`, `offset` (document-local pixels, finite ±30000), `reversed`. It accepts exactly one contour with 2–3000 anchors, horizontal single-line text, and no simultaneous warp. Layout stores a copy of the path, not a layer reference. Too-short paths refuse rendering rather than truncating text. `text.warp` has `bend` (−1…1), a parabolic arc displacement in fractions of text-box height. Text content, font and color runs remain editable; exporting these layouts to PSD retains pixels with a conversion note. Pixel fallback is authoritative until an explicit edit triggers layout.
+
+Transforms, duplication, Canvas Size/Crop and undo preserve path metadata. Destructive pixel edits and Image Size resampling drop it. An image and a mask each keep their existing surface/document budgets; geometry count limits apply in addition to raster limits.
 
 ### Additive layer fields
 

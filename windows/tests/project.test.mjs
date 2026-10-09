@@ -10,7 +10,7 @@ import { fixture, manifest, IDS, png } from './fixtures.mjs';
 const encode = m => Buffer.from(JSON.stringify(m));
 const rejects = (mutate, code = 'invalid') => { const m = manifest(); mutate(m); assert.throws(() => parseManifest(encode(m)), e => e.code === code); };
 test('all supported versions accept a basic project without newer metadata', () => {
-  for (let version = 1; version <= 12; version++) {
+  for (let version = 1; version <= 13; version++) {
     const m = manifest(); m.version = version; delete m.layers[1].opacity; delete m.layers[1].maskFile;
     assert.equal(parseManifest(encode(m)).version, version);
   }
@@ -21,7 +21,7 @@ test('unknown manifest/layer fields remain immutable and visible as unsupported'
   const parsed = parseManifest(encode(m)); assert.deepEqual(parsed, m); assert.ok(Object.isFrozen(parsed.layers[0]));
   assert.ok(analyze(parsed).issues.includes('unknown'));
 });
-test('unsupported version is rejected, never coerced', () => { rejects(m => m.version = 13, 'version'); rejects(m => m.version = 0, 'version'); });
+test('unsupported version is rejected, never coerced', () => { rejects(m => m.version = 14, 'version'); rejects(m => m.version = 0, 'version'); });
 test('unsafe image paths rejected', () => { for (const name of ['../x.png', 'C:\\secret.png', 'a.png', IDS[0] + '.PNG']) rejects(m => m.layers[0].imageFile = name); });
 test('duplicate IDs are case-insensitive', () => rejects(m => m.layers[1].id = m.layers[0].id.toLowerCase()));
 test('missing parents and cycles rejected', () => { rejects(m => m.layers[1].parentID = IDS[2]); rejects(m => { delete m.layers[0].imageFile; m.layers[0].isGroup = true; m.layers[0].parentID = IDS[0]; }); });
@@ -82,4 +82,27 @@ test('v12 fill, effects and vertical text stay preserved and require a cached pr
   assert.deepEqual(saved.sourceBytes, original.sourceBytes);
   assert.deepEqual(saved.manifest, original.manifest);
   assert.deepEqual(resourceDigests(saved), resourceDigests(original));
+});
+
+test('v13 path and text layout records survive save, rename and older-version gates', async t => {
+  const { editProject } = await import('../packages/comp-bridge/edit.mjs');
+  const temp = await mkdtemp(path.join(os.tmpdir(), 'comp-v13-')); t.after(() => rm(temp, { recursive: true, force: true }));
+  const source = path.join(temp, 'v13.comp'), copy = path.join(temp, 'copy.comp');
+  await fixture(source, m => {
+    m.version = 13;
+    m.layers[0].shape = { kind: 'Path', vector: { contours: [{ anchors: [{ point: [.1,.1], outgoing: [.3,0] }, { point: [.9,.9] }], closed: false }], future: 'retain' } };
+    m.layers[1].text = { content: '中文', pathLayout: { path: structuredClone(m.layers[0].shape.vector), offset: 4, reversed: false } };
+    m.layers[1].vectorMask = structuredClone(m.layers[0].shape.vector); return m;
+  });
+  const original = await readProject(source);
+  assert.ok(analyze(original.manifest).issues.includes('unknown'));
+  await writeSnapshotNew(original, copy); const saved = await readProject(copy);
+  assert.deepEqual(saved.manifest, original.manifest);
+  assert.deepEqual(resourceDigests(saved), resourceDigests(original));
+  const renamed = editProject(original, { kind: 'rename', id: IDS[0], name: 'Renamed' });
+  assert.equal(renamed.manifest.version, 13);
+  assert.deepEqual(renamed.manifest.layers[0].shape, original.manifest.layers[0].shape);
+  assert.deepEqual(renamed.manifest.layers[1].vectorMask, original.manifest.layers[1].vectorMask);
+  const old = structuredClone(original.manifest); old.version = 12;
+  assert.throws(() => parseManifest(encode(old)), e => e.code === 'invalid');
 });

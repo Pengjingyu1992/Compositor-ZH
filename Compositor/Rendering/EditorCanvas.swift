@@ -1406,6 +1406,7 @@ final class CanvasView: NSView {
             if !visible.isNull, !visible.isEmpty { drawPixelGrid(in: visible, document: document, context: context) }
         }
         drawTextBoxDraft()
+        session.drawPathControls(in: context)
     }
 
     /// One-screen-pixel lines on document pixel boundaries, over the image only.
@@ -1828,6 +1829,10 @@ final class CanvasView: NSView {
             Task { await session.clickPaintBucket(at: pixel, background: background); synchronizeDisplay() }
         } else if session.tool == .gradient {
             beginGradientDrag(at: point)
+        } else if session.tool == .pen, let document = session.document {
+            session.pathMouseDown(session.viewport.documentPoint(from: point, documentSize: document.size),
+                                  option: event.modifierFlags.contains(.option), double: event.clickCount >= 2)
+            synchronizeDisplay()
         } else if session.tool == .type {
             beginTextGesture(at: point, event: event)
         } else if session.tool == .shape, let document = session.document {
@@ -1847,6 +1852,10 @@ final class CanvasView: NSView {
     override func mouseDragged(with event: NSEvent) {
         guard session.document != nil else { return }
         let point = convert(event.locationInWindow, from: nil)
+        if session.pathEditing?.dragPart != nil, !spaceHeld, let document = session.document {
+            session.dragPath(to: session.viewport.documentPoint(from: point, documentSize: document.size), option: event.modifierFlags.contains(.option))
+            synchronizeDisplay(); return
+        }
         if session.filterEdit?.drawingCameraRawGeometryGuide == true, session.filterEdit?.cameraRawGuideDraft != nil,
            let document = session.document {
             session.continueCameraRawGeometryGuide(to: session.viewport.documentPoint(from: point, documentSize: document.size))
@@ -2027,6 +2036,7 @@ final class CanvasView: NSView {
         window?.invalidateCursorRects(for: self)
     }
     override func mouseUp(with event: NSEvent) {
+        if session.pathEditing?.dragPart != nil { session.pathEditing?.dragPart = nil; synchronizeDisplay(); return }
         if session.filterEdit?.cameraRawGuideDraft != nil {
             session.commitCameraRawGeometryGuide()
         }
@@ -2131,6 +2141,11 @@ final class CanvasView: NSView {
         let physicalKey = event.keyCode
         guard let event = ShortcutSettings.shared.canvasEvent(event) else { return }
         if handleKeyboardZoom(event) { return }
+        if session.pathEditing != nil, event.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty {
+            if event.keyCode == 53 { session.pathEditing = nil; synchronizeDisplay(); return }
+            if [36, 76].contains(event.keyCode) { session.finishPathEditing(); synchronizeDisplay(); return }
+            if [51, 117].contains(event.keyCode) { session.removePathAnchor(); synchronizeDisplay(); return }
+        }
         if event.keyCode == 53, textBoxAnchor != nil { textBoxAnchor = nil; textBoxRect = nil; needsDisplay = true; return }
         if event.keyCode == 53, session.textDraft != nil { session.cancelText(); return }
         // A drag session swallows the flagsChanged that says Option was let go, which left the canvas thinking it

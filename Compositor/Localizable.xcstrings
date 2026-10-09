@@ -17280,6 +17280,347 @@
           }
         }
       }
+    },
+    "Arc Bend": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "弧形弯曲"
+          }
+        }
+      }
+    },
+    "Click to add anchors · Drag for curves · Click the first anchor to close · Option breaks handles · Return applies · Delete removes an anchor": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击添加锚点 · 拖动创建曲线 · 点击起点闭合 · Option 解除控制柄对称 · Return 应用 · Delete 删除锚点"
+          }
+        }
+      }
+    },
+    "Combined pixel and vector masks were merged into one pixel mask.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "像素蒙版与矢量蒙版已合并为一个像素蒙版。"
+          }
+        }
+      }
+    },
+    "Convert Text to Outlines": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文字转轮廓"
+          }
+        }
+      }
+    },
+    "Create Vector Mask": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "创建矢量蒙版"
+          }
+        }
+      }
+    },
+    "Create Vector Mask on Lower Layer": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在下方图层创建矢量蒙版"
+          }
+        }
+      }
+    },
+    "Edit Path": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "编辑路径"
+          }
+        }
+      }
+    },
+    "Edit Vector Mask": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "编辑矢量蒙版"
+          }
+        }
+      }
+    },
+    "Even-Odd": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "奇偶填充"
+          }
+        }
+      }
+    },
+    "Layers, folders, masks, ordinary horizontal text, single-color paths, and mapped fills, adjustments and effects remain editable. Pixel-layer transforms are baked.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保留图层、组、蒙版、普通横排文字、单色路径及支持的填充、调整与效果参数。像素图层变换会烘焙。"
+          }
+        }
+      }
+    },
+    "Mapped adjustments and effects retain editable parameters. Rendering can differ between editors; inspect the exported PSD before production use.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "支持的调整与效果保留可编辑参数。不同编辑器的渲染可能不同；正式使用前请检查导出的 PSD。"
+          }
+        }
+      }
+    },
+    "Multicolor text outlines retain pixels in PSD. Single-color paths remain vector shapes.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "多色文字轮廓在 PSD 中保留为像素，单色路径保留为矢量形状。"
+          }
+        }
+      }
+    },
+    "New Contour": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新建子路径"
+          }
+        }
+      }
+    },
+    "New Path": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新建路径"
+          }
+        }
+      }
+    },
+    "Path": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "路径"
+          }
+        }
+      }
+    },
+    "Path Offset": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "路径偏移"
+          }
+        }
+      }
+    },
+    "Paths and Type": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "路径与文字"
+          }
+        }
+      }
+    },
+    "Pen": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "钢笔"
+          }
+        }
+      }
+    },
+    "Pen tool": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "钢笔工具"
+          }
+        }
+      }
+    },
+    "Reset Text Layout": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重置文字排版"
+          }
+        }
+      }
+    },
+    "Reverse Path": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "反向路径"
+          }
+        }
+      }
+    },
+    "Solid fills and canvas-aligned gradients retain editable PSD fill settings. Patterns and other gradient placements retain pixels.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "单色填充与整画布对齐的渐变保留 PSD 可编辑填充设置；图案和其他位置的渐变保留为像素。"
+          }
+        }
+      }
+    },
+    "Some glyphs have no vector outline. The text layer was not changed.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "部分字形没有矢量轮廓，文字图层未更改。"
+          }
+        }
+      }
+    },
+    "Text on Path": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "沿路径文字"
+          }
+        }
+      }
+    },
+    "Text on a path requires one horizontal line of text.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "沿路径文字需要单行横排文字。"
+          }
+        }
+      }
+    },
+    "The path is too short for this text. Reduce the font size or extend the path.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "路径长度不足以容纳文字，请减小字号或延长路径。"
+          }
+        }
+      }
+    },
+    "Unmapped adjustments, effects, or nonadjacent clipping links require a flattened PSD.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不支持映射的调整、效果或非相邻剪贴关系需要合成导出 PSD。"
+          }
+        }
+      }
+    },
+    "Use Foreground Color": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用前景色"
+          }
+        }
+      }
+    },
+    "Vertical, warped, path-bound, or nonuniformly scaled text is exported as pixels. Ordinary horizontal text retains editable text and font/color runs.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "竖排、变形、沿路径或非等比缩放文字导出为像素；普通横排文字保留可编辑文字及字体和颜色区间。"
+          }
+        }
+      }
+    },
+    "Some Photoshop effects or blend settings could not be mapped. Inspect the imported appearance.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "部分 Photoshop 效果或混合设置无法映射，请检查导入后的外观。"
+          }
+        }
+      }
+    },
+    "Separate mask enablement could not be retained; the active mask appearance was preserved.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法分别保留两个蒙版的启用状态，已保留当前启用蒙版的外观。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

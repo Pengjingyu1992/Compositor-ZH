@@ -101,7 +101,7 @@ enum CLIError: LocalizedError {
 
 @MainActor final class PosterMCPServer {
     private static var commandSchema: [String: Any] {
-        let kinds = ["addFill", "editFill", "addImage", "addText", "editText", "transform", "opacity", "blendMode", "visibility", "remove", "invert", "fillPixels", "filter", "effects", "reorder", "setMask", "refineEdges"]
+        let kinds = ["addFill", "editFill", "addImage", "addText", "editText", "transform", "opacity", "blendMode", "visibility", "remove", "invert", "fillPixels", "filter", "effects", "reorder", "setMask", "refineEdges", "addPath", "editPath", "textOutlines", "vectorMask"]
         func number(_ lower: Double, _ upper: Double) -> [String: Any] { ["type": "number", "minimum": lower, "maximum": upper] }
         func object(_ properties: [String: Any], _ required: [String]) -> [String: Any] {
             ["type": "object", "properties": properties, "required": required, "additionalProperties": false]
@@ -114,7 +114,9 @@ enum CLIError: LocalizedError {
             "alignment": ["type": "string", "enum": ["Left", "Center", "Right", "Justified"]], "vertical": ["type": "boolean"],
             "tracking": number(-100, 1000), "leading": number(0, 5000),
             "boxSize": ["type": "array", "items": ["type": "number"], "minItems": 2, "maxItems": 2],
-            "colorRuns": ["type": "array"], "fontRuns": ["type": "array"]],
+            "colorRuns": ["type": "array"], "fontRuns": ["type": "array"],
+            "pathLayout": ["type": "object", "description": "A copy of one VectorPathStyle contour, with offset and reversed."],
+            "warp": object(["bend": number(-1,1)], ["bend"])],
             ["content", "fontName", "fontSize", "red", "green", "blue", "alignment", "tracking", "leading"])
         return object([
             "kind": ["type": "string", "enum": kinds], "layerID": ["type": "string", "format": "uuid"],
@@ -123,6 +125,7 @@ enum CLIError: LocalizedError {
             "maskData": ["type": "string", "contentEncoding": "base64", "description": "Image luminance times alpha; white reveals, black hides."],
             "clearMask": ["type": "boolean"], "text": text,
             "transform": ["type": "object", "description": "Copy a layer transform from project_state and edit origin, size, rotation or flips."],
+            "vector": ["type": "object", "description": "Complete VectorPathStyle from project_state shape.vector or vectorMask; normalized layer coordinates."],
             "fill": ["type": "object", "description": "LayerFillStyle; use compositor-cli example or project_state fill as a complete template."],
             "color": object(["red": number(0, 1), "green": number(0, 1), "blue": number(0, 1), "alpha": number(1, 1)], ["red", "green", "blue", "alpha"]),
             "effects": ["type": "object"], "blendMode": ["type": "string"], "index": ["type": "integer", "minimum": 0],

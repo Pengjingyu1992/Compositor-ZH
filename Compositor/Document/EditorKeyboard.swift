@@ -18,6 +18,7 @@ extension EditorSession {
         case "j": selectTool(.spotHealing)
         case "s": selectTool(.cloneStamp)
         case "t": selectTool(.type)
+        case "p": selectTool(.pen)
         case "g": selectTool(.gradient)
         case "k": selectTool(.bucket)
         case "u":

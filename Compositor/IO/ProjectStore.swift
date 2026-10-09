@@ -12,7 +12,7 @@ extension UTType {
 
 nonisolated struct ProjectManifest: Codable, Sendable {
     /// The format version new saves write.
-    static let current = 12
+    static let current = 13
     /// Every version `load` accepts. The package-header check, the manifest check and the error
     /// message all read this, so they cannot drift apart when `current` is bumped.
     static let supported = 1...ProjectManifest.current
@@ -54,6 +54,7 @@ nonisolated struct ProjectLayerRecord: Codable, Sendable {
     var effects: LayerEffects? = nil
     var text: LayerTextStyle? = nil
     var fill: LayerFillStyle? = nil
+    var vectorMask: VectorPathStyle? = nil
 }
 
 nonisolated struct ProjectSnapshot: @unchecked Sendable {
@@ -229,6 +230,18 @@ actor ProjectStore {
         guard (1...DocumentLimits.maxSide).contains(manifest.width), (1...DocumentLimits.maxSide).contains(manifest.height),
               manifest.layers.count <= 10_000 else { throw ProjectError.tooLarge }
         for layer in manifest.layers {
+            if let vector = layer.shape?.vector {
+                guard manifest.version >= 13, vector.isValid, layer.shape?.kind == .path,
+                      layer.imageFile != nil, layer.text == nil, layer.fill == nil,
+                      layer.adjustment == nil, layer.isGroup != true else { throw ProjectError.invalid }
+            }
+            if layer.shape?.kind == .path, layer.shape?.vector == nil { throw ProjectError.invalid }
+            if let vector = layer.vectorMask {
+                guard manifest.version >= 13, vector.isValid, layer.maskFile != nil else { throw ProjectError.invalid }
+            }
+            if let text = layer.text, text.pathLayout != nil || text.warp != nil {
+                guard manifest.version >= 13 else { throw ProjectError.invalid }
+            }
             if let effects = layer.effects, effects.usesPosterEffects {
                 guard manifest.version >= 12 else { throw ProjectError.invalid }
             }

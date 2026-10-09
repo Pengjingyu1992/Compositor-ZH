@@ -79,7 +79,18 @@ struct TypeControls: View {
                             .accessibilityAddTraits(selected ? .isSelected : [])
                         }
                     }
-                    Toggle("Vertical Text", isOn: Binding(get: { session.currentTextStyle.isVertical }, set: { value in session.changeTextStyle { $0.vertical = value } }))
+                    Toggle("Vertical Text", isOn: Binding(get: { session.currentTextStyle.isVertical }, set: { value in session.changeTextStyle { $0.vertical = value } })).disabled(session.currentTextStyle.pathLayout != nil)
+                    if session.currentTextStyle.pathLayout != nil {
+                        TextField("Path Offset", value: Binding<Double>(get: { Double(session.currentTextStyle.pathLayout?.offset ?? 0) }, set: { v in
+                            if v.isFinite { session.changeTextStyle { $0.pathLayout?.offset = CGFloat(min(30_000, max(-30_000, v))) } }
+                        }), format: .number).frame(width: 60)
+                        Toggle("Reverse Path", isOn: Binding(get: { session.currentTextStyle.pathLayout?.reversed ?? false }, set: { v in session.changeTextStyle { $0.pathLayout?.reversed = v } }))
+                    } else {
+                        Text("Arc Bend")
+                        TextField("Arc Bend", value: Binding<Double>(get: { Double(session.currentTextStyle.warp?.bend ?? 0) * 100 }, set: { v in
+                            if v.isFinite { session.changeTextStyle { $0.warp = v == 0 ? nil : TextWarp(bend: CGFloat(min(1, max(-1, v/100)))) } }
+                        }), format: .number).frame(width: 52)
+                    }
                     Text("Tracking").scrubbable(sensitivity: 1, value: value(\.tracking), range: -100...1000, step: 1)
                     TextField("Tracking", value: number(\.tracking), format: .number).frame(width: 45)
                         .arrowSteps(value: { Double(session.currentTextStyle.tracking) },

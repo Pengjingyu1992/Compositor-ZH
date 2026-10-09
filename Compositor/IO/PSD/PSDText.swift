@@ -51,14 +51,14 @@ nonisolated enum PSDText {
 
     static func parse(extra: [String: Data]) -> Source? {
         guard let data = extra["TySh"] ?? extra["tySh"], data.count <= 8_000_000 else { return nil }
-        var reader = Reader(data: data)
+        var reader = PSDDescriptorReader(data: data)
         guard reader.u16() == 1 else { return nil }
         guard let xx = reader.f64(), let xy = reader.f64(), let yx = reader.f64(),
               let yy = reader.f64(), let tx = reader.f64(), let ty = reader.f64(),
               [xx, xy, yx, yy, tx, ty].allSatisfy(\.isFinite) else { return nil }
         guard reader.u16() == 50, let text = reader.descriptor(versioned: true) else { return nil }
         if let orientation = text.enumeration("Ornt"), orientation == "Vrtc" { return nil }
-        guard let placed = placement(xx: xx, xy: xy, yx: yx, yy: yy, tx: tx, ty: ty) else { return nil }
+        guard let placed = placement(xx: xx, xy: yx, yx: xy, yy: yy, tx: tx, ty: ty) else { return nil }
 
         var notes: [String] = []
         if reader.remaining >= 2, reader.u16() == 1, let warp = reader.descriptor(versioned: true),
@@ -82,7 +82,14 @@ nonisolated enum PSDText {
 
         var anchor = CGPoint(x: placed.tx, y: placed.ty)
         var anchorIsFrame = false
-        if let bounds = text.rect("bounds"), let glyphs = text.rect("boundingBox"),
+        if let engine, let box = array(walk(engine, "EngineDict", "Rendered", "Shapes", "Children")).first,
+           let bounds = walk(box, "Cookie", "Photoshop", "BoxBounds") {
+            let values = array(bounds).compactMap { number($0) }
+            guard values.count == 4, values.allSatisfy(\.isFinite) else { return nil }
+            style.boxSize = CGSize(width: (values[2]-values[0])*placed.pixelScale + 2*LayerTextStyle.padding,
+                                   height: (values[3]-values[1])*placed.pixelScale + 2*LayerTextStyle.padding)
+            anchor = placed.map(CGPoint(x: values[0], y: values[1])); anchorIsFrame = true
+        } else if let bounds = text.rect("bounds"), let glyphs = text.rect("boundingBox"),
            bounds.width > glyphs.width + 4, bounds.height > glyphs.height + 4,
            bounds.width > 1, bounds.height > 1 {
             let frame = CGSize(width: bounds.width * placed.pixelScale, height: bounds.height * placed.pixelScale)
@@ -182,7 +189,23 @@ nonisolated enum PSDText {
             notes.append(fauxNote)
         }
         if runs.count > 1, runs.dropFirst().contains(where: { signature($0) != signature(first) }) {
-            notes.append(firstStyleNote)
+            let lengths = array(walk(engine,"EngineDict","StyleRun","RunLengthArray"))
+            var offset = 0, colors: [LayerTextColorRun] = [], faces: [LayerTextFontRun] = []
+            for (index,run) in runs.enumerated() {
+                guard index < lengths.count, let count = number(lengths[index]), count.isFinite, count >= 0, count <= 100_001 else { break }
+                let length = min(Int(count), max(0,style.content.utf16.count-offset)), sign = signature(run)
+                if length > 0 {
+                    if sign.red != Double(style.red) || sign.green != Double(style.green) || sign.blue != Double(style.blue) {
+                        colors.append(LayerTextColorRun(location:offset,length:length,red:CGFloat(sign.red),green:CGFloat(sign.green),blue:CGFloat(sign.blue)))
+                    }
+                    if sign.font >= 0, sign.font < Double(fonts.count), let face = string(walk(fonts[Int(sign.font)],"Name")), face != style.fontName {
+                        faces.append(LayerTextFontRun(location:offset,length:length,fontName:face))
+                    }
+                }
+                offset += length
+                if sign.size != points || sign.tracking != tracking || sign.autoLeading != auto { notes.append(firstStyleNote) }
+            }
+            style.colorRuns = colors.isEmpty ? nil : colors; style.fontRuns = faces.isEmpty ? nil : faces
         }
         let paragraphs = array(walk(engine, "EngineDict", "ParagraphRun", "RunArray"))
         let justification = number(walk(paragraphs.first ?? engine, "ParagraphSheet", "Properties", "Justification"))
@@ -190,6 +213,7 @@ nonisolated enum PSDText {
         case 1: style.alignment = .right
         case 2: style.alignment = .center
         case 0: style.alignment = .left
+        case 6: style.alignment = .justified
         default:
             style.alignment = .left
             notes.append(justifyNote)
@@ -249,7 +273,7 @@ nonisolated enum PSDText {
         }
     }
 
-    private static func baseline(_ style: LayerTextStyle, image: CGSize) -> CGFloat {
+    static func baseline(_ style: LayerTextStyle, image: CGSize) -> CGFloat {
         let padding = LayerTextStyle.padding
         let sample = style.content.isEmpty ? " " : style.content
         let storage = NSTextStorage(attributedString: NSAttributedString(string: sample, attributes: EditorSession.textAttributes(style)))
@@ -519,7 +543,7 @@ private nonisolated struct EngineCursor {
     }
 }
 
-private nonisolated enum DescriptorValue {
+nonisolated enum DescriptorValue {
     case text(String)
     case number(Double)
     case enumeration(String)
@@ -528,7 +552,7 @@ private nonisolated enum DescriptorValue {
     case list([DescriptorValue])
 }
 
-private nonisolated extension Dictionary where Key == String, Value == DescriptorValue {
+nonisolated extension Dictionary where Key == String, Value == DescriptorValue {
     func string(_ key: String) -> String? {
         if case .text(let text) = self[key] { return text }
         return nil
@@ -554,12 +578,15 @@ private nonisolated extension Dictionary where Key == String, Value == Descripto
 }
 
 /// Descriptor walker from the same specification (class and keys are length-prefixed, or 4 bytes when the length is 0).
-private nonisolated struct Reader {
+nonisolated struct PSDDescriptorReader {
     let data: Data
     var offset = 0
+    private var depth = 0
+    init(data: Data, offset: Int = 0) { self.data = data; self.offset = offset }
     var remaining: Int { data.count - offset }
 
     mutating func descriptor(versioned: Bool) -> [String: DescriptorValue]? {
+        guard depth < 64 else { return nil }; depth += 1; defer { depth -= 1 }
         if versioned, u32() != 16 { return nil }
         guard unicode() != nil, identifier() != nil, let count = u32(), count <= 10_000 else { return nil }
         var items: [String: DescriptorValue] = [:]
@@ -586,8 +613,8 @@ private nonisolated struct Reader {
             let bits = raw.reduce(UInt64(0)) { ($0 << 8) | UInt64($1) }
             return .number(Double(Int64(bitPattern: bits)))
         case "bool":
-            guard u8() != nil else { return nil }
-            return .number(0)
+            guard let flag = u8() else { return nil }
+            return .number(flag == 0 ? 0 : 1)
         case "TEXT":
             guard let text = unicode() else { return nil }
             return .text(text)

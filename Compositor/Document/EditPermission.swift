@@ -36,7 +36,7 @@ extension EditorSession {
         if selectionAmountOperation != nil || colorRange != nil || textDraft != nil || brushStroke != nil
             || warpStroke != nil || showsNewDocument || showsImporter || renamingLayerID != nil
             || transformEdit != nil || cropRect != nil || gradientEdit != nil || pixelMove != nil
-            || hueSaturation != nil || levels != nil || filterEdit != nil || adjustmentEditingID != nil || liquify != nil {
+            || hueSaturation != nil || levels != nil || filterEdit != nil || adjustmentEditingID != nil || liquify != nil || pathEditing != nil {
             return .modal
         }
         return nil

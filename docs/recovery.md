@@ -2,7 +2,7 @@
 
 The Chinese build stores recovery packages in `~/Library/Application Support/com.wonderassembly.compositor.zh-Hans/Recovery/`. A completed edit, undo or redo schedules a write after two seconds of inactivity. Active modal edits and project operations defer the write. Images and metadata encode off the main actor; concurrent writes are serialized.
 
-Each UUID-named `.comp` package includes the normal project manifest and images plus `recovery.json`: recovery schema version, project version, document ID, history revision, original path, title, date and normal-close flag. Both parts are replaced atomically. Ordinary project saves omit this extra file and retain project format version 12. Versions 1–12 remain readable through ProjectStore.
+Each UUID-named `.comp` package includes the normal project manifest and images plus `recovery.json`: recovery schema version, project version, document ID, history revision, original path, title, date and normal-close flag. Both parts are replaced atomically. Ordinary project saves omit this extra file and use project format version 13. Versions 1–13 remain readable through ProjectStore, including editable paths, vector masks and text layouts in recovery snapshots.
 
 Recovery never calls `markSaved`, changes a document's path, or adds a recent-file entry. A restored draft receives a fresh document ID and is explicitly dirty. Its source is removed only after a replacement recovery copy has been written successfully. A failed replacement keeps the source.
 

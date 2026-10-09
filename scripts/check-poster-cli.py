@@ -1,6 +1,7 @@
 """Exercise the packaged CLI and stdio MCP against disposable synthetic projects."""
 import argparse
 import base64
+import copy
 import struct
 import zlib
 import json
@@ -60,6 +61,9 @@ try:
     check('MCP version negotiation', initialized['protocolVersion'] == '2025-11-25')
     definitions = request('tools/list', {})['tools']
     check('MCP tools', len(definitions) == 11 and 'close_project' in [t['name'] for t in definitions])
+    edit_schema = next(t for t in definitions if t['name'] == 'edit_project')['inputSchema']
+    command_kinds = edit_schema['properties']['commands']['items']['properties']['kind']['enum']
+    check('MCP exposes path commands', {'addPath', 'editPath', 'textOutlines', 'vectorMask'} <= set(command_kinds))
     tool('new_project', {'width': True, 'height': 64}, error=True)
     created = tool('new_project', {'width': 160, 'height': 120})
     handle, state = created['handle'], created['state']
@@ -124,6 +128,35 @@ try:
     tool('save_project', {'handle': handle, 'expectedRevision': state['revision'], 'path': str(root / 'workflow.comp')})
     state = tool('undo', {'handle': handle, 'expectedRevision': state['revision']})
     check('Full workflow one-step undo', state['layers'] == before_workflow['layers'])
+    state = tool('redo', {'handle': handle, 'expectedRevision': state['revision']})
+    before_paths = copy.deepcopy(state)
+    text_id = state['layers'][-1]['id']
+    image_id = next(layer['id'] for layer in state['layers'] if layer['name'] == 'Synthetic Subject')
+    vector = {'contours': [{'anchors': [{'point': point, 'smooth': False} for point in
+              [[0.1, 0.1], [0.9, 0.1], [0.9, 0.9], [0.1, 0.9]]], 'closed': True}],
+              'evenOdd': False, 'fillEnabled': True, 'strokeEnabled': False,
+              'strokeColor': {'red': 0, 'green': 0, 'blue': 0}, 'strokeWidth': 2, 'roundCaps': False}
+    edited_vector = copy.deepcopy(vector)
+    edited_vector.update(strokeEnabled=True, strokeWidth=4)
+    path_commands = [
+        {'kind': 'addPath', 'name': 'Automation Path', 'vector': vector,
+         'color': {'red': 1, 'green': 0.4, 'blue': 0.7, 'alpha': 1},
+         'transform': state['layers'][-1]['transform']},
+        {'kind': 'editPath', 'vector': edited_vector, 'color': {'red': 1, 'green': 0.4, 'blue': 0.7, 'alpha': 1}},
+        {'kind': 'textOutlines', 'layerID': text_id},
+        {'kind': 'vectorMask', 'layerID': image_id, 'vector': vector}
+    ]
+    state = edit(path_commands)['state']
+    path_layer = next(layer for layer in state['layers'] if layer['name'] == 'Automation Path')
+    check('MCP edits persistent path', path_layer['shape']['vector']['strokeWidth'] == 4)
+    outline_layer = next(layer for layer in state['layers'] if layer['id'] == text_id)
+    check('MCP outlines Chinese text', not outline_layer['editableText'] and bool(outline_layer['shape']['vector']['contours']))
+    check('MCP writes vector mask', next(layer for layer in state['layers'] if layer['id'] == image_id)['vectorMask'] == vector)
+    tool('save_project', {'handle': handle, 'expectedRevision': state['revision'], 'path': str(root / 'paths.comp')})
+    state = tool('undo', {'handle': handle, 'expectedRevision': state['revision']})
+    check('Path batch one-step undo', state['layers'] == before_paths['layers'])
+    edit(path_commands + [{'kind': 'opacity', 'opacity': 4}], error=True)
+    check('Path batch failure is atomic', tool('project_state', {'handle': handle}) == state)
     check('MCP closes project', tool('close_project', {'handle': handle})['closed'] == handle)
     tool('project_state', {'handle': handle}, error=True)
 finally:
@@ -156,4 +189,11 @@ options_file = root / 'export-options.json'
 options_file.write_text(json.dumps(poster_options))
 cli_export = cli('batch-export', root / 'workflow.comp', options_file, root)
 check('CLI multi-size export', len(list(Path(cli_export['output']).glob('*.png'))) == 2)
+path_source = cli('inspect', root / 'workflow.comp')
+commands.write_text(json.dumps(path_commands))
+cli('batch', root / 'workflow.comp', commands, root / 'cli-paths.comp', path_source['sourceFingerprint'])
+path_state = cli('inspect', root / 'cli-paths.comp')
+check('CLI persists path and vector mask', any(layer.get('shape', {}).get('vector') for layer in path_state['layers'])
+      and any(layer.get('vectorMask') for layer in path_state['layers']))
+check('CLI path batch preserves source', cli('inspect', root / 'workflow.comp')['sourceFingerprint'] == path_source['sourceFingerprint'])
 print(f'CLI/MCP: {checks} checks, 0 failures')

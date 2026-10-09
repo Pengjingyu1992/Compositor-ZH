@@ -21,7 +21,13 @@ final class ProjectTab: Identifiable {
 final class ProjectWorkspace {
     let recoveryStore: RecoveryStore?
     private(set) var tabs: [ProjectTab] = []
-    private(set) var selectedID: UUID
+    private(set) var selectedID: UUID {
+        didSet { tabs.first { $0.id == selectedID }?.session.canvasOnly = canvasOnly }
+    }
+    /// Canvas-only mode belongs to the editor window, including newly opened tabs.
+    var canvasOnly = false {
+        didSet { for tab in tabs { tab.session.canvasOnly = canvasOnly } }
+    }
     var isManaging = false
     var showsRecoveryNotice = false
     @ObservationIgnored private var checkedRecovery = false
@@ -164,6 +170,7 @@ final class ProjectWorkspace {
         session.finishAdjustmentEditing(commit: false)
         session.finishEffectsEditing(commit: false)
         session.cancelColorRange()
+        session.showsPrintSetup = false
         session.selectionAmountOperation = nil
         if session.colorPicker != nil { session.closeColorPicker(commit: false) }
     }

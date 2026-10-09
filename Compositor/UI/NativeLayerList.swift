@@ -53,9 +53,12 @@ struct NativeLayerList: NSViewRepresentable {
         private var previousLocks: [UUID: LayerLocks] = [:]
         private var editingEnabled = false
         private var synchronizing = false
+        private var activeLayerID: UUID?
         init(session: EditorSession) { self.session = session }
 
         func update(_ table: NSTableView) {
+            let selectionChanged = activeLayerID != session.activeLayerID
+            activeLayerID = session.activeLayerID
             let entries = session.layerRows
             let byID = Dictionary(uniqueKeysWithValues: (session.document?.layers ?? []).map { ($0.id, $0) })
             let next = entries.compactMap { byID[$0.layer.id] }
@@ -90,6 +93,10 @@ struct NativeLayerList: NSViewRepresentable {
             }
             let indices = IndexSet(next.indices.filter { session.selectedEffect == nil && session.selectedLayerIDs.contains(next[$0].id) })
             if table.selectedRowIndexes != indices { table.selectRowIndexes(indices, byExtendingSelection: false) }
+            // Reveal a newly selected layer, without undoing a manual scroll on later display updates.
+            if selectionChanged, let id = activeLayerID, let row = next.firstIndex(where: { $0.id == id }) {
+                table.scrollRowToVisible(row)
+            }
             // Border-only updates: selecting a target never rebuilds thumbnails or canvas pixels.
             let visible = table.rows(in: table.visibleRect)
             if visible.location != NSNotFound {
@@ -834,6 +841,7 @@ private final class LayerCell: NSTableCellView, NSTextFieldDelegate {
         nameLabel.usesSingleLineMode = true
         nameLabel.maximumNumberOfLines = 1
         nameLabel.font = .systemFont(ofSize: 13)
+        nameLabel.wantsLayer = true
         dimensions.font = .systemFont(ofSize: 10)
         dimensions.textColor = .secondaryLabelColor
         for view in [eye, disclosure, thumbnail, linkButton, maskThumbnail, disabledMaskMark, nameLabel, dimensions] {
@@ -1001,9 +1009,7 @@ private final class LayerCell: NSTableCellView, NSTextFieldDelegate {
         renaming = true
         nameLabel.isEditable = true
         nameLabel.isSelectable = true
-        nameLabel.isBezeled = true
-        nameLabel.bezelStyle = .roundedBezel
-        nameLabel.drawsBackground = true
+        nameLabel.layer?.backgroundColor = NSColor.quaternaryLabelColor.cgColor
         nameLabel.delegate = self
         nameLabel.stringValue = layerName
         window?.makeFirstResponder(nameLabel)
@@ -1013,8 +1019,7 @@ private final class LayerCell: NSTableCellView, NSTextFieldDelegate {
         renaming = false
         nameLabel.isEditable = false
         nameLabel.isSelectable = false
-        nameLabel.isBezeled = false
-        nameLabel.drawsBackground = false
+        nameLabel.layer?.backgroundColor = nil
         nameLabel.delegate = nil
     }
     private func endRenaming(keeping: Bool) {

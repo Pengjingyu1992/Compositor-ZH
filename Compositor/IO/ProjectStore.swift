@@ -7,7 +7,7 @@ extension UTType {
     static let compositorProject = UTType(exportedAs: "com.compositor.project", conformingTo: .package)
     nonisolated static let photoshopImage = UTType(importedAs: "com.adobe.photoshop-image")
     nonisolated static let photoshopLargeImage = UTType(importedAs: "com.adobe.photoshop-large-image")
-    static let importableImages: [UTType] = [.jpeg, .png, .heic, .tiff, .photoshopImage, .photoshopLargeImage, .rawImage, .svg]
+    static let importableImages: [UTType] = [.jpeg, .png, .heic, .tiff, .webP, .photoshopImage, .photoshopLargeImage, .rawImage, .svg]
 }
 
 nonisolated struct ProjectManifest: Codable, Sendable {

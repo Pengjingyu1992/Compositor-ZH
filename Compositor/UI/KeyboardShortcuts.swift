@@ -78,8 +78,8 @@ struct ShortcutDefinition: Identifiable {
             entry("Undo", "z", 1, menu: true), entry("Redo", "z", 9, menu: true),
             entry("New Canvas", "n", 1, menu: true), entry("Open Project", "o", 1, menu: true),
             entry("Save", "s", 1, menu: true), entry("Save As", "s", 9, menu: true),
-            entry("Export PNG", "e", 9, menu: true), entry("Export JPEG", "s", 11, menu: true),
-            entry("Close Project", "w", 1, menu: true), entry("Fit Canvas", "0", 1, menu: true),
+            entry("Export PNG", "e", 9, menu: true), entry("Export JPEG", "s", 11, menu: true), entry("Export As", "w", 11, menu: true),
+            entry("Close Project", "w", 1, menu: true), entry("Fit Canvas", "0", 1, menu: true), entry("Search Commands", "f", 1, menu: true),
             entry("Actual Pixels", "1", 1, menu: true), entry("Zoom In", "=", 1, menu: true),
             entry("Zoom Out", "-", 1, menu: true), entry("Show Transform Controls", "h", 1, menu: true),
             entry("Hide Others", "h", 3, menu: true), entry("Cut", "x", 1, menu: true),
@@ -88,7 +88,7 @@ struct ShortcutDefinition: Identifiable {
             entry("Fill with Background", "\u{7f}", 1, menu: true), entry("Content-Aware Fill", "\u{7f}", 8, menu: true),
             entry("Select All", "a", 1, menu: true), entry("Deselect", "d", 1, menu: true),
             entry("Inverse Selection", "i", 9, menu: true), entry("Select Subject", "a", 3, menu: true),
-            entry("Curves", "m", 1, menu: true), entry("Levels", "l", 1, menu: true),
+            entry("Last Filter", "f", 3, menu: true), entry("Curves", "m", 1, menu: true), entry("Levels", "l", 1, menu: true),
             entry("Hue/Saturation", "u", 1, menu: true), entry("Invert Pixels / Mask", "i", 1, menu: true),
             entry("Advanced Liquify", "x", 9, menu: true),
             entry("Canvas Size", "c", 3, menu: true), entry("Image Size", "i", 3, menu: true),
@@ -101,7 +101,7 @@ struct ShortcutDefinition: Identifiable {
             entry("Show Rulers", "r", 1, menu: true), entry("Snap", ";", 9, menu: true),
             entry("Lock Guides", ";", 3, menu: true)
         ]
-        for (title, key) in [("Select tool", "a"), ("Move / Transform tool", "v"), ("Hand tool", "h"),
+        for (title, key) in [("Toggle Fullscreen: the canvas alone on black (Esc also leaves)", "f"), ("Select tool", "a"), ("Move / Transform tool", "v"), ("Hand tool", "h"),
             ("Zoom tool", "z"), ("Brush tool", "b"), ("Eraser", "e"), ("Spot Healing", "j"),
             ("Clone Stamp", "s"), ("Type tool", "t"), ("Pen tool", "p"), ("Gradient tool", "g"), ("Paint Bucket tool", "k"), ("Shape tool", "u"),
             ("Eyedropper tool", "i"), ("Marquee / cycle shape", "m"), ("Magic", "w"),

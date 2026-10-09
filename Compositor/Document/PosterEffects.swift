@@ -30,8 +30,9 @@ extension LayerEffectsRenderer {
             context.saveGState()
             context.translateBy(x: placed.minX, y: placed.maxY); context.scaleBy(x: 1, y: -1)
             let rect = CGRect(x: 0, y: 0, width: shown.width, height: shown.height)
-            context.clip(to: rect, mask: shown)
-            context.setAlpha(effect.opacity); context.setBlendMode(.normal)
+            // The destination is the layer's own pixels. Source-atop keeps alpha,
+            // matching color overlay without tinting the effects behind the layer.
+            context.setAlpha(effect.opacity); context.setBlendMode(.sourceAtop)
             context.draw(image, in: rect)
             context.restoreGState()
         }
@@ -41,7 +42,7 @@ extension LayerEffectsRenderer {
                 var edge = InnerShadowEffect()
                 edge.angle = angle; edge.distance = bevel.size; edge.blur = bevel.size / 2
                 let mask = try innerCoverage(shown, placed: placed, size: full.size, shadow: edge)
-                fill(color, alpha: bevel.depth, coverage: mask, in: full, context: context)
+                recolor(context, color, alpha: bevel.depth, amount: mask, in: full)
             }
         }
     }

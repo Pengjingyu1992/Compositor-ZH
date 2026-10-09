@@ -233,18 +233,26 @@ static void scale_luminance(double *r, double *g, double *b, double target) {
     *b = camera_clamp(*b * scale);
 }
 
-static double tone_highlights(double y, double amount) {
-    double t = camera_clamp((y - 0.5) / 0.5);
-    double weight = t * t;
-    if (amount >= 0) return camera_clamp(y + amount * weight * (1.0 - y));
-    return camera_clamp(y + amount * weight * (y - 0.5));
+// A bump over a range of tones, 0 at both ends: u(1 - 2u)², largest a sixth of the way in. Its slope runs from 1
+// down to -1/3, so a curve adding up to three times it (or taking away up to once it) keeps rising: tones never swap
+// places.
+static double tone_bump(double u) {
+    if (u <= 0 || u >= 0.5) return 0;
+    double rest = 1.0 - 2.0 * u;
+    return u * rest * rest;
 }
 
+// Shadows lifts (or deepens) the dark tones, most a third of the way up to middle gray, leaving black at black and
+// middle gray where it is. It once lifted black itself to middle gray, above the tones just over it, so the darkest,
+// least certain pixels were the ones stretched furthest: a lifted dark area broke into blotches of color.
 static double tone_shadows(double y, double amount) {
-    double t = camera_clamp((0.5 - y) / 0.5);
-    double weight = t * t;
-    if (amount >= 0) return camera_clamp(y + amount * weight * (0.5 - y));
-    return camera_clamp(y + amount * weight * y);
+    return camera_clamp(y + amount * (amount >= 0 ? 2.5 : 1.0) * tone_bump(y));
+}
+
+// Highlights, the same in the light tones: white stays white, and pulling them down no longer drops white below the
+// tones under it.
+static double tone_highlights(double y, double amount) {
+    return camera_clamp(y + amount * (amount >= 0 ? 1.0 : 2.5) * tone_bump(1.0 - y));
 }
 
 // The top quarter is the white point: +1 maps 0.875 to 1, −1 pulls everything above 0.75 down to 0.75.
@@ -936,47 +944,67 @@ void adjust_camera_raw_detail(uint8_t *rgba, size_t width, size_t height, size_t
         }
     }
     if (noiseColor > 0) {
-        int radius = effects_radius(1.0 + noiseColorSmoothness / 40.0, scale);
-        float *chroma = malloc(count * sizeof(float));
-        float *chromaBlur = malloc(count * sizeof(float));
-        if (!chroma || !chromaBlur) { free(chroma); free(chromaBlur); free(luma); free(work); return; }
+        // Color noise is speckle of random hue over the picture's own color, in blotches a few pixels wide. Each pixel
+        // keeps its brightness and takes the color of the area around it: its two color differences from its
+        // brightness, red and blue, are blurred and put back over the brightness unchanged. Blurring saturation
+        // alone kept every speck's own hue, so the speckle stayed.
+        double strength = noiseColor / 100.0;
+        int radius = effects_radius(1.5 + strength * 4.0 * (0.5 + noiseColorSmoothness / 100.0), scale);
+        float *planes = malloc(count * sizeof(float) * 6);
+        if (!planes) { free(luma); free(work); return; }
+        // Red and blue differences and coverage, then the same blurred. Each pixel counts by its alpha, so clear
+        // pixels add no color of their own and don't pull the colors beside them toward gray.
+        float *red = planes, *blue = planes + count, *weight = planes + 2 * count;
+        float *redBlur = planes + 3 * count, *blueBlur = planes + 4 * count, *weightBlur = planes + 5 * count;
         for (size_t y = 0; y < height; ++y) {
             uint8_t *row = rgba + y * stride;
             for (size_t x = 0; x < width; ++x) {
                 uint8_t *p = row + x * 4;
+                size_t index = y * width + x;
                 double alpha = p[3];
-                if (!alpha) continue;
+                if (!alpha) { red[index] = 0; blue[index] = 0; weight[index] = 0; continue; }
                 double r = fmin(1.0, p[0] / alpha), g = fmin(1.0, p[1] / alpha), b = fmin(1.0, p[2] / alpha);
-                double h, s, l;
-                rgb_to_hsl(r, g, b, &h, &s, &l);
-                chroma[y * width + x] = (float)s;
+                double luminance = rec709(r, g, b), coverage = alpha / 255.0;
+                red[index] = (float)((r - luminance) * coverage);
+                blue[index] = (float)((b - luminance) * coverage);
+                weight[index] = (float)coverage;
             }
         }
-        if (!box_blur_plane(chroma, chromaBlur, width, height, radius)) {
-            free(chroma); free(chromaBlur); free(luma); free(work); return;
+        if (!box_blur_plane(red, redBlur, width, height, radius) || !box_blur_plane(blue, blueBlur, width, height, radius)
+            || !box_blur_plane(weight, weightBlur, width, height, radius)) {
+            free(planes); free(luma); free(work); return;
         }
-        double strength = noiseColor / 100.0;
+        for (size_t i = 0; i < count; ++i) {
+            if (weightBlur[i] > 1e-6f) { redBlur[i] /= weightBlur[i]; blueBlur[i] /= weightBlur[i]; }
+        }
+        // Color Detail keeps real color edges: where the smoothed color itself changes across a blur's width. Grain
+        // doesn't count, as it did when each pixel was compared with its own blur.
         double preserve = noiseColorDetail / 100.0;
+        size_t reach = (size_t)radius;
         for (size_t y = 0; y < height; ++y) {
             uint8_t *row = rgba + y * stride;
+            size_t up = y >= reach ? y - reach : 0, down = y + reach < height ? y + reach : height - 1;
             for (size_t x = 0; x < width; ++x) {
                 uint8_t *p = row + x * 4;
                 double alpha = p[3];
                 if (!alpha) continue;
                 size_t index = y * width + x;
-                float edge = fabsf(chroma[index] - chromaBlur[index]);
-                double local = strength * (1.0 - preserve * fmin(1.0, edge * 4.0));
-                float sat = chroma[index] * (float)(1.0 - local) + chromaBlur[index] * (float)local;
+                size_t left = x >= reach ? x - reach : 0, right = x + reach < width ? x + reach : width - 1;
+                double dx = fabs(redBlur[y * width + right] - redBlur[y * width + left]) + fabs(blueBlur[y * width + right] - blueBlur[y * width + left]);
+                double dy = fabs(redBlur[down * width + x] - redBlur[up * width + x]) + fabs(blueBlur[down * width + x] - blueBlur[up * width + x]);
+                double local = strength * (1.0 - preserve * fmin(1.0, (dx + dy) * 3.0));
                 double r = fmin(1.0, p[0] / alpha), g = fmin(1.0, p[1] / alpha), b = fmin(1.0, p[2] / alpha);
-                double h, s, l;
-                rgb_to_hsl(r, g, b, &h, &s, &l);
-                s = sat;
-                hsl_to_rgb(h, s, l, &r, &g, &b);
-                write_premultiplied(p, r, g, b, alpha);
+                double luminance = rec709(r, g, b);
+                double redDiff = (r - luminance) + (redBlur[index] - (r - luminance)) * local;
+                double blueDiff = (b - luminance) + (blueBlur[index] - (b - luminance)) * local;
+                r = luminance + redDiff;
+                b = luminance + blueDiff;
+                // Green follows from the brightness kept and the new red and blue.
+                g = (luminance - 0.2126 * r - 0.0722 * b) / 0.7152;
+                write_premultiplied(p, fmin(1.0, fmax(0.0, r)), fmin(1.0, fmax(0.0, g)), fmin(1.0, fmax(0.0, b)), alpha);
             }
         }
-        free(chroma);
-        free(chromaBlur);
+        free(planes);
     }
     if (sharpenAmount > 0) {
         for (size_t y = 0; y < height; ++y) {

@@ -17621,6 +17621,1468 @@
           }
         }
       }
+    },
+    " · %lld DPI: %lld × %lld pixels": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": " · %lld DPI: %lld × %lld pixels"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": " · %lld DPI：%lld × %lld 像素"
+          }
+        }
+      }
+    },
+    "%@ × %@ in at %lld DPI": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ × %@ in at %lld DPI"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ × %@ 英寸，%lld DPI"
+          }
+        }
+      }
+    },
+    "Add Layer Mask": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add Layer Mask"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加图层蒙版"
+          }
+        }
+      }
+    },
+    "Add Layer Mask (Hide All)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add Layer Mask (Hide All)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加图层蒙版（全部隐藏）"
+          }
+        }
+      }
+    },
+    "Add Layer Mask Hiding Selection": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add Layer Mask Hiding Selection"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加蒙版并隐藏选区"
+          }
+        }
+      }
+    },
+    "Add Layer Mask from Selection": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add Layer Mask from Selection"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从选区添加图层蒙版"
+          }
+        }
+      }
+    },
+    "Add layer effect": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add layer effect"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加图层效果"
+          }
+        }
+      }
+    },
+    "Black Level": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Black Level"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "黑场"
+          }
+        }
+      }
+    },
+    "Black canvas": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Black canvas"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "黑色画布"
+          }
+        }
+      }
+    },
+    "Break the lines into beads where the picture is darker than this, blending into solid lines where it's brighter": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Break the lines into beads where the picture is darker than this, blending into solid lines where it's brighter"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "低于此亮度时将扫描线变成点状，较亮处逐渐变为连续线条"
+          }
+        }
+      }
+    },
+    "CMYK Preview · %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CMYK Preview · %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CMYK 预览 · %@"
+          }
+        }
+      }
+    },
+    "CMYK Print Preview": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CMYK Print Preview"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CMYK 印刷预览"
+          }
+        }
+      }
+    },
+    "CMYK Profile": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CMYK Profile"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CMYK 配置文件"
+          }
+        }
+      }
+    },
+    "CMYK TIFF": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CMYK TIFF"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CMYK TIFF"
+          }
+        }
+      }
+    },
+    "CMYK · ICC profile embedded": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CMYK · ICC profile embedded"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CMYK · 已嵌入 ICC 配置文件"
+          }
+        }
+      }
+    },
+    "Choose ICC…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose ICC…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择 ICC…"
+          }
+        }
+      }
+    },
+    "Choose a JPEG, PNG, HEIC, TIFF, WebP, or Photoshop (PSD) file.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a JPEG, PNG, HEIC, TIFF, WebP, or Photoshop (PSD) file."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请选择 JPEG、PNG、HEIC、TIFF、WebP 或 Photoshop（PSD）文件。"
+          }
+        }
+      }
+    },
+    "Choose a valid CMYK output ICC profile supplied for your printing conditions.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a valid CMYK output ICC profile supplied for your printing conditions."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请选择适用于印刷条件的有效 CMYK 输出 ICC 配置文件。"
+          }
+        }
+      }
+    },
+    "Choose the ICC profile for your printing conditions": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose the ICC profile for your printing conditions"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择适用于印刷条件的 ICC 配置文件"
+          }
+        }
+      }
+    },
+    "Choose the lines' color": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose the lines' color"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择扫描线颜色"
+          }
+        }
+      }
+    },
+    "Choose the screen's color": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose the screen's color"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择屏幕底色"
+          }
+        }
+      }
+    },
+    "Click or drag to move the view": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Click or drag to move the view"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击或拖动以移动视图"
+          }
+        }
+      }
+    },
+    "Color Split": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Color Split"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "色彩分离"
+          }
+        }
+      }
+    },
+    "Compare sRGB": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compare sRGB"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "对比原始 sRGB"
+          }
+        }
+      }
+    },
+    "Couldn’t load CMYK profile": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t load CMYK profile"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法载入 CMYK 配置文件"
+          }
+        }
+      }
+    },
+    "Custom ratio": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Custom ratio"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自定义比例"
+          }
+        }
+      }
+    },
+    "Custom…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Custom…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自定义…"
+          }
+        }
+      }
+    },
+    "Darker or lighter before the lines are drawn": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Darker or lighter before the lines are drawn"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在绘制扫描线前调暗或调亮图像"
+          }
+        }
+      }
+    },
+    "Displace": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Displace"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "位移"
+          }
+        }
+      }
+    },
+    "Draw no line where the picture is darker than this, leaving the screen dark": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Draw no line where the picture is darker than this, leaving the screen dark"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "低于此亮度时不绘制扫描线，保留屏幕底色"
+          }
+        }
+      }
+    },
+    "Enter a positive ratio within the document size limits.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter a positive ratio within the document size limits."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请输入正数比例，且宽高不能超出文档尺寸限制。"
+          }
+        }
+      }
+    },
+    "Enter a size up to %@ pixels at this DPI.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter a size up to %@ pixels at this DPI."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请输入尺寸，在当前 DPI 下最大为 %@ 像素。"
+          }
+        }
+      }
+    },
+    "Export %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导出 %@"
+          }
+        }
+      }
+    },
+    "Export As": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export As"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导出为"
+          }
+        }
+      }
+    },
+    "Export As…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export As…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导出为…"
+          }
+        }
+      }
+    },
+    "Export Background": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export Background"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导出背景色"
+          }
+        }
+      }
+    },
+    "Filled canvases support up to %lld megapixels.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filled canvases support up to %lld megapixels."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "带背景色的画布最多支持 %lld 百万像素。"
+          }
+        }
+      }
+    },
+    "Fills transparent areas": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fills transparent areas"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "填充透明区域"
+          }
+        }
+      }
+    },
+    "Gamut Warning": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gamut Warning"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "色域警告"
+          }
+        }
+      }
+    },
+    "Gray marks colors outside the selected profile’s gamut; it is never exported": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gray marks colors outside the selected profile’s gamut; it is never exported"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "灰色标记超出所选配置文件色域的颜色；标记不会导出"
+          }
+        }
+      }
+    },
+    "Height in pixels; the width follows, keeping the proportions": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Height in pixels; the width follows, keeping the proportions"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "高度（像素）；宽度随之调整，保持比例"
+          }
+        }
+      }
+    },
+    "How bright the lines are where the picture is black, so they show even over black": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How bright the lines are where the picture is black, so they show even over black"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设置黑色区域内扫描线的亮度，让黑色上也能显示扫描线"
+          }
+        }
+      }
+    },
+    "How far the brightness is smoothed before it displaces the lines, from sharp ridges to rounded hills": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How far the brightness is smoothed before it displaces the lines, from sharp ridges to rounded hills"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "位移前对亮度进行平滑的程度，可将尖锐起伏变为圆滑曲线"
+          }
+        }
+      }
+    },
+    "How much of the gap a bright line fills; dimmer parts draw it thinner": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How much of the gap a bright line fills; dimmer parts draw it thinner"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "亮处扫描线占间距的比例；较暗处线条更细"
+          }
+        }
+      }
+    },
+    "Importing…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importing…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在导入…"
+          }
+        }
+      }
+    },
+    "Last Filter": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last Filter"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重复上次滤镜"
+          }
+        }
+      }
+    },
+    "Last Filter: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last Filter: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重复上次滤镜：%@"
+          }
+        }
+      }
+    },
+    "Lift the lines where the picture is bright, or lower them when negative, so they swell into its shapes": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lift the lines where the picture is bright, or lower them when negative, so they swell into its shapes"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在亮处抬高扫描线，负值则降低，让线条呈现图像轮廓"
+          }
+        }
+      }
+    },
+    "Move the red and blue apart, for colored fringes on the lines": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move the red and blue apart, for colored fringes on the lines"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分离红蓝通道，为扫描线添加彩色边缘"
+          }
+        }
+      }
+    },
+    "Navigator": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Navigator"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导航器"
+          }
+        }
+      }
+    },
+    "Navigator (300% and above)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Navigator (300% and above)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导航器（300% 及以上）"
+          }
+        }
+      }
+    },
+    "No commands match": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No commands match"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有匹配的命令"
+          }
+        }
+      }
+    },
+    "None selected": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "None selected"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未选择"
+          }
+        }
+      }
+    },
+    "PDF": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PDF"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PDF"
+          }
+        }
+      }
+    },
+    "Page": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Page"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "页面"
+          }
+        }
+      }
+    },
+    "Perceptual": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Perceptual"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "感知"
+          }
+        }
+      }
+    },
+    "Preview simulates CMYK conversion. Paper color and black ink are not simulated. Use the profile supplied by your print provider.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preview simulates CMYK conversion. Paper color and black ink are not simulated. Use the profile supplied by your print provider."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "预览模拟 CMYK 转换，不模拟纸张颜色或黑墨效果。请使用印刷服务商提供的配置文件。"
+          }
+        }
+      }
+    },
+    "Print Background": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Print Background"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "印刷背景色"
+          }
+        }
+      }
+    },
+    "Print Setup": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Print Setup"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "印刷设置"
+          }
+        }
+      }
+    },
+    "Print Setup…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Print Setup…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "印刷设置…"
+          }
+        }
+      }
+    },
+    "Print preview couldn’t finish": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Print preview couldn’t finish"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "印刷预览未能完成"
+          }
+        }
+      }
+    },
+    "Relative Colorimetric": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Relative Colorimetric"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "相对比色"
+          }
+        }
+      }
+    },
+    "Rendering Intent": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rendering Intent"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "渲染意图"
+          }
+        }
+      }
+    },
+    "Resolution: 72 for screens, 300 for print. Click to switch.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resolution: 72 for screens, 300 for print. Click to switch."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分辨率：屏幕用 72 DPI，印刷用 300 DPI。点击切换。"
+          }
+        }
+      }
+    },
+    "Rotate Canvas 90° Clockwise": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rotate Canvas 90° Clockwise"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "顺时针旋转画布 90°"
+          }
+        }
+      }
+    },
+    "Rotate Canvas 90° Counterclockwise": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rotate Canvas 90° Counterclockwise"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "逆时针旋转画布 90°"
+          }
+        }
+      }
+    },
+    "Scale the export: the document stays as it is": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scale the export: the document stays as it is"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缩放导出图像，文档尺寸保持不变"
+          }
+        }
+      }
+    },
+    "Scanlines": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scanlines"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扫描线"
+          }
+        }
+      }
+    },
+    "Search Commands": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search Commands"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索命令"
+          }
+        }
+      }
+    },
+    "Search Commands…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search Commands…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索命令…"
+          }
+        }
+      }
+    },
+    "Search commands and tools": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search commands and tools"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索命令和工具"
+          }
+        }
+      }
+    },
+    "Services": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Services"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "服务"
+          }
+        }
+      }
+    },
+    "Show the original colors before CMYK conversion; the export stays CMYK": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show the original colors before CMYK conversion; the export stays CMYK"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示 CMYK 转换前的原始颜色；导出仍为 CMYK"
+          }
+        }
+      }
+    },
+    "Smoothness": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Smoothness"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "平滑度"
+          }
+        }
+      }
+    },
+    "Some dropped items couldn’t be read. Drag JPEG, PNG, HEIC, TIFF, WebP, or Photoshop (PSD) files from Finder.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Some dropped items couldn’t be read. Drag JPEG, PNG, HEIC, TIFF, WebP, or Photoshop (PSD) files from Finder."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "部分拖入项目无法读取。请从访达拖入 JPEG、PNG、HEIC、TIFF、WebP 或 Photoshop（PSD）文件。"
+          }
+        }
+      }
+    },
+    "Start see-through, or with a white or black Background layer. Click to switch.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择透明画布，或以白色、黑色背景图层开始。点击切换。"
+          }
+        }
+      }
+    },
+    "The selected profile could not convert these colors.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The selected profile could not convert these colors."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所选配置文件无法转换这些颜色。"
+          }
+        }
+      }
+    },
+    "Thickness": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thickness"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "线条粗细"
+          }
+        }
+      }
+    },
+    "This profile does not supply gamut-warning data.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This profile does not supply gamut-warning data."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此配置文件不提供色域警告数据。"
+          }
+        }
+      }
+    },
+    "Threshold": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Threshold"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "阈值"
+          }
+        }
+      }
+    },
+    "Toggle Fullscreen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toggle Fullscreen"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "切换画布全屏"
+          }
+        }
+      }
+    },
+    "Toggle Fullscreen: the canvas alone on black (Esc also leaves)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toggle Fullscreen: the canvas alone on black (Esc also leaves)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "切换画布全屏（黑色背景，Esc 也可退出）"
+          }
+        }
+      }
+    },
+    "Tool › %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tool › %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工具 › %@"
+          }
+        }
+      }
+    },
+    "Transparency kept · sRGB": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transparency kept · sRGB"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保留透明度 · sRGB"
+          }
+        }
+      }
+    },
+    "Transparent canvas": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transparent canvas"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "透明画布"
+          }
+        }
+      }
+    },
+    "Units: pixels, inches, centimeters or millimeters. Click to switch.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "单位：像素、英寸、厘米或毫米。点击切换。"
+          }
+        }
+      }
+    },
+    "White canvas": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "White canvas"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "白色画布"
+          }
+        }
+      }
+    },
+    "Width in pixels; the height follows, keeping the proportions": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Width in pixels; the height follows, keeping the proportions"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "宽度（像素）；高度随之调整，保持比例"
+          }
+        }
+      }
+    },
+    "Width:Height": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Width:Height"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "宽:高"
+          }
+        }
+      }
+    },
+    "Width:height, such as 9:20 or 2.5:1": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Width:height, such as 9:20 or 2.5:1"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "宽:高，例如 9:20 或 2.5:1"
+          }
+        }
+      }
+    },
+    "Zoom in (%@), now %@. At 100%% each pixel of the export is one pixel of the screen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zoom in (%@), now %@. At 100%% each pixel of the export is one pixel of the screen"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "放大（%@），当前 %@。100%% 时，导出图像的一个像素对应屏幕的一个像素"
+          }
+        }
+      }
+    },
+    "sRGB": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sRGB"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sRGB"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

@@ -6,79 +6,83 @@ struct LassoControls: View {
     var body: some View {
         HStack(spacing: 12) {
             Text(L10n.text(session.tool == .marquee ? "Marquee" : session.tool == .wand ? "Magic" : "Lasso")).font(ToolHeaderStyle.titleFont)
-            Button("Color Range…") { session.beginColorRange() }
-                .disabled(!session.canSelectColorRange)
-                .accessibilityIdentifier("openColorRange")
-            if session.tool == .marquee {
-                Picker("Shape", selection: Binding(get: { session.marqueeKind }, set: { kind in
-                    session.cancelLasso()
-                    session.marqueeKind = kind
-                })) {
-                    ForEach(LassoKind.marqueeChoices, id: \.self) { Text(L10n.text($0.rawValue)).tag($0) }
+            ScrollView(.horizontal) {
+                HStack(spacing: 12) {
+                    Button("Color Range…") { session.beginColorRange() }
+                        .disabled(!session.canSelectColorRange)
+                        .accessibilityIdentifier("openColorRange")
+                    if session.tool == .marquee {
+                        Picker("Shape", selection: Binding(get: { session.marqueeKind }, set: { kind in
+                            session.cancelLasso()
+                            session.marqueeKind = kind
+                        })) {
+                            ForEach(LassoKind.marqueeChoices, id: \.self) { Text(L10n.text($0.rawValue)).tag($0) }
+                        }
+                        .pickerStyle(.segmented).labelsHidden().fixedSize()
+                        .help(L10n.format("Press %@ to switch between Rectangle and Ellipse", ShortcutSettings.shared.keyLabel("\t")))
+                    }
+                    if session.tool == .wand {
+                        Picker("Mode", selection: Binding(get: { session.wandMode }, set: { mode in
+                            session.cancelLasso()
+                            session.wandMode = mode
+                        })) {
+                            ForEach(WandMode.allCases, id: \.self) { Text(L10n.text($0.rawValue)).tag($0) }
+                        }
+                        .pickerStyle(.segmented).labelsHidden().fixedSize()
+                        .help(L10n.format("Press %@ to switch between Wand and Object", ShortcutSettings.shared.keyLabel("\t")))
+                    }
+                    if session.tool == .lasso {
+                        Picker("Lasso", selection: Binding(get: { session.lassoKind }, set: { kind in
+                            session.cancelLasso()
+                            session.lassoKind = kind
+                        })) {
+                            ForEach(LassoKind.lassoChoices, id: \.self) { Text(L10n.text($0.rawValue)).tag($0) }
+                        }
+                        .pickerStyle(.segmented).labelsHidden().fixedSize()
+                        .help(L10n.format("Press %@ to switch between Freehand and Polygonal", ShortcutSettings.shared.keyLabel("\t")))
+                    }
+                    // Shows held Shift/Option (or an outline's mode) live; clicking sets the choice.
+                    Picker("Mode", selection: Binding(get: { session.displayedSelectionMode },
+                                                      set: { session.selectionModeChoice = $0 })) {
+                        ForEach(SelectionMode.allCases, id: \.self) { Text(L10n.text($0.rawValue)).tag($0) }
+                    }
+                    .pickerStyle(.segmented).labelsHidden().fixedSize()
+                    .help("Hold Shift to add or Option to subtract for one outline")
+                    if session.tool == .wand, session.wandMode == .wand { wandControls }
+                    if session.tool == .wand, session.wandMode == .object { objectSelectionControls }
+                    // Rectangles snap to whole pixels, so smoothing doesn't apply (as in Photoshop); ellipses curve.
+                    if session.tool == .lasso || session.tool == .wand || (session.tool == .marquee && session.marqueeKind == .ellipse) {
+                        Toggle("Anti-alias", isOn: $session.selectionAntialiased)
+                            .help(L10n.text(session.tool == .wand && session.wandMode == .object ? "Smooth the detected object outline; turn off for the raw pixel mask" : "Smooth selection edges; turn off for hard pixel edges"))
+                    }
+                    Divider().frame(height: 18)
+                    modifyControl("Expand", amount: $session.selectionExpandAmount) {
+                        session.expandSelection(by: session.selectionExpandAmount)
+                    }
+                    modifyControl("Contract", amount: $session.selectionContractAmount) {
+                        session.contractSelection(by: session.selectionContractAmount)
+                    }
+                    // Softens the selection's edge, as Select → Feather does.
+                    HStack(spacing: 5) {
+                        Button("Feather") { session.featherSelection(by: session.selectionFeatherAmount) }
+                            .disabled(!session.canModifySelection)
+                            .help("Fade the edge of the selection by this many pixels")
+                        TextField("Feather", value: Binding(get: { Double(session.selectionFeatherAmount) },
+                                                            set: { session.selectionFeatherAmount = $0.isFinite ? Int(min(250, max(1, $0))) : 2 }),
+                                  format: .number.precision(.fractionLength(0)))
+                            .frame(width: 48).textFieldStyle(.roundedBorder).multilineTextAlignment(.trailing)
+                            .arrowSteps(value: { Double(session.selectionFeatherAmount) },
+                                        change: { session.selectionFeatherAmount = Int(min(250, max(1, $0))) })
+                            .unitSuffix("px", scrubValue: $session.selectionFeatherAmount,
+                                        sensitivity: 1, range: 1...250)
+                    }
+                    Spacer(minLength: 0)
+                    if let selection = session.selection {
+                        if selection.isEmpty { Text("Empty selection").foregroundStyle(.secondary) }
+                        Button("Deselect") { session.deselect() }.disabled(!session.canEditSelection)
+                    }
                 }
-                .pickerStyle(.segmented).labelsHidden().fixedSize()
-                .help(L10n.format("Press %@ to switch between Rectangle and Ellipse", ShortcutSettings.shared.keyLabel("\t")))
-            }
-            if session.tool == .wand {
-                Picker("Mode", selection: Binding(get: { session.wandMode }, set: { mode in
-                    session.cancelLasso()
-                    session.wandMode = mode
-                })) {
-                    ForEach(WandMode.allCases, id: \.self) { Text(L10n.text($0.rawValue)).tag($0) }
-                }
-                .pickerStyle(.segmented).labelsHidden().fixedSize()
-                .help(L10n.format("Press %@ to switch between Wand and Object", ShortcutSettings.shared.keyLabel("\t")))
-            }
-            if session.tool == .lasso {
-                Picker("Lasso", selection: Binding(get: { session.lassoKind }, set: { kind in
-                    session.cancelLasso()
-                    session.lassoKind = kind
-                })) {
-                    ForEach(LassoKind.lassoChoices, id: \.self) { Text(L10n.text($0.rawValue)).tag($0) }
-                }
-                .pickerStyle(.segmented).labelsHidden().fixedSize()
-                .help(L10n.format("Press %@ to switch between Freehand and Polygonal", ShortcutSettings.shared.keyLabel("\t")))
-            }
-            // Shows held Shift/Option (or an outline's mode) live; clicking sets the choice.
-            Picker("Mode", selection: Binding(get: { session.displayedSelectionMode },
-                                              set: { session.selectionModeChoice = $0 })) {
-                ForEach(SelectionMode.allCases, id: \.self) { Text(L10n.text($0.rawValue)).tag($0) }
-            }
-            .pickerStyle(.segmented).labelsHidden().fixedSize()
-            .help("Hold Shift to add or Option to subtract for one outline")
-            if session.tool == .wand, session.wandMode == .wand { wandControls }
-            if session.tool == .wand, session.wandMode == .object { objectSelectionControls }
-            // Rectangles snap to whole pixels, so smoothing doesn't apply (as in Photoshop); ellipses curve.
-            if session.tool == .lasso || session.tool == .wand || (session.tool == .marquee && session.marqueeKind == .ellipse) {
-                Toggle("Anti-alias", isOn: $session.selectionAntialiased)
-                    .help(L10n.text(session.tool == .wand && session.wandMode == .object ? "Smooth the detected object outline; turn off for the raw pixel mask" : "Smooth selection edges; turn off for hard pixel edges"))
-            }
-            Divider().frame(height: 18)
-            modifyControl("Expand", amount: $session.selectionExpandAmount) {
-                session.expandSelection(by: session.selectionExpandAmount)
-            }
-            modifyControl("Contract", amount: $session.selectionContractAmount) {
-                session.contractSelection(by: session.selectionContractAmount)
-            }
-            // Softens the selection's edge, as Select → Feather does.
-            HStack(spacing: 5) {
-                Button("Feather") { session.featherSelection(by: session.selectionFeatherAmount) }
-                    .disabled(!session.canModifySelection)
-                    .help("Fade the edge of the selection by this many pixels")
-                TextField("Feather", value: Binding(get: { Double(session.selectionFeatherAmount) },
-                                                    set: { session.selectionFeatherAmount = $0.isFinite ? Int(min(250, max(1, $0))) : 2 }),
-                          format: .number.precision(.fractionLength(0)))
-                    .frame(width: 48).textFieldStyle(.roundedBorder).multilineTextAlignment(.trailing)
-                    .arrowSteps(value: { Double(session.selectionFeatherAmount) },
-                                change: { session.selectionFeatherAmount = Int(min(250, max(1, $0))) })
-                    .unitSuffix("px", scrubValue: $session.selectionFeatherAmount,
-                                sensitivity: 1, range: 1...250)
-            }
-            Spacer(minLength: 0)
-            if let selection = session.selection {
-                if selection.isEmpty { Text("Empty selection").foregroundStyle(.secondary) }
-                Button("Deselect") { session.deselect() }.disabled(!session.canEditSelection)
-            }
+            }.scrollIndicators(.hidden)
         }
         .padding(.horizontal, 18).toolHeaderBar().releasesFocusOnCommit(session)
         .disabled(session.showsBusy || session.document == nil)

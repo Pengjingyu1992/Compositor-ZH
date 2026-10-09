@@ -115,16 +115,20 @@ import CoreImage
         if let stroke, !stroke.inside, let ring = try? LayerEffectsRenderer.ringCoverage(pixels, in: outer.size, stroke: stroke) {
             fill(stroke.color, alpha: stroke.opacity, coverage: ring, in: placed(outer))
         }
-        BrushRaster.draw(pixels, in: placed(outer), mask: false, context: context)
+        // An inner glow recolors the pixels themselves, keeping their alpha, as the full renderer does.
+        var shown = pixels
         if let glow = effects.innerGlow, glow.isEnabled, glow.size > 0, glow.opacity > 0,
            let coverage = try? LayerEffectsRenderer.innerGlowCoverage(
                 pixels,
                 placed: CGRect(origin: .zero, size: outer.size),
                 size: outer.size,
                 glow: glow
-           ) {
-            fill(glow.color, alpha: glow.opacity, coverage: coverage, in: placed(outer))
+           ), let layer = try? BrushRaster.copy(pixels) {
+            LayerEffectsRenderer.recolor(layer, glow.color, alpha: glow.opacity, amount: coverage,
+                                         in: CGRect(origin: .zero, size: outer.size))
+            shown = layer.makeImage() ?? pixels
         }
+        BrushRaster.draw(shown, in: placed(outer), mask: false, context: context)
         if let stroke, stroke.inside, let ring = try? LayerEffectsRenderer.ringCoverage(pixels, in: outer.size, stroke: stroke) {
             fill(stroke.color, alpha: stroke.opacity, coverage: ring, in: placed(outer))
         }

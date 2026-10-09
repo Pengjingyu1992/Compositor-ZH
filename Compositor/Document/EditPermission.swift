@@ -33,7 +33,7 @@ extension EditorSession {
         guard document != nil else { return .noDocument }
         if let owner, !ownsEdit(owner) { return .stale }
         if (isProjectBusy && owner == nil) || isImporting { return .busy }
-        if selectionAmountOperation != nil || colorRange != nil || textDraft != nil || brushStroke != nil
+        if showsPrintSetup || selectionAmountOperation != nil || colorRange != nil || textDraft != nil || brushStroke != nil
             || warpStroke != nil || showsNewDocument || showsImporter || renamingLayerID != nil
             || transformEdit != nil || cropRect != nil || gradientEdit != nil || pixelMove != nil
             || hueSaturation != nil || levels != nil || filterEdit != nil || adjustmentEditingID != nil || liquify != nil || pathEditing != nil {

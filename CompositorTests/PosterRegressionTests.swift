@@ -89,7 +89,7 @@ import Testing
         let snap = session.projectSnapshot()!
         try await ProjectStore.shared.save(snap, to: project, quickLook: ImageExporter.shared.quickLookImages(snap), mustNotExist: true)
         let loaded = try await ProjectStore.shared.load(from: project)
-        check("format 12 fill/effects roundtrip", loaded.manifest.version == 12 && loaded.manifest.layers.last?.fill == fill && loaded.manifest.layers.last?.effects == effects)
+        check("format 12 fill/effects roundtrip", loaded.manifest.version == ProjectManifest.current && loaded.manifest.layers.last?.fill == fill && loaded.manifest.layers.last?.effects == effects)
         do { try await ProjectStore.shared.save(snap, to: project, mustNotExist: true); check("save no overwrite", false) } catch { check("save no overwrite", true) }
         var older = snap.manifest; older.version = 11
         do { try await ProjectStore.shared.validateSnapshot(ProjectSnapshot(manifest: older, images: snap.images)); check("v11 rejects v12 properties", false) } catch { check("v11 rejects v12 properties", true) }

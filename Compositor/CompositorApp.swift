@@ -316,6 +316,17 @@ struct CompositorApp: App {
                     Button("New Fill Layer…") { session.openFillLayer() }
                         .disabled(!session.canEditLayers || session.document == nil || !session.canInsertFillLayer)
                     Button("Refine Layer Edges…") { session.beginEdgeRefinement() }.disabled(!session.canRefineEdges)
+                    Menu("Paths and Type") {
+                        Button("Pen") { session.selectTool(.pen) }
+                        Button("Convert Text to Outlines") { session.convertTextToOutlines() }.disabled(!session.canConvertTextToOutlines)
+                        Button("Text on Path") { session.attachTextToPath() }
+                            .disabled(!session.canEditLayers || session.activeLayer?.liveShape?.style.vector == nil || !session.selectedLayerIDs.contains(where: { id in session.document?.layers.first(where: { $0.id == id })?.liveText != nil }))
+                        Button("Reset Text Layout") { session.removeTextPath() }.disabled(!session.canConvertTextToOutlines)
+                        Button("Edit Vector Mask") { session.beginVectorMaskEditing() }
+                            .disabled(!session.canEditLayers || session.activeLayer?.mask?.vector == nil)
+                        Button("Create Vector Mask on Lower Layer") { session.makeVectorMask() }
+                            .disabled(!session.canEditLayers || session.activeLayer?.liveShape?.style.vector == nil)
+                    }
                     Button("Edit Fill Layer…") { session.openFillLayer(editing: true) }
                         .disabled(!session.canEditLayers || session.activeLayer?.liveFill == nil || !session.allowsLayerEdit(session.activeLayerID, .content))
                     Menu("New Adjustment Layer") {

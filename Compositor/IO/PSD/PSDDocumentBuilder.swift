@@ -36,7 +36,7 @@ nonisolated enum PSDDocumentBuilder {
                 renderedText = (cached, rendered.transform)
                 keptTextAppearance = true
             }
-            var notes: [String] = []
+            var notes = record.effectNotes
             if record.kind == .text {
                 if let source = record.text, renderedText != nil {
                     notes.append(keptTextAppearance
@@ -51,13 +51,13 @@ nonisolated enum PSDDocumentBuilder {
             if record.kind == .smartObject {
                 notes.append("The smart object was rasterized. Linked contents can’t be edited.")
             }
-            if record.kind == .effects {
+            if record.kind == .effects && record.effects == nil {
                 notes.append("Layer effects were discarded, so the appearance may differ.")
             }
             if record.kind == .vector {
                 if record.shape != nil {
                     notes.append(contentsOf: record.shapeNotes)
-                } else {
+                } else if record.vectorMask == nil && record.fill == nil {
                     notes.append("Vector shape was rasterized to pixels.")
                 }
             }
@@ -123,6 +123,33 @@ nonisolated enum PSDDocumentBuilder {
                 layer.mask = LayerMask(asset: maskAsset, isEnabled: record.maskEnabled, isLinked: record.maskLinked)
             } else if record.mask != nil {
                 conversions.append(PSDConversion(layerName: record.name, message: "The layer mask couldn’t be converted to 8-bit grayscale and was skipped."))
+            }
+            layer.effects = record.effects
+            if let fill = record.fill, let image = layer.asset?.image, record.bounds == CGRect(origin:.zero,size:canvas) {
+                layer.fill = LayerFill(style:fill,image:image)
+            }
+            if let vector = record.vectorMask, layer.mask == nil || record.vectorMaskEnabled {
+
+                let toLocal = BrushRaster.pixelToDocument(layer.transform,width:1,height:1).inverted()
+                let local = vector.mapped { CGPoint(x:$0.x*canvas.width,y:$0.y*canvas.height).applying(toLocal) }
+                let w = max(1,Int(ceil(layer.size.width))), h = max(1,Int(ceil(layer.size.height)))
+                let c = try BrushRaster.context(width:w,height:h,mask:true)
+                c.addPath(local.path(size:CGSize(width:w,height:h))); c.setFillColor(gray:1,alpha:1)
+                c.fillPath(using:local.evenOdd ? .evenOdd : .winding)
+                if let image = c.makeImage() {
+                    if let raster = layer.mask, raster.isEnabled {
+                        let combined = try BrushRaster.context(width:w,height:h,mask:true)
+                        combined.setFillColor(gray:0,alpha:1); combined.fill(CGRect(x:0,y:0,width:w,height:h))
+                        combined.clip(to:CGRect(x:0,y:0,width:w,height:h),mask:image)
+                        BrushRaster.draw(raster.asset.image,in:CGRect(x:0,y:0,width:w,height:h),mask:true,context:combined)
+                        guard let merged = combined.makeImage() else { throw ExportError.render }
+                        layer.mask = LayerMask(asset:try LayerMask.asset(from:merged),isEnabled:true,isLinked:record.maskLinked && record.vectorMaskLinked)
+                        conversions.append(PSDConversion(layerName:record.name,message:"Combined pixel and vector masks were merged into one pixel mask."))
+                    } else { layer.mask = LayerMask(asset:try LayerMask.asset(from:image),isEnabled:record.vectorMaskEnabled,isLinked:record.vectorMaskLinked,vector:local) }
+                }
+            }
+            if record.vectorMask != nil, record.mask != nil, !record.vectorMaskEnabled || !record.maskEnabled {
+                conversions.append(PSDConversion(layerName:record.name,message:"Separate mask enablement could not be retained; the active mask appearance was preserved."))
             }
             layers.append(layer)
         }

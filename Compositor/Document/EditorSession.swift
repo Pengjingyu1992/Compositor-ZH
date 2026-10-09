@@ -90,14 +90,14 @@ struct CanvasDocument: Equatable {
 }
 
 enum NavigationTool: String, CaseIterable {
-    case move, marquee, lasso, wand, crop, brush, spotHealing, cloneStamp, blur, gradient, bucket, shape, type, eyedropper, hand, zoom
+    case move, marquee, lasso, wand, crop, brush, spotHealing, cloneStamp, blur, gradient, bucket, shape, pen, type, eyedropper, hand, zoom
     /// No tool (A): nothing in the tool rail is selected and canvas clicks do nothing.
     case idle
     /// Tools that paint with the brush tip, sharing its size, hardness, opacity, and keys.
     var isBrushTool: Bool { self == .brush || self == .spotHealing || self == .cloneStamp || self == .blur }
     /// Tools that draw and edit selections, sharing modifiers, moving, and nudging.
     var isSelectionTool: Bool { self == .marquee || self == .lasso || self == .wand }
-    var symbol: String { self == .bucket ? "drop.fill" : self == .type ? "character.cursor.ibeam" : self == .eyedropper ? "eyedropper" : self == .marquee ? "rectangle.dashed" : self == .lasso ? "lasso" : self == .wand ? "wand.and.stars" : self == .brush ? "paintbrush.pointed" : self == .spotHealing ? "bandage" : self == .cloneStamp ? "seal" : self == .blur ? "drop" : self == .gradient ? "square.bottomhalf.filled" : self == .shape ? "square.on.circle" : self == .crop ? "crop" : self == .move ? "arrow.up.left.and.arrow.down.right" : self == .hand ? "hand.draw" : "magnifyingglass" }
+    var symbol: String { self == .pen ? "pencil.tip.crop.circle" : self == .bucket ? "drop.fill" : self == .type ? "character.cursor.ibeam" : self == .eyedropper ? "eyedropper" : self == .marquee ? "rectangle.dashed" : self == .lasso ? "lasso" : self == .wand ? "wand.and.stars" : self == .brush ? "paintbrush.pointed" : self == .spotHealing ? "bandage" : self == .cloneStamp ? "seal" : self == .blur ? "drop" : self == .gradient ? "square.bottomhalf.filled" : self == .shape ? "square.on.circle" : self == .crop ? "crop" : self == .move ? "arrow.up.left.and.arrow.down.right" : self == .hand ? "hand.draw" : "magnifyingglass" }
     var label: String {
         let keys = ShortcutSettings.shared
         switch self {
@@ -108,6 +108,7 @@ enum NavigationTool: String, CaseIterable {
         default:
             let (title, key): (String, String)
             switch self {
+            case .pen: (title, key) = ("Pen", "p")
             case .bucket: (title, key) = ("Paint Bucket", "k")
             case .type: (title, key) = ("Type", "t")
             case .eyedropper: (title, key) = ("Eyedropper", "i")
@@ -182,7 +183,7 @@ final class EditorSession {
     private var fileRequestWaiters: [CheckedContinuation<Void, Never>] = []
     var canStartProjectOperation: Bool {
         _ = showsBusy // Re-evaluate in the UI when a long operation starts or ends.
-        return liquify == nil && selectionAmountOperation == nil && colorRange == nil && textDraft == nil && !isProjectBusy && !isImporting && brushStroke == nil && warpStroke == nil && levels == nil && filterEdit == nil && hueSaturation == nil && adjustmentEditingID == nil && effectsEditing == nil && !showsNewDocument && !showsImporter && renamingLayerID == nil && importError == nil && !showsConversionSheet
+        return pathEditing == nil && liquify == nil && selectionAmountOperation == nil && colorRange == nil && textDraft == nil && !isProjectBusy && !isImporting && brushStroke == nil && warpStroke == nil && levels == nil && filterEdit == nil && hueSaturation == nil && adjustmentEditingID == nil && effectsEditing == nil && !showsNewDocument && !showsImporter && renamingLayerID == nil && importError == nil && !showsConversionSheet
     }
     func waitForFileRequest() async {
         while !canStartProjectOperation {
@@ -287,6 +288,7 @@ final class EditorSession {
     var shapeLineWidth: Double = 4
     /// The shape being dragged out with the Shape tool, before it becomes a layer.
     var shapeDraft: ShapeDraft?
+    var pathEditing: PathEditing? { didSet { if oldValue != nil && pathEditing == nil { resumeFileRequests() } } }
     var selectionModeChoice = SelectionMode.replace
     /// Mode implied by the Shift/Option keys currently held, nil when neither is.
     var heldSelectionMode: SelectionMode?
@@ -416,13 +418,13 @@ final class EditorSession {
         effectSelection = nil
         if id != activeLayerID, !finishText() { return }
         guard brushStroke == nil, warpStroke == nil, levels == nil else { return }
-        if id != activeLayerID { commitTransform(); resolveGradient() }
+        if id != activeLayerID { commitTransform(); resolveGradient(); pathEditing = nil }
         activeLayerID = id
     }
     func selectTool(_ value: NavigationTool) {
         if tool != value, !finishText() { return }
         guard !isProjectBusy, brushStroke == nil, warpStroke == nil, levels == nil else { return }
-        if tool != value { commitTransform(); cancelCrop(); resolveGradient(); cancelLasso(); cancelShape() }
+        if tool != value { commitTransform(); cancelCrop(); resolveGradient(); cancelLasso(); cancelShape(); pathEditing = nil }
         let from = Self.tipFamily(tool), to = Self.tipFamily(value)
         if from != to, let parked = parkedBrushTips[to] {
             parkedBrushTips[from] = (brushSettings.diameter, brushSettings.hardness, brushSettings.opacity)
@@ -668,7 +670,7 @@ final class EditorSession {
     var isModified: Bool { history.isModified }
     var canUseHistory: Bool {
         _ = showsBusy
-        return liquify == nil && selectionAmountOperation == nil && colorRange == nil && textDraft == nil && !isProjectBusy && !isImporting && brushStroke == nil && warpStroke == nil && levels == nil && filterEdit == nil && hueSaturation == nil && adjustmentEditingID == nil && effectsEditing == nil && !showsNewDocument && !showsImporter && renamingLayerID == nil && importError == nil && transformEdit == nil && !showsConversionSheet
+        return pathEditing == nil && liquify == nil && selectionAmountOperation == nil && colorRange == nil && textDraft == nil && !isProjectBusy && !isImporting && brushStroke == nil && warpStroke == nil && levels == nil && filterEdit == nil && hueSaturation == nil && adjustmentEditingID == nil && effectsEditing == nil && !showsNewDocument && !showsImporter && renamingLayerID == nil && importError == nil && transformEdit == nil && !showsConversionSheet
     }
     var canUndo: Bool { canUseHistory && (history.canUndo || gradientEdit != nil) }
     var canRedo: Bool { canUseHistory && history.canRedo }

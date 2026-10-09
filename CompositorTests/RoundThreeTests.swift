@@ -284,6 +284,10 @@ struct RoundThreeTests {
 
     @Test func PSDRejectsUnsupportedLayerFeaturesAndOffersFaithfulFlattening() async throws {
         let s = try session(); s.document?.layers[0].effects = LayerEffects(stroke: StrokeEffect())
+        let supported = try #require(s.projectSnapshot())
+        #expect(!PSDWriter.requiresFlattening(supported))
+        #expect(try await PSDExporter.shared.data(supported, mode: .layered).count > 0)
+        s.document?.layers[0].effects = LayerEffects(bevel: BevelEffect())
         let snapshot = try #require(s.projectSnapshot())
         #expect(PSDWriter.requiresFlattening(snapshot))
         do { _ = try await PSDExporter.shared.data(snapshot, mode: .layered); #expect(false) }

@@ -356,6 +356,11 @@ nonisolated enum PSDReader {
                 : CGRect(x: layer.left, y: layer.top,
                          width: max(0, layer.right - layer.left), height: max(0, layer.bottom - layer.top))
             record.image = isGroup ? nil : layer.image
+            record.effects = PSDEditableReader.effects(layer.extra["lfx2"])
+            if let data = layer.extra["lfx2"], !PSDEditableReader.fullyMappedEffects(data) {
+                record.effectNotes = ["Some Photoshop effects or blend settings could not be mapped. Inspect the imported appearance."]
+            }
+            record.fill = PSDEditableReader.descriptor(layer.extra["GdFl"]).flatMap(PSDEditableReader.gradient)
             if record.kind == .text, let text = PSDText.parse(extra: layer.extra) {
                 record.text = text
             } else if !isGroup, let live = try PSDVector.live(extra: layer.extra, canvas: canvas, remainingPixels: remaining) {
@@ -377,6 +382,15 @@ nonisolated enum PSDReader {
             record.maskDefault = layer.maskDefault
             record.maskEnabled = !layer.maskDisabled
             record.maskLinked = layer.maskLinked
+            if record.shape == nil, record.fill == nil, let data = layer.extra["vmsk"] ?? layer.extra["vsms"],
+               let vector = PSDVector.model(from: data, canvas: canvas) {
+                let flags = data.count >= 8 ? u32(data,4) : 0
+                if flags & 1 == 0 {
+                    record.vectorMask = vector
+                    record.vectorMaskEnabled = flags & 4 == 0
+                    record.vectorMaskLinked = flags & 2 == 0
+                }
+            }
             if !isGroup { record.adjustment = PSDAdjustments.parse(layer.extra) }
             if record.adjustment != nil { record.kind = .adjustment }
             result.append(record)
@@ -465,6 +479,12 @@ nonisolated enum PSDAdjustments {
         if let data = extra["levl"] { return levels(data) }
         if let data = extra["curv"] { return curves(data) }
         if let data = extra["hue2"] ?? extra["hue "] { return hue(data) }
+        if extra["nvrt"] != nil { return LayerAdjustment(kind:.invert) }
+        if let data = extra["expA"], data.count >= 14 {
+            func f(_ at: Int) -> Double { Double(Float(bitPattern: UInt32(data[at])<<24 | UInt32(data[at+1])<<16 | UInt32(data[at+2])<<8 | UInt32(data[at+3]))) }
+            let a = LayerAdjustment(kind:.exposure,exposureSettings:ExposureSettings(exposure:f(2),offset:f(6),gamma:f(10)))
+            return a.isValid ? a : nil
+        }
         return nil
     }
 
@@ -495,10 +515,11 @@ nonisolated enum PSDAdjustments {
         offset += 2
         guard version == 1 || version == 4 else { return nil }
         guard offset + 2 <= data.count else { return nil }
-        let count = Int(u16(data, offset))
-        offset += 2
+        guard offset + 4 <= data.count else { return nil }
+        offset += 2 // reserved
+        let channels = Int(u16(data, offset)); offset += 2
         var settings = CurvesSettings()
-        for channel in 0..<min(4, count) {
+        for channel in 0..<4 where channels & (1 << channel) != 0 {
             guard offset + 2 <= data.count else { return nil }
             let points = Int(u16(data, offset))
             offset += 2

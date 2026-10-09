@@ -322,13 +322,13 @@ struct PSDRoundTripTests {
         #expect(imported.layers.first?.liveShape?.image === imported.layers.first?.asset?.image)
     }
 
-    @Test func strokedRectangleImportsAsALiveShapeAndReportsTheStroke() throws {
+    @Test func strokedRectangleRetainsEditableVectorStroke() throws {
         var extra = PSDVectorFixtures.rectangle()
         extra["vogk"] = originationData(type: 2, rect: CGRect(x: 945, y: 153, width: 646, height: 182), radii: [0, 0, 0, 0])
         let live = try #require(try PSDVector.live(extra: extra, canvas: PSDVectorFixtures.canvas))
-        #expect(live.style.kind == .rectangle)
+        #expect(live.style.kind == .path)
         #expect(live.style.cornerRadius == 0)
-        #expect(live.notes.contains { $0.contains("stroke") })
+        #expect(live.style.vector?.strokeEnabled == true)
         var record = PSDRecord(id: UUID(), name: "rectangle-contour-jaune")
         record.kind = .vector
         record.image = live.image
@@ -336,12 +336,12 @@ struct PSDRoundTripTests {
         record.shape = live.style
         record.shapeNotes = live.notes
         let imported = try PSDDocumentBuilder.makeImport(PSDDocument(width: 1920, height: 1080, resolution: 72, layers: [record]))
-        #expect(imported.layers.first?.liveShape?.style.kind == .rectangle)
-        #expect(imported.conversions.contains { $0.layerName == "rectangle-contour-jaune" && $0.message.contains("stroke") })
+        #expect(imported.layers.first?.liveShape?.style.vector?.strokeEnabled == true)
+        #expect(imported.conversions.isEmpty)
         #expect(!imported.conversions.contains { $0.message.contains("rasterized") })
     }
 
-    @Test func fourSharpCornersInferARectangleWithoutOrigination() throws {
+    @Test func fourSharpCornersRemainAnEditablePathWithoutOrigination() throws {
         var extra: [String: Data] = [:]
         extra["vmsk"] = vectorMask(canvas: CGSize(width: 200, height: 200), corners: [
             CGPoint(x: 120, y: 30), CGPoint(x: 120, y: 80), CGPoint(x: 20, y: 80), CGPoint(x: 20, y: 30)
@@ -349,7 +349,7 @@ struct PSDRoundTripTests {
         extra["SoCo"] = solidColor(red: 0, green: 110, blue: 255)
         extra["vstk"] = strokeStyle(fill: true, stroke: false, width: 1, red: 255, green: 255, blue: 0)
         let live = try #require(try PSDVector.live(extra: extra, canvas: CGSize(width: 200, height: 200)))
-        #expect(live.style.kind == .rectangle)
+        #expect(live.style.kind == .path)
         #expect(live.notes.isEmpty)
         #expect(live.bounds.width >= 99 && live.bounds.height >= 49)
     }
@@ -631,10 +631,10 @@ struct PSDRoundTripTests {
     }
 
     @Test func photoshopTextReportsLeadingOnlyStyleDifferences() {
-        let byLeading = PSDText.parse(extra: ["TySh": PSDFixture.tySh(text: "Hello", leading: 30, secondLeading: 48)])
+        let byLeading = PSDText.parse(extra: ["TySh": PSDFixture.tySh(text: "Hello", leading: 30, secondLeading: 48, runLengths: [2,3])])
         #expect(byLeading?.style.leading == 30)
         #expect(byLeading?.notes.contains(PSDText.firstStyleNote) == true)
-        let byScale = PSDText.parse(extra: ["TySh": PSDFixture.tySh(text: "Hello", secondHorizontalScale: 1.2)])
+        let byScale = PSDText.parse(extra: ["TySh": PSDFixture.tySh(text: "Hello", secondHorizontalScale: 1.2, runLengths: [2,3])])
         #expect(byScale?.notes.contains(PSDText.firstStyleNote) == true)
     }
 
@@ -701,7 +701,7 @@ struct PSDRoundTripTests {
     }
 
     @Test func rotatedPhotoshopTextKeepsItsAngle() {
-        let parsed = PSDText.parse(extra: ["TySh": PSDFixture.tySh(text: "Hello", xx: 0, xy: -1, yx: 1, yy: 0)])
+        let parsed = PSDText.parse(extra: ["TySh": PSDFixture.tySh(text: "Hello", xx: 0, xy: 1, yx: -1, yy: 0)])
         #expect(abs((parsed?.rotation ?? 0) - 90) < 0.01)
         #expect(parsed?.flipY == false)
     }

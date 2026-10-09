@@ -36,7 +36,7 @@ struct LocalizedHistoryTests {
             #expect(L10n.text(key) != key)
             #expect(english.localizedString(forKey: key, value: key, table: "Localizable") == key)
         }
-        #expect(ProjectManifest.current == 12)
+        #expect(ProjectManifest.current == 13)
     }
 
     @Test func layerFlipsKeepUndoRedoAndLocalizedMenuNames() throws {

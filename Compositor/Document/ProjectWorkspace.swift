@@ -153,6 +153,7 @@ final class ProjectWorkspace {
         let session = current.session
         if session.gradientEdit != nil { await session.commitGradient() }
         if session.pixelMove != nil { await session.finishPixelMove() }
+        session.pathEditing = nil
         session.cancelFilter()
         session.cancelLiquify()
         session.cancelFillLayer()

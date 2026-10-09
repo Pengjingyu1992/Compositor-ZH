@@ -53,6 +53,10 @@ struct ContentView: View {
                 ShapeControls(session: session)
                 Divider()
             }
+            if session.tool == .pen {
+                PathControls(session: session)
+                Divider()
+            }
             if session.tool == .eyedropper {
                 HStack(spacing: 16) {
                     Text("Eyedropper").font(ToolHeaderStyle.titleFont)
@@ -406,6 +410,8 @@ struct ContentView: View {
             parts = [L10n.format("Drag a text box · Click text to edit · Drag box handles to resize · %@ finish", keys.keyLabel("\r", 1)), cancel]
         case .shape:
             parts = [L10n.format("Drag to draw a shape on a new layer · Shift %@ · Option from center · %@ or %@ for the next shape", L10n.text(session.shapeKind == .line ? "45°" : session.shapeKind == .rectangle ? "square" : "circle"), keys.keyLabel("u", 8), keys.keyLabel("\t")), cancel, pan]
+        case .pen:
+            parts = [L10n.text("Click to add anchors · Drag for curves · Click the first anchor to close · Option breaks handles · Return applies · Delete removes an anchor"), cancel, pan]
         case .bucket:
             parts = [L10n.format("Click to fill similar colors · Option uses background color · %@ selects Paint Bucket", keys.keyLabel("k"))]
         case .gradient:

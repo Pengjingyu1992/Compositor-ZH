@@ -14,6 +14,8 @@ nonisolated struct LayerTextStyle: Codable, Equatable, Sendable {
     var blue: CGFloat = 0
     var alignment: TextAlignment = .left
     var vertical: Bool? = nil
+    var pathLayout: TextPathLayout? = nil
+    var warp: TextWarp? = nil
     var isVertical: Bool { vertical ?? false }
     var tracking: CGFloat = 0
     /// Baseline to baseline, in layer pixels, as Photoshop's Leading is. 0 is Auto: 120% of the font size.
@@ -43,6 +45,8 @@ nonisolated struct LayerTextStyle: Codable, Equatable, Sendable {
         && tracking.isFinite && (-100...1000).contains(tracking)
         && leading.isFinite && (0...5000).contains(leading)
         && colorRunsAreValid && fontRunsAreValid
+        && (pathLayout?.isValid ?? true) && (warp?.isValid ?? true)
+        && (pathLayout == nil || (!isVertical && !content.contains(where: \.isNewline) && warp == nil))
     }
     var unavailableFontNames: [String] {
         Set([fontName] + (fontRuns ?? []).map(\.fontName)).filter { NSFont(name: $0, size: fontSize) == nil }.sorted()
@@ -444,7 +448,7 @@ extension EditorSession {
     }
 
     /// The text as it is drawn and measured, with each letter's own face and color.
-    static func attributedText(_ style: LayerTextStyle) -> NSMutableAttributedString {
+    nonisolated static func attributedText(_ style: LayerTextStyle) -> NSMutableAttributedString {
         let string = NSMutableAttributedString(string: style.content, attributes: textAttributes(style))
         if style.isVertical { string.addAttribute(.verticalGlyphForm, value: 1, range: NSRange(location: 0, length: string.length)) }
         for run in style.fontRuns ?? [] where Self.containsTextRun(run.location, run.length, in: string.length) {
@@ -458,12 +462,13 @@ extension EditorSession {
         return string
     }
 
-    static func containsTextRun(_ location: Int, _ length: Int, in total: Int) -> Bool {
+    nonisolated static func containsTextRun(_ location: Int, _ length: Int, in total: Int) -> Bool {
         length > 0 && location >= 0 && location <= total - length
     }
 
     static func textImage(_ style: LayerTextStyle) throws -> CGImage {
         guard style.isValid else { throw ProjectError.invalid }
+        if style.pathLayout != nil || style.warp != nil { return try PathTypography.image(style) }
         let string = attributedText(style)
         let padding = LayerTextStyle.padding
         let size = textBoxSize(style)

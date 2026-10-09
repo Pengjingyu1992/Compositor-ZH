@@ -27,6 +27,10 @@ import AppKit
         for failure in result.failures { print("FAIL: \(failure)") }
         for measurement in result.measurements { print(measurement) }
         if !result.failures.isEmpty { exit(1) }
+        let paths = try await PathRegressionChecks.run(output: folder)
+        print("Paths and PSD: \(paths.checks) checks, \(paths.failures.count) failures")
+        for failure in paths.failures { print("FAIL: \(failure)") }
+        if !paths.failures.isEmpty { exit(1) }
         let liquid = try await LiquifyRegressionChecks.run()
         print("Liquify: \(liquid.checks) checks, \(liquid.failures.count) failures")
         for failure in liquid.failures { print("FAIL: \(failure)") }
@@ -48,10 +52,10 @@ xcrun swiftc -sdk "$SDK_PATH" -target arm64-apple-macosx26.0 -swift-version 5 -d
     -enable-upcoming-feature InferIsolatedConformances \
     -enable-upcoming-feature InferSendableFromCaptures \
     -enable-upcoming-feature NonisolatedNonsendingByDefault \
-    -D POSTER_CLT_CHECKS -D LIQUIFY_CLT_CHECKS -D FIRST_BATCH_CLT_CHECKS -D SHORTCUT_CLT_CHECKS -parse-as-library -O -whole-module-optimization -num-threads 8 \
+    -D PATH_CLT_CHECKS -D POSTER_CLT_CHECKS -D LIQUIFY_CLT_CHECKS -D FIRST_BATCH_CLT_CHECKS -D SHORTCUT_CLT_CHECKS -parse-as-library -O -whole-module-optimization -num-threads 8 \
     -gnone -file-prefix-map "$PROJECT_ROOT=." \
     -import-objc-header "$PROJECT_ROOT/Compositor/Compositor-Bridging-Header.h" \
-    "${sources[@]}" "$PROJECT_ROOT/CompositorTests/LiquifyRegressionTests.swift" "$PROJECT_ROOT/CompositorTests/FirstBatchRegressionTests.swift" "$PROJECT_ROOT/CompositorTests/ShortcutRegressionTests.swift" "$PROJECT_ROOT/CompositorTests/PosterRegressionTests.swift" "$WORK_ROOT/Run.swift" \
+    "${sources[@]}" "$PROJECT_ROOT/CompositorTests/LiquifyRegressionTests.swift" "$PROJECT_ROOT/CompositorTests/FirstBatchRegressionTests.swift" "$PROJECT_ROOT/CompositorTests/ShortcutRegressionTests.swift" "$PROJECT_ROOT/CompositorTests/PosterRegressionTests.swift" "$PROJECT_ROOT/CompositorTests/PathRegressionTests.swift" "$PROJECT_ROOT/CompositorTests/PSDFixture.swift" "$WORK_ROOT/Run.swift" \
     "$WORK_ROOT"/obj/*.o -o "$WORK_ROOT/poster-checks"
 mkdir -p "$PROJECT_ROOT/build"
 cp "$WORK_ROOT/poster-checks" "$PROJECT_ROOT/build/poster-checks"

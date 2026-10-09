@@ -1,13 +1,14 @@
 import AppKit
 
 nonisolated enum PosterCommandKind: String, Codable, Sendable {
-    case addFill, editFill, addImage, addText, editText, transform, opacity, blendMode, visibility, remove, invert, fillPixels, filter, effects, reorder, setMask, refineEdges
+    case addFill, editFill, addImage, addText, editText, transform, opacity, blendMode, visibility, remove, invert, fillPixels, filter, effects, reorder, setMask, refineEdges, addPath, editPath, textOutlines, vectorMask
 }
 nonisolated struct PosterCommand: Codable, Sendable {
     var kind: PosterCommandKind
     var layerID: UUID?
     var name: String?
     var fill: LayerFillStyle?
+    var vector: VectorPathStyle?
     var text: LayerTextStyle?
     var transform: LayerTransform?
     var opacity: Double?
@@ -104,6 +105,29 @@ extension EditorSession {
             addPixelLayer(asset.image, at: command.transform?.origin ?? .zero, name: asset.name, editName: "Import Images", dropsSelection: false)
             guard let index = document?.layers.firstIndex(where: { $0.id == activeLayerID }) else { throw PosterCommandError.invalid }
             if let transform = command.transform { document?.layers[index].transform = transform }
+        case .addPath, .editPath:
+            guard let vector = command.vector, vector.isValid, let color = command.color, color.isValid, color.alpha == 1 else { throw PosterCommandError.invalid }
+            let paint = PaletteColor(red:color.red,green:color.green,blue:color.blue)
+            let shape = LayerShapeStyle(kind:.path,red:paint.red,green:paint.green,blue:paint.blue,cornerRadius:0,vector:vector)
+            if command.kind == .addPath {
+                guard canInsertFillLayer, let transform = command.transform, transform.isValid else { throw PosterCommandError.invalid }
+                let image = try Self.shapeImage(.path,size:transform.size,color:paint,vector:vector)
+                addPixelLayer(image,at:transform.origin,name:command.name ?? L10n.text("Path"),editName:"New Path",dropsSelection:false,shape:LayerShape(style:shape,image:image))
+                if let i = document?.layers.firstIndex(where: { $0.id == activeLayerID }) { document?.layers[i].transform = transform }
+            } else {
+                guard let layer = activeLayer, layer.liveShape?.style.vector != nil, allowsLayerEdit(layer.id,.content),
+                      let i = document?.layers.firstIndex(where: { $0.id == layer.id }) else { throw PosterCommandError.locked }
+                let image = try Self.shapeImage(.path,size:layer.size,color:paint,vector:vector)
+                document?.layers[i].asset = ImportedImage(image:image,thumbnail:try PixelInvert.thumbnail(of:image),name:layer.name)
+                document?.layers[i].shape = LayerShape(style:shape,image:image)
+            }
+        case .textOutlines:
+            guard canConvertTextToOutlines else { throw PosterCommandError.locked }; convertTextToOutlines()
+        case .vectorMask:
+            guard let vector = command.vector, vector.isValid, let layer = activeLayer,
+                  allowsLayerEdit(layer.id,.content), let i = document?.layers.firstIndex(where: { $0.id == layer.id }) else { throw PosterCommandError.locked }
+            let image = try Self.vectorMaskImage(vector,size:layer.size)
+            document?.layers[i].mask = LayerMask(asset:try LayerMask.asset(from:image),vector:vector)
         case .addText:
             guard let style = command.text, style.isValid, canInsertFillLayer else { throw PosterCommandError.invalid }
             let image = try Self.textImage(style)
@@ -221,6 +245,8 @@ extension EditorSession {
              func json<T: Encodable>(_ item: T) -> Any? { (try? JSONEncoder().encode(item)).flatMap { try? JSONSerialization.jsonObject(with: $0) } }
              value["transform"] = json(layer.transform)
              value["fill"] = layer.liveFill.flatMap { json($0.style) }
+             value["shape"] = layer.liveShape.flatMap { json($0.style) }
+             value["vectorMask"] = layer.mask?.vector.flatMap { json($0) }
              value["text"] = layer.liveText.flatMap { json($0.style) }
              value["effects"] = layer.effects.flatMap { json($0) }
              value["parentID"] = layer.parentID?.uuidString

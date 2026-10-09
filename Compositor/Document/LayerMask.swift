@@ -11,10 +11,11 @@ nonisolated struct LayerMask: Equatable, @unchecked Sendable {
     var placement: LayerTransform? = nil
     /// Linked, layer and mask move together; unlinked, each transforms on its own, as in Photoshop.
     var isLinked = true
+    var vector: VectorPathStyle? = nil
     var enabledImage: CGImage? { isEnabled ? asset.image : nil }
 
     static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.asset.image === rhs.asset.image && lhs.isEnabled == rhs.isEnabled && lhs.placement == rhs.placement && lhs.isLinked == rhs.isLinked
+        lhs.asset.image === rhs.asset.image && lhs.isEnabled == rhs.isEnabled && lhs.placement == rhs.placement && lhs.isLinked == rhs.isLinked && lhs.vector == rhs.vector
     }
     /// The same mask with new pixels (in its own grid), still enabled or not, linked or not, and where it sits.
     func replacing(_ asset: ImportedImage) -> LayerMask {
@@ -212,7 +213,7 @@ nonisolated struct FolderMaskClip {
 extension ProjectSnapshot {
     nonisolated func mask(for layer: ProjectLayerRecord) -> LayerMask? {
         guard layer.maskFile != nil, let asset = masks[layer.id] else { return nil }
-        return LayerMask(asset: asset, isEnabled: layer.maskEnabled ?? true, placement: layer.maskPlacement, isLinked: layer.maskLinked ?? true)
+        return LayerMask(asset: asset, isEnabled: layer.maskEnabled ?? true, placement: layer.maskPlacement, isLinked: layer.maskLinked ?? true, vector: layer.vectorMask)
     }
 }
 

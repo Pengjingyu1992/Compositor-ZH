@@ -10,7 +10,7 @@ struct ShapeControls: View {
                 session.cancelShape()
                 session.shapeKind = kind
             })) {
-                ForEach(ShapeKind.allCases, id: \.self) { Text(L10n.text($0.rawValue)).tag($0) }
+                ForEach(ShapeKind.allCases.filter { $0 != .path }, id: \.self) { Text(L10n.text($0.rawValue)).tag($0) }
             }
             .pickerStyle(.segmented).labelsHidden().fixedSize()
             .help(L10n.format("%@ (or %@) steps through Rectangle, Ellipse and Line", ShortcutSettings.shared.keyLabel("u", 8), ShortcutSettings.shared.keyLabel("\t")))

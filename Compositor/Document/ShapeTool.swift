@@ -4,6 +4,7 @@ nonisolated enum ShapeKind: String, CaseIterable, Codable, Sendable {
     case rectangle = "Rectangle"
     case ellipse = "Ellipse"
     case line = "Line"
+    case path = "Path"
     /// The shape filling `rect`. A rectangle's corners round by `cornerRadius`, at most half its shorter
     /// side (so a large radius makes a pill); ellipses ignore it. A line runs corner to corner and is stroked,
     /// not filled (see `linePath`).
@@ -28,6 +29,7 @@ nonisolated struct LayerShapeStyle: Codable, Equatable, Sendable {
     var lineWidth: CGFloat? = nil
     var start: CGPoint? = nil
     var end: CGPoint? = nil
+    var vector: VectorPathStyle? = nil
     var color: PaletteColor { PaletteColor(red: red, green: green, blue: blue) }
 }
 
@@ -106,7 +108,7 @@ extension EditorSession {
     /// Shift-U (and Tab): the Shape tool steps through Rectangle, Ellipse and Line.
     func toggleShapeKind() {
         cancelShape()
-        let kinds = ShapeKind.allCases
+        let kinds = ShapeKind.allCases.filter { $0 != .path }
         shapeKind = kinds[((kinds.firstIndex(of: shapeKind) ?? 0) + 1) % kinds.count]
     }
 
@@ -165,7 +167,7 @@ extension EditorSession {
               let image = try? Self.shapeImage(shape.style.kind, size: CGSize(width: width, height: height),
                                                color: shape.style.color, cornerRadius: shape.style.cornerRadius,
                                                lineWidth: shape.style.lineWidth ?? 0,
-                                               start: shape.style.start, end: shape.style.end),
+                                               start: shape.style.start, end: shape.style.end, vector: shape.style.vector),
               let thumbnail = try? PixelInvert.thumbnail(of: image) else { return }
         // A mask that follows the layer's pixel grid stays exactly where it is while that grid changes size.
         if let mask = layer.mask, mask.placement == nil { document?.layers[index].mask?.placement = layer.maskTransform }
@@ -195,9 +197,18 @@ extension EditorSession {
 
     /// The shape filling its box, anti-aliased where it curves.
     nonisolated static func shapeImage(_ kind: ShapeKind, size: CGSize, color: PaletteColor, cornerRadius: CGFloat = 0,
-                           lineWidth: CGFloat = 0, start: CGPoint? = nil, end: CGPoint? = nil) throws -> CGImage {
-        let context = try BrushRaster.context(width: Int(size.width), height: Int(size.height), mask: false)
+                           lineWidth: CGFloat = 0, start: CGPoint? = nil, end: CGPoint? = nil, vector: VectorPathStyle? = nil) throws -> CGImage {
+        guard size.width.isFinite, size.height.isFinite, size.width >= 1, size.height >= 1,
+              size.width <= DocumentLimits.maxSideExtent, size.height <= DocumentLimits.maxSideExtent,
+              ceil(size.width) * ceil(size.height) <= DocumentLimits.maxSurfaceExtent else { throw ProjectError.tooLarge }
+        let context = try BrushRaster.context(width: Int(ceil(size.width)), height: Int(ceil(size.height)), mask: false)
         let bounds = CGRect(origin: .zero, size: size)
+        if kind == .path {
+            guard let vector, vector.isValid else { throw ProjectError.invalid }
+            vector.draw(size: size, color: color, in: context)
+            guard let image = context.makeImage() else { throw ExportError.render }
+            return image
+        }
         if kind == .line {
             // Corner to corner, inset by half the thickness so the stroke stays inside the layer.
             let thickness = max(1, lineWidth)

@@ -79,7 +79,7 @@ npm start
 npm run package:win
 ```
 
-需要 Node.js 24 和 Git。输出在 windows/release。云端工作流做源码/本地化审查、类型检查、编辑/保存故障注入、独立 PSD 读取、软件 GPU 打包 GUI 检查与许可证/包审查。按要求开发者本机不运行测试、应用或构建。
+需要 Node.js 22.12 或更高版本（与 `windows/package.json` 的 `engines` 字段一致）和 Git。输出在 windows/release。云端工作流做源码/本地化审查、类型检查、编辑/保存故障注入、独立 PSD 读取、软件 GPU 打包 GUI 检查与许可证/包审查。按要求开发者本机不运行测试、应用或构建。
 
 ## English summary
 

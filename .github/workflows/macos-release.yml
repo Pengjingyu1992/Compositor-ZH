@@ -1,0 +1,69 @@
+name: macOS release package
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing macOS release tag (for example v1.4.8-zh.3)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-release-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  package:
+    if: startsWith(github.event.release.tag_name || inputs.tag, 'v')
+    runs-on: macos-26
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+          persist-credentials: false
+      - name: Validate tag and source privacy
+        run: |
+          python3 - <<'PY'
+          import os, re
+          assert re.fullmatch(r'v\d+\.\d+\.\d+-zh\.\d+', os.environ['RELEASE_TAG']), 'Invalid macOS release tag'
+          PY
+          python3 scripts/check-release-privacy.py
+          ./scripts/check-localization.zsh
+      - name: Build app
+        run: ./scripts/build-clt.zsh
+      - name: Package app and exact tagged source
+        shell: zsh {0}
+        run: |
+          VERSION=$(plutil -extract CFBundleShortVersionString raw build/clt/Compositor.app/Contents/Info.plist)
+          [[ "$RELEASE_TAG" == "v${VERSION}-zh."* ]]
+          ./scripts/package.zsh
+          SOURCE="Compositor-ZH-${RELEASE_TAG#v}-source.zip"
+          git archive --format=zip --prefix="Compositor-ZH-${RELEASE_TAG#v}/" HEAD -o "dist/$SOURCE"
+          cd dist
+          shasum -a 256 Compositor-ZH-*.zip > SHA256SUMS.txt
+          shasum -a 256 -c SHA256SUMS.txt
+      - name: Inspect packaged app
+        shell: zsh {0}
+        run: |
+          CHECK_ROOT=$(mktemp -d /private/tmp/compositor-release-check.XXXXXX)
+          trap 'rm -rf "$CHECK_ROOT"' EXIT
+          unzip -tq dist/*-macOS-arm64.zip
+          unzip -tq dist/*-source.zip
+          ditto -x -k dist/*-macOS-arm64.zip "$CHECK_ROOT"
+          codesign --verify --deep --strict "$CHECK_ROOT/Compositor.app"
+          python3 scripts/check-release-privacy.py --bundle "$CHECK_ROOT/Compositor.app"
+      - name: Upload release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "$RELEASE_TAG" dist/Compositor-ZH-*.zip dist/SHA256SUMS.txt --clobber

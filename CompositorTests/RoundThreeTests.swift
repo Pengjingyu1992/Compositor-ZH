@@ -65,7 +65,7 @@ struct RoundThreeTests {
         let entry = try #require(entries.first)
         #expect(entry.record?.revision == revision && entry.record?.closedNormally == false)
         let loaded = try await store.load(entry.url)
-        #expect(loaded.manifest.layers[0].opacity == 0.4 && loaded.manifest.version == ProjectManifest.current)
+        #expect(loaded.manifest.layers[0].opacity == 0.4 && loaded.manifest.version == 13)
         #expect(try bytes(try #require(loaded.images.values.first?.image)) == bytes(try image()))
         await coord.finishNormally()
         #expect(try await store.entries().first?.record?.closedNormally == true)

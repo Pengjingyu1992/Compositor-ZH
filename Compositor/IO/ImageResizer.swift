@@ -15,12 +15,13 @@ actor ImageResizer {
         guard (1...DocumentLimits.maxSide).contains(options.width), (1...DocumentLimits.maxSide).contains(options.height),
               options.resolution.isFinite, (1...9600).contains(options.resolution) else { throw ProjectError.tooLarge }
         let old = snapshot.manifest
-        var manifest = ProjectManifest(resolution: options.resolution, documentID: old.documentID,
+        var manifest = ProjectManifest(version: 13, resolution: options.resolution, documentID: old.documentID,
             width: options.width, height: options.height, activeLayerID: old.activeLayerID, layers: [],
             guides: old.guides)
         if old.width == options.width && old.height == options.height {
+            manifest.version = old.version
             manifest.layers = old.layers
-            return ProjectSnapshot(manifest: manifest, images: snapshot.images, masks: snapshot.masks)
+            return ProjectSnapshot(manifest: manifest, images: snapshot.images, masks: snapshot.masks, filterStacks: snapshot.filterStacks)
         }
         guard options.width * options.height <= DocumentLimits.maxSurfacePixels else { throw ProjectError.tooLarge }
         let sx = CGFloat(options.width) / CGFloat(old.width)

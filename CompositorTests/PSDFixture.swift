@@ -562,17 +562,17 @@ nonisolated private struct PSDBuffer: Sendable {
 }
 
 extension Data {
-    fileprivate mutating func appendUInt16(_ value: UInt16) {
+    nonisolated fileprivate mutating func appendUInt16(_ value: UInt16) {
         append(UInt8(truncatingIfNeeded: value >> 8))
         append(UInt8(truncatingIfNeeded: value))
     }
-    fileprivate mutating func appendUInt32(_ value: UInt32) {
+    nonisolated fileprivate mutating func appendUInt32(_ value: UInt32) {
         append(UInt8(truncatingIfNeeded: value >> 24))
         append(UInt8(truncatingIfNeeded: value >> 16))
         append(UInt8(truncatingIfNeeded: value >> 8))
         append(UInt8(truncatingIfNeeded: value))
     }
-    fileprivate mutating func appendUInt64(_ value: UInt64) {
+    nonisolated fileprivate mutating func appendUInt64(_ value: UInt64) {
         append(UInt8(truncatingIfNeeded: value >> 56))
         append(UInt8(truncatingIfNeeded: value >> 48))
         append(UInt8(truncatingIfNeeded: value >> 40))

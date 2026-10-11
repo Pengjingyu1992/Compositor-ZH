@@ -1,7 +1,7 @@
 import AppKit
 import Observation
 
-nonisolated enum LiquifyTool: String, CaseIterable, Sendable {
+nonisolated enum LiquifyTool: String, Codable, CaseIterable, Sendable {
     case push = "Forward Warp"
     case twirl = "Twirl"
     case pinch = "Pinch"
@@ -109,6 +109,8 @@ final class LiquifyWorkspace {
     let pixels: LiquifyPixels
     let referenceLayers: [ImageLayer]
     let mustUseCopy: Bool
+    let savedNodeID: UUID?
+    let initialSaved: SavedLiquify?
     var tool: LiquifyTool = .push
     var diameter: Double = 180
     var hardness: Double = 0.3
@@ -148,6 +150,7 @@ final class LiquifyWorkspace {
     @ObservationIgnored private var captured: [Int: Data] = [:]
     @ObservationIgnored private var last: CGPoint?
     @ObservationIgnored private var previewTask: Task<Void, Never>?
+    @ObservationIgnored var applyTask: Task<CGImage, Error>?
     private(set) var isStroking = false
     var canUndo: Bool {
         _ = revision
@@ -189,17 +192,19 @@ final class LiquifyWorkspace {
         strength = Double(BrushSettings.opacityValue(digit, at: time, pending: &pendingStrengthDigit))
     }
 
-    init(owner: EditOwner, layer: ImageLayer, selection: SelectionClip?, references: [ImageLayer], keepsAlpha: Bool)
+    init(owner: EditOwner, layer: ImageLayer, selection: SelectionClip?, references: [ImageLayer], keepsAlpha: Bool,
+         input: CGImage? = nil, saved: SavedLiquify? = nil, nodeID: UUID? = nil)
         throws
     {
-        guard let image = layer.asset?.image, LiquifyPixels.fits(width: image.width, height: image.height) else {
+        guard let image = input ?? layer.asset?.image, LiquifyPixels.fits(width: image.width, height: image.height) else {
             throw LiquifyError.budget
         }
         self.owner = owner
         self.layer = layer
+        savedNodeID = nodeID; initialSaved = saved
         original = image
         referenceLayers = references
-        mustUseCopy = layer.text != nil || layer.shape != nil
+        mustUseCopy = layer.text != nil || layer.shape != nil || layer.fill != nil
         let w = image.width
         let h = image.height
         let step = max(1, Int(ceil(Double(max(w, h)) / 1536)))
@@ -207,8 +212,8 @@ final class LiquifyWorkspace {
         let gh = (h - 1 + step - 1) / step + 1
         let c = try BrushRaster.copy(image)
         let source = Data(bytes: c.data!, count: w * h * 4)
-        var coverage: Data?
-        if let selection {
+        var coverage: Data? = saved?.coverage
+        if saved == nil, let selection {
             let mask = try BrushRaster.context(width: w, height: h, mask: true)
             mask.concatenate(BrushRaster.pixelToDocument(layer.transform, width: w, height: h).inverted())
             selection.apply(to: mask)
@@ -218,12 +223,28 @@ final class LiquifyWorkspace {
         }
         pixels = LiquifyPixels(
             source: source, coverage: coverage, width: w, height: h,
-            gridWidth: gw, gridHeight: gh, step: step, keepsAlpha: keepsAlpha,
+            gridWidth: gw, gridHeight: gh, step: step, keepsAlpha: saved?.keepsAlpha ?? keepsAlpha,
             gpu: LiquifyMetalRenderer(source: source, coverage: coverage, width: w, height: h))
-        nodes = Data(count: gw * gh * MemoryLayout<LiquifyNode>.stride)
+        if let saved {
+            guard saved.isValid, saved.width == w, saved.height == h, saved.gridWidth == gw, saved.gridHeight == gh else { throw ProjectError.invalid }
+        }
+        nodes = saved?.field ?? Data(count: gw * gh * MemoryLayout<LiquifyNode>.stride)
         scratch = Data(count: nodes.count)
         diameter = min(180, max(10, Double(min(w, h)) / 3))
+        if let saved {
+            diameter = saved.diameter; hardness = saved.hardness; strength = saved.strength; rate = saved.rate
+            fixedEdges = saved.fixedEdges; usesPressure = saved.usesPressure; reversesDirection = saved.reversesDirection
+            tool = saved.tool; createsCopy = false
+        }
         preview = try pixels.render(nodes: nodes, longSide: 1280)
+        frozenOverlay = try pixels.overlay(nodes: nodes, width: preview!.width, height: preview!.height)
+    }
+
+    var savedState: SavedLiquify {
+        SavedLiquify(width: pixels.width, height: pixels.height, step: pixels.step,
+            gridWidth: pixels.gridWidth, gridHeight: pixels.gridHeight, field: nodes, coverage: pixels.coverage,
+            keepsAlpha: pixels.keepsAlpha, diameter: diameter, hardness: hardness, strength: strength, rate: rate,
+            fixedEdges: fixedEdges, usesPressure: usesPressure, reversesDirection: reversesDirection, tool: tool)
     }
 
     private var tilesAcross: Int { (pixels.gridWidth + 31) / 32 }
@@ -433,13 +454,37 @@ nonisolated enum LiquifyError: String, LocalizedError {
 }
 
 extension EditorSession {
-    var canLiquify: Bool {
+    var canEditSavedLiquify: Bool { canOpenLiquify && activeLayer?.filterStack?.nodes.contains(where: { $0.kind == .liquify }) == true }
+    func openQueuedLiquify() {
+        guard let request = queuedLiquify else { return }
+        queuedLiquify = nil
+        guard document?.id == request.documentID, history.currentRevision == request.revision, activeLayerID == request.layerID else { return }
+        Task { await beginSavedLiquify(request.nodeID) }
+    }
+    func beginSavedLiquify(_ nodeID: UUID? = nil) async {
+        guard canEditSavedLiquify, let layer = activeLayer, let stack = layer.filterStack,
+              let index = stack.nodes.lastIndex(where: { node in nodeID.map { $0 == node.id } ?? (node.kind == .liquify) }),
+              let saved = stack.nodes[index].liquify, let owner = beginOwnedEdit() else { return }
+        do {
+            let task = Task.detached(priority: .userInitiated) { try stack.render(through: index) }
+            let input = try await withTaskCancellationHandler { try await task.value } onCancel: { task.cancel() }
+            guard !Task.isCancelled, ownsEdit(owner), activeLayer == layer, allowsLayerEdit(layer.id, .content) else { throw EditRefusal.stale }
+            if effectiveLocks(for: layer.id).contains(.transparency), !saved.keepsAlpha { throw EditRefusal.locked }
+            let edit = try LiquifyWorkspace(owner: owner, layer: layer, selection: nil,
+                references: document?.layers.filter { $0.id != layer.id && document?.effectiveVisibleIDs.contains($0.id) == true } ?? [],
+                keepsAlpha: saved.keepsAlpha, input: input, saved: saved, nodeID: stack.nodes[index].id)
+            isProjectBusy = false
+            liquify = edit
+        } catch { releaseEdit(owner); brushError = error.localizedDescription }
+    }
+    private var canOpenLiquify: Bool {
         canEditLayers && effectsEditing == nil && !history.hasPendingEdit && selectedLayerIDs.count == 1
             && !isMaskSelected && activeLayer?.asset != nil
-            && activeLayer?.isGroup == false && activeLayer?.adjustment == nil && selection?.isEmpty != true
+            && activeLayer?.isGroup == false && activeLayer?.adjustment == nil
             && allowsLayerEdit(activeLayerID, .content)
             && activeLayerID.map { document?.effectiveVisibleIDs.contains($0) == true } == true
     }
+    var canLiquify: Bool { canOpenLiquify && selection?.isEmpty != true }
     func beginLiquify() {
         guard canLiquify, let document, let layer = activeLayer, activeEditOwner == nil else { return }
         finishOpacityEdit()
@@ -459,75 +504,70 @@ extension EditorSession {
     }
     func cancelLiquify() {
         guard let edit = liquify else { return }
+        edit.applyTask?.cancel()
         liquify = nil
         releaseEdit(edit.owner)
     }
     @discardableResult func applyLiquify() async -> Bool {
         guard let edit = liquify, !edit.isApplying else { return false }
         edit.endStroke()
-        guard edit.hasWarp else {
-            cancelLiquify()
-            return false
-        }
+        let saved = edit.savedState
+        guard saved.isValid else { edit.error = ProjectError.invalid.localizedDescription; return false }
+        if let initial = edit.initialSaved {
+            if saved == initial && !edit.createsCopy { cancelLiquify(); return false }
+        } else if !edit.hasWarp { cancelLiquify(); return false }
         let copy = edit.createsCopy || edit.mustUseCopy
         guard ownsEdit(edit.owner), allowsLayerEdit(edit.layer.id, .content),
-            !copy || (allowsLayerEdit(edit.layer.id, .appearance) && (document?.layers.count ?? 10_000) < 10_000),
-            !copy
-                || (document?.layers.reduce(0) { $0 + ($1.asset.map { $0.image.width * $0.image.height } ?? 0) } ?? 0)
-                    + edit.pixels.width * edit.pixels.height <= DocumentLimits.documentPixelBudget
-        else {
-            edit.error = L10n.text("The layer is locked or the duplicate would exceed this document’s limits.")
-            return false
+              !copy || (allowsLayerEdit(edit.layer.id, .appearance) && (document?.layers.count ?? 10_000) < 10_000),
+              !effectiveLocks(for: edit.layer.id).contains(.transparency) || saved.keepsAlpha else {
+            edit.error = EditRefusal.locked.localizedDescription; return false
         }
-        edit.isApplying = true
-        isProjectBusy = true
+        edit.isApplying = true; isProjectBusy = true
         do {
-            let image = try await edit.rendered()
-            guard liquify === edit, ownsEdit(edit.owner),
-                let index = document?.layers.firstIndex(where: { $0.id == edit.layer.id }),
-                document?.layers[index] == edit.layer, allowsLayerEdit(edit.layer.id, .content)
-            else { throw LiquifyError.stale }
-            if let bytes = image.dataProvider?.data, CFDataGetLength(bytes) == edit.pixels.source.count,
-                edit.pixels.source.withUnsafeBytes({
-                    memcmp($0.baseAddress!, CFDataGetBytePtr(bytes)!, edit.pixels.source.count) == 0
-                })
-            {
-                cancelLiquify()
-                return false
+            var stack = edit.layer.filterStack ?? LayerFilterStack(source: edit.layer.asset!, nodes: [])
+            if let id = edit.savedNodeID, let index = stack.nodes.firstIndex(where: { $0.id == id }) {
+                stack.nodes[index].liquify = saved
+            } else {
+                guard stack.nodes.count < 32 else { throw ProjectError.tooLarge }
+                var node = EditableFilterNode(kind: .liquify); node.liquify = saved
+                stack.nodes.append(node)
             }
-            let asset = ImportedImage(
-                image: image, thumbnail: try PixelAdjust.thumbnail(of: image), name: edit.layer.name)
+            let recipe = stack
+            let task = Task.detached(priority: .userInitiated) { try recipe.render() }
+            edit.applyTask = task
+            let image = try await withTaskCancellationHandler { try await task.value } onCancel: { task.cancel() }
+            guard !Task.isCancelled, liquify === edit, ownsEdit(edit.owner),
+                  let index = document?.layers.firstIndex(where: { $0.id == edit.layer.id }),
+                  document?.layers[index] == edit.layer, allowsLayerEdit(edit.layer.id, .content) else { throw LiquifyError.stale }
+            let asset = ImportedImage(image: image, thumbnail: try PixelAdjust.thumbnail(of: image), name: edit.layer.name)
             var candidate = document!
             if copy {
                 let source = edit.layer
-                let new = ImageLayer(
-                    id: UUID(), asset: asset, name: L10n.format("%@ — Advanced Liquify", source.name), isVisible: true,
-                    transform: source.transform,
-                    parentID: source.parentID, opacity: source.opacity, blendMode: source.blendMode, mask: source.mask,
-                    maskSourceID: source.maskSourceID, effects: source.effects)
+                let new = ImageLayer(id: UUID(), asset: asset, name: L10n.format("%@ — Advanced Liquify", source.name), isVisible: true,
+                    transform: source.transform, parentID: source.parentID, opacity: source.opacity, blendMode: source.blendMode,
+                    mask: source.mask, maskSourceID: source.maskSourceID, effects: source.effects, filterStack: stack)
                 candidate.layers[index].isVisible = false
                 candidate.layers.insert(new, at: index + 1)
             } else {
-                candidate.layers[index].asset = asset
-                candidate.layers[index].text = nil
-                candidate.layers[index].shape = nil
+                candidate.layers[index].asset = asset; candidate.layers[index].filterStack = stack
+                candidate.layers[index].text = nil; candidate.layers[index].shape = nil; candidate.layers[index].fill = nil
             }
             guard !violatesLayerLocks(before: document, after: candidate) else { throw EditRefusal.locked }
+            try await ProjectStore.shared.validateSnapshot(Self.snapshot(for: candidate, activeLayerID: activeLayerID))
+            guard liquify === edit, ownsEdit(edit.owner), document?.layers[index] == edit.layer,
+                  allowsLayerEdit(edit.layer.id, .content), !violatesLayerLocks(before: document, after: candidate) else { throw LiquifyError.stale }
             let before = document
-            beginEdit("Advanced Liquify")
-            document = candidate
+            beginEdit("Advanced Liquify"); document = candidate
             activeLayerID = candidate.layers[copy ? index + 1 : index].id
             endEdit()
             let changed = document != before
             basicLiquifyTip = edit.basicBrushTip
-            liquify = nil
-            releaseEdit(edit.owner)
+            liquify = nil; releaseEdit(edit.owner)
             return changed
         } catch {
             edit.isApplying = false
             if liquify === edit { edit.error = error.localizedDescription }
             releaseEdit(edit.owner)
-            // A failed apply can be retried only while it still owns the same document revision.
             if liquify === edit, document?.id == edit.owner.documentID, history.currentRevision == edit.owner.revision {
                 activeEditOwner = edit.owner
             }

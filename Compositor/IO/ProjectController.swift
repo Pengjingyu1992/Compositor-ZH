@@ -53,6 +53,28 @@ final class ProjectController {
         catch { await showError("Couldn’t export PNG", error: error) }
     }
 
+    func grayscaleCopy() async {
+        guard canStart, let workspace, session.document != nil, begin() else { return }
+        defer { session.isProjectBusy = false }
+        let alert = NSAlert()
+        alert.messageText = L10n.text("Convert to Grayscale Copy")
+        alert.informativeText = L10n.text("Create a new document from the visible layers as one grayscale layer. The source project stays open with its layers intact. Further editing uses the RGB tools.")
+        alert.addButton(withTitle: L10n.text("Create Copy"))
+        alert.addButton(withTitle: L10n.text("Cancel"))
+        guard await show(alert) == .alertFirstButtonReturn, let snapshot = session.projectSnapshot() else { return }
+        let documentID = snapshot.manifest.documentID, revision = session.history.currentRevision
+        let name = L10n.format("%@ — Grayscale", workspace.current.title)
+        do {
+            let copy = try await GrayscaleConverter.shared.copy(snapshot, name: name)
+            guard session.document?.id == documentID, session.history.currentRevision == revision,
+                  workspace.current.session === session else { return }
+            let tab = workspace.addTab(reuseEmpty: false, name: name)
+            tab.session.installProject(copy, from: nil)
+            tab.session.history.markUnsaved()
+            tab.session.recovery?.schedule()
+        } catch { await showError("Couldn’t convert to grayscale", error: error) }
+    }
+
     /// File › Export As…: PNG, JPEG or a one-page PDF, at the canvas's size or scaled, previewed first. Export JPEG…
     /// opens it on JPEG.
     func exportAs(start: ExportFormat? = nil) async {

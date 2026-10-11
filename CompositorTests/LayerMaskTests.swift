@@ -114,9 +114,10 @@ struct LayerMaskTests {
         defer { try? FileManager.default.removeItem(at: url) }
         for enabled in [true, false] {
             session.document?.layers[0].mask?.isEnabled = enabled
-            try await ProjectStore.shared.save(try #require(session.projectSnapshot()), to: url)
+            let snapshot = try #require(session.projectSnapshot())
+            try await ProjectStore.shared.save(snapshot, to: url)
             let loaded = try await ProjectStore.shared.load(from: url)
-            #expect(loaded.manifest.version == ProjectManifest.current)
+            #expect(loaded.manifest.version == snapshot.manifest.version)
             session.installProject(loaded, from: url)
             #expect(session.activeLayer?.mask?.isEnabled == enabled)
             let png = try await ImageExporter.shared.pngData(loaded)
@@ -288,7 +289,7 @@ struct LayerMaskTests {
         let snapshot = try #require(session.projectSnapshot())
         try await ProjectStore.shared.save(snapshot, to: url)
         let loaded = try await ProjectStore.shared.load(from: url)
-        #expect(loaded.manifest.version == ProjectManifest.current && loaded.masks[folder] != nil)
+        #expect(loaded.manifest.version == snapshot.manifest.version && loaded.masks[folder] != nil)
         #expect(try alphas(try await ImageExporter.shared.render(loaded).image) == [255, 0, 128, 255])
         let resized = try await ImageResizer.shared.resize(loaded,
             to: ImageSizeOptions(width: 4, height: 4, resolution: 72, sampling: .nearest))

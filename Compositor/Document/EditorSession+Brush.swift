@@ -43,6 +43,7 @@ extension EditorSession {
         let used = document.layers.filter { $0.id != layer.id }.reduce(0) { total, layer in
             let image = isMaskSelected ? layer.mask?.asset.image : layer.asset?.image
             return total + (image.map { $0.width * $0.height } ?? 0)
+                + (isMaskSelected ? 0 : (layer.filterStack.map { $0.source.image.width * $0.source.image.height } ?? 0))
         }
         stroke.locksAlpha = !isMaskSelected && effectiveLocks(for: layer.id).contains(.transparency)
         stroke.pixelLimit = DocumentLimits.documentPixelBudget - used

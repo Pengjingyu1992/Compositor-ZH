@@ -47,9 +47,9 @@ final class ProjectWorkspace {
         first.controller.workspace = self
     }
     @discardableResult
-    func addTab(reuseEmpty: Bool = true) -> ProjectTab {
+    func addTab(reuseEmpty: Bool = true, name: String? = nil) -> ProjectTab {
         if reuseEmpty, tabs.count == 1, current.session.document == nil { return current }
-        let tab = ProjectTab(name: L10n.format("Untitled %lld", nextNumber), recoveryStore: recoveryStore)
+        let tab = ProjectTab(name: name ?? L10n.format("Untitled %lld", nextNumber), recoveryStore: recoveryStore)
         nextNumber += 1
         tab.controller.workspace = self; tab.controller.window = window
         tabs.append(tab); selectedID = tab.id
@@ -113,12 +113,18 @@ final class ProjectWorkspace {
         do { showsRecoveryNotice = try await recoveryStore.entries().contains { $0.record?.closedNormally != true } }
         catch { current.session.recoveryError = error.localizedDescription }
     }
+
+    /// Capture open coordinators before awaiting. Dismissing an error must not abandon its pending checkpoint.
+    func retryFailedRecoveryCopies() async {
+        let coordinators = tabs.compactMap { $0.session.recovery }
+        for coordinator in coordinators { await coordinator.flush() }
+    }
     /// A recovered draft gets its own document identity and is saved explicitly by the user.
     func installRecovery(_ snapshot: ProjectSnapshot, title: String) -> ProjectTab {
         let source = snapshot.manifest
-        let manifest = ProjectManifest(resolution: source.resolution, documentID: UUID(), width: source.width,
+        let manifest = ProjectManifest(version: source.version, resolution: source.resolution, documentID: UUID(), width: source.width,
             height: source.height, activeLayerID: source.activeLayerID, layers: source.layers, guides: source.guides)
-        let recovered = ProjectSnapshot(manifest: manifest, images: snapshot.images, masks: snapshot.masks)
+        let recovered = ProjectSnapshot(manifest: manifest, images: snapshot.images, masks: snapshot.masks, filterStacks: snapshot.filterStacks)
         let tab = ProjectTab(name: L10n.format("Recovered %@", title), recoveryStore: recoveryStore)
         tab.controller.workspace = self; tab.controller.window = window
         tab.session.installProject(recovered, from: nil)
@@ -162,6 +168,7 @@ final class ProjectWorkspace {
         session.pathEditing = nil
         session.cancelFilter()
         session.cancelLiquify()
+        session.cancelFilterStack()
         session.cancelFillLayer()
         session.cancelEdgeRefinement()
         session.cancelBatchExport()
@@ -279,6 +286,7 @@ final class ProjectWorkspace {
                 if copied[i].adjustment != nil { copied[i].maskSourceID = nil; continue }
                 let layerID = copied[i].id
                 copied[i].asset = try await Task.detached(priority: .userInitiated) { try LiveMaskBaker.bake(snapshot, target: layerID) }.value
+                copied[i].filterStack = nil
                 copied[i].maskSourceID = nil
             }
             let mapping = Dictionary(uniqueKeysWithValues: copied.map { ($0.id, UUID()) })
@@ -295,8 +303,9 @@ final class ProjectWorkspace {
                 mask?.placement?.origin.x += center.x-anchor.x; mask?.placement?.origin.y += center.y-anchor.y
                 return ImageLayer(id: mapping[layer.id]!, asset: layer.asset, name: layer.name, isVisible: layer.isVisible,
                     transform: transform, parentID: layer.parentID.flatMap { mapping[$0] }, isGroup: layer.isGroup,
-                    opacity: layer.opacity, blendMode: layer.blendMode, mask: mask, maskSourceID: layer.maskSourceID.flatMap { mapping[$0] }, adjustment: layer.adjustment, shape: layer.shape, effects: layer.effects, text: layer.text)
+                    opacity: layer.opacity, blendMode: layer.blendMode, mask: mask, maskSourceID: layer.maskSourceID.flatMap { mapping[$0] }, adjustment: layer.adjustment, shape: layer.shape, effects: layer.effects, text: layer.text, fill: layer.fill, filterStack: layer.filterStack)
             }
+            guard EditorSession.fitsFilterResources((target.session.document?.layers ?? []) + layers) else { throw ProjectError.tooLarge }
             target.session.isProjectBusy = false
             target.session.beginEdit("Copy Layers from Project")
             if target.session.document == nil { target.session.createDocument(width: Int(size.width), height: Int(size.height)) }

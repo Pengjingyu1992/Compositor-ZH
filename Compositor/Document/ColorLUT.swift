@@ -2,10 +2,11 @@ import AppKit
 import UniformTypeIdentifiers
 
 nonisolated enum LUTSpace: String, Codable, CaseIterable, Sendable { case sRGB = "Encoded sRGB", linear = "Linear sRGB" }
-nonisolated struct ColorLUTSettings: Equatable, Sendable {
+nonisolated struct ColorLUTSettings: Codable, Equatable, Sendable {
     var table: ColorLUT?
     var strength: Double = 100
     var space: LUTSpace = .sRGB
+    var isValid: Bool { strength.isFinite && (0...100).contains(strength) && (table?.isValid ?? true) }
     func apply(_ image: CGImage) throws -> CGImage {
         guard let table else { return image }
         let amount = ImageAdjustmentPixels.clamp(strength, 0...100, 100) / 100
@@ -23,13 +24,21 @@ nonisolated struct ColorLUTSettings: Equatable, Sendable {
 }
 
 /// Adobe .cube ordering: red changes fastest, then green, then blue.
-nonisolated struct ColorLUT: Equatable, Sendable {
+nonisolated struct ColorLUT: Codable, Equatable, Sendable {
     let name: String
     let size: Int
     let is1D: Bool
     let minimum: [Double]
     let maximum: [Double]
     let values: [[Double]]
+    var isValid: Bool {
+        (2...(is1D ? 65536 : 65)).contains(size) && name.utf8.count <= 16_384
+            && minimum.count == 3 && maximum.count == 3
+            && (minimum + maximum).allSatisfy { $0.isFinite && abs($0) <= 16 }
+            && zip(minimum, maximum).allSatisfy { $0 < $1 }
+            && values.count == (is1D ? size : size * size * size)
+            && values.allSatisfy { $0.count == 3 && $0.allSatisfy { $0.isFinite && abs($0) <= 16 } }
+    }
     static func parse(_ data: Data, name: String) throws -> Self {
         guard data.count <= 16 * 1024 * 1024, let text = String(data: data, encoding: .utf8) else { throw ProjectError.invalid }
         var size: Int?, one = false, minimum = [0.0, 0, 0], maximum = [1.0, 1, 1], values: [[Double]] = []

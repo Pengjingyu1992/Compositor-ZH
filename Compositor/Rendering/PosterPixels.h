@@ -3,4 +3,6 @@
 #include <stdint.h>
 void poster_halftone(uint8_t *pixels, const uint8_t *source, int width, int height, int stride,
                      double cell, const double *angles, int shape, double strength);
+int poster_halftone_screen(uint8_t *pixels, const uint8_t *source, int width, int height, int stride,
+                            double maximum_radius, const double *angles, int shape, double strength, int channels);
 #endif

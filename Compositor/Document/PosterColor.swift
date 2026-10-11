@@ -1,31 +1,58 @@
 import AppKit
 
 nonisolated enum HalftoneDot: String, Codable, CaseIterable, Sendable { case circle = "Round", square = "Square", line = "Line" }
+nonisolated enum HalftoneScreen: String, Codable, CaseIterable, Sendable {
+    case automatic = "Automatic Channels", rgb = "RGB Channels", grayscale = "Grayscale Screen", legacyCMYK = "Legacy CMYK Print"
+}
 nonisolated struct ColorHalftoneSettings: Codable, Equatable, Sendable {
-    var size: Double = 10
-    var cyan: Double = 15
-    var magenta: Double = 75
-    var yellow: Double = 0
+    var size: Double = 8
+    var cyan: Double = 108
+    var magenta: Double = 162
+    var yellow: Double = 90
     var black: Double = 45
     var shape: HalftoneDot = .circle
     var strength: Double = 100
+    /// Missing in older recipes: retain their original CMYK rendering and cell-size meaning.
+    var screen: HalftoneScreen? = .automatic
+    var usesLegacyScreen: Bool { screen == nil || screen == .legacyCMYK }
     var isValid: Bool {
         size.isFinite && (2...128).contains(size) && strength.isFinite && (0...100).contains(strength)
         && [cyan, magenta, yellow, black].allSatisfy { $0.isFinite && (-180...180).contains($0) }
     }
     func apply(_ image: CGImage, scale: CGFloat) throws -> CGImage {
+        guard isValid, scale.isFinite, scale > 0 else { throw ProjectError.invalid }
         guard ImageAdjustmentPixels.clamp(strength, 0...100, 100) > 0 else { return image }
         let source = try BrushRaster.context(width: image.width, height: image.height, mask: false)
         BrushRaster.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height), mask: false, context: source)
         guard let input = source.data else { throw ExportError.render }
-        let angles = [cyan, magenta, yellow, black].map { ImageAdjustmentPixels.clamp($0, -180...180, 0) }
-        return try ImageAdjustmentPixels.run(image) { pixels, width, height, stride in
-            angles.withUnsafeBufferPointer {
-                poster_halftone(pixels, input.assumingMemoryBound(to: UInt8.self), Int32(width), Int32(height), Int32(stride),
-                    max(1, ImageAdjustmentPixels.clamp(size, 2...128, 10) * scale), $0.baseAddress,
-                    shape == .circle ? 0 : shape == .square ? 1 : 2, ImageAdjustmentPixels.clamp(strength, 0...100, 100) / 100)
+        let bytes = input.assumingMemoryBound(to: UInt8.self)
+        var gray = screen == .grayscale
+        if screen == .automatic {
+            gray = true
+            for y in 0..<image.height {
+                for x in 0..<image.width {
+                    let p = bytes + y * source.bytesPerRow + x * 4
+                    if p[3] != 0 && (abs(Int(p[0]) - Int(p[1])) > 1 || abs(Int(p[1]) - Int(p[2])) > 1) { gray = false; break }
+                }
+                if !gray { break }
             }
         }
+        let angles = [cyan, magenta, yellow, black].map { ImageAdjustmentPixels.clamp($0, -180...180, 0) }
+        var succeeded = true
+        let result = try ImageAdjustmentPixels.run(image) { pixels, width, height, stride in
+            angles.withUnsafeBufferPointer {
+                if usesLegacyScreen {
+                    poster_halftone(pixels, bytes, Int32(width), Int32(height), Int32(stride),
+                        max(1, size * scale), $0.baseAddress, shape == .circle ? 0 : shape == .square ? 1 : 2, strength / 100)
+                } else {
+                    succeeded = poster_halftone_screen(pixels, bytes, Int32(width), Int32(height), Int32(stride),
+                        max(0.5, size * scale), $0.baseAddress, shape == .circle ? 0 : shape == .square ? 1 : 2,
+                        strength / 100, gray ? 1 : 3) != 0
+                }
+            }
+        }
+        guard succeeded else { throw ExportError.render }
+        return result
     }
 }
 

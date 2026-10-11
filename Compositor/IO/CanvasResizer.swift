@@ -13,7 +13,7 @@ actor CanvasResizer {
             throw ProjectError.invalid
         }
         guard options.width != old.width || options.height != old.height || offset != .zero else { return snapshot }
-        var manifest = ProjectManifest(resolution: old.resolution, documentID: old.documentID,
+        var manifest = ProjectManifest(version: old.version, resolution: old.resolution, documentID: old.documentID,
             width: options.width, height: options.height, activeLayerID: old.activeLayerID, layers: [],
             guides: old.guides?.map { $0.offset(x: offset.x, y: offset.y) })
         for layer in old.layers {
@@ -28,13 +28,14 @@ actor CanvasResizer {
                     moved.origin.x += offset.x
                     moved.origin.y += offset.y
                     return moved
-                }, maskLinked: layer.maskLinked, shape: layer.shape, effects: layer.effects, text: layer.text, fill: layer.fill, vectorMask: layer.vectorMask))
+                }, maskLinked: layer.maskLinked, shape: layer.shape, effects: layer.effects, text: layer.text, fill: layer.fill, vectorMask: layer.vectorMask, editableFilters: layer.editableFilters))
         }
         var images = snapshot.images
         // A colored extension is separate bottom-layer content. The old canvas
         // intersection remains transparent, including holes in the existing artwork.
         if let color = options.fill, options.width > old.width || options.height > old.height {
             let used = images.values.reduce(0) { $0 + $1.image.width * $1.image.height }
+                + snapshot.filterStacks.values.reduce(0) { $0 + $1.source.image.width * $1.source.image.height }
             guard options.width * options.height <= DocumentLimits.documentPixelBudget - used,
                   manifest.layers.count < 10_000 else { throw ProjectError.tooLarge }
             guard [color.red, color.green, color.blue].allSatisfy({ $0.isFinite && (0...1).contains($0) }) else {
@@ -68,6 +69,6 @@ actor CanvasResizer {
                 transform: LayerTransform(origin: .zero, size: CGSize(width: options.width, height: options.height)),
                 imageFile: "\(id.uuidString).png"), at: 0)
         }
-        return ProjectSnapshot(manifest: manifest, images: images, masks: snapshot.masks)
+        return ProjectSnapshot(manifest: manifest, images: images, masks: snapshot.masks, filterStacks: snapshot.filterStacks)
     }
 }

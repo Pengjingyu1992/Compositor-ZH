@@ -316,7 +316,7 @@ struct RoundTwoTests {
         defer { try? FileManager.default.removeItem(at: root) }
         let url = root.appendingPathComponent("RoundTwo.comp")
         let snapshot = try #require(s.projectSnapshot())
-        #expect(snapshot.manifest.version == ProjectManifest.current)
+        #expect(snapshot.manifest.version == 13)
         try await ProjectStore.shared.save(snapshot, to: url)
         let reopened = EditorSession()
         reopened.installProject(try await ProjectStore.shared.load(from: url), from: url)

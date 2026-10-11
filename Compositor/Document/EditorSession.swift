@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 struct ImageLayer: Identifiable, Equatable {
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.id == rhs.id && lhs.name == rhs.name && lhs.isVisible == rhs.isVisible && lhs.transform == rhs.transform
-            && lhs.asset?.image === rhs.asset?.image && lhs.parentID == rhs.parentID && lhs.isGroup == rhs.isGroup && lhs.opacity == rhs.opacity && lhs.blendMode == rhs.blendMode && lhs.mask == rhs.mask && lhs.maskSourceID == rhs.maskSourceID && lhs.adjustment == rhs.adjustment && lhs.shape == rhs.shape && lhs.text == rhs.text && lhs.effects == rhs.effects && lhs.fill == rhs.fill
+            && lhs.asset?.image === rhs.asset?.image && lhs.parentID == rhs.parentID && lhs.isGroup == rhs.isGroup && lhs.opacity == rhs.opacity && lhs.blendMode == rhs.blendMode && lhs.mask == rhs.mask && lhs.maskSourceID == rhs.maskSourceID && lhs.adjustment == rhs.adjustment && lhs.shape == rhs.shape && lhs.text == rhs.text && lhs.effects == rhs.effects && lhs.fill == rhs.fill && lhs.filterStack == rhs.filterStack
     }
     let id: UUID
     var asset: ImportedImage?
@@ -25,6 +25,7 @@ struct ImageLayer: Identifiable, Equatable {
     var effects: LayerEffects?
     var text: LayerText?
     var fill: LayerFill?
+    var filterStack: LayerFilterStack?
     nonisolated var size: CGSize { transform.size }
 
     init(asset: ImportedImage, origin: CGPoint) {
@@ -41,7 +42,7 @@ struct ImageLayer: Identifiable, Equatable {
         self.name = name
     }
 
-    init(id: UUID, asset: ImportedImage?, name: String, isVisible: Bool, transform: LayerTransform, parentID: UUID? = nil, isGroup: Bool = false, opacity: Double = 1, blendMode: LayerBlendMode = .normal, mask: LayerMask? = nil, maskSourceID: UUID? = nil, adjustment: LayerAdjustment? = nil, shape: LayerShape? = nil, effects: LayerEffects? = nil, text: LayerText? = nil, fill: LayerFill? = nil) {
+    init(id: UUID, asset: ImportedImage?, name: String, isVisible: Bool, transform: LayerTransform, parentID: UUID? = nil, isGroup: Bool = false, opacity: Double = 1, blendMode: LayerBlendMode = .normal, mask: LayerMask? = nil, maskSourceID: UUID? = nil, adjustment: LayerAdjustment? = nil, shape: LayerShape? = nil, effects: LayerEffects? = nil, text: LayerText? = nil, fill: LayerFill? = nil, filterStack: LayerFilterStack? = nil) {
         self.id = id
         self.asset = asset
         self.name = name
@@ -58,6 +59,7 @@ struct ImageLayer: Identifiable, Equatable {
         self.effects = effects
         self.text = text
         self.fill = fill
+        self.filterStack = filterStack
     }
 }
 
@@ -183,7 +185,7 @@ final class EditorSession {
     private var fileRequestWaiters: [CheckedContinuation<Void, Never>] = []
     var canStartProjectOperation: Bool {
         _ = showsBusy // Re-evaluate in the UI when a long operation starts or ends.
-        return !showsPrintSetup && pathEditing == nil && liquify == nil && selectionAmountOperation == nil && colorRange == nil && textDraft == nil && !isProjectBusy && !isImporting && brushStroke == nil && warpStroke == nil && levels == nil && filterEdit == nil && hueSaturation == nil && adjustmentEditingID == nil && effectsEditing == nil && !showsNewDocument && !showsImporter && renamingLayerID == nil && importError == nil && !showsConversionSheet
+        return !showsPrintSetup && filterStackEdit == nil && pathEditing == nil && liquify == nil && selectionAmountOperation == nil && colorRange == nil && textDraft == nil && !isProjectBusy && !isImporting && brushStroke == nil && warpStroke == nil && levels == nil && filterEdit == nil && hueSaturation == nil && adjustmentEditingID == nil && effectsEditing == nil && !showsNewDocument && !showsImporter && renamingLayerID == nil && importError == nil && !showsConversionSheet
     }
     func waitForFileRequest() async {
         while !canStartProjectOperation {
@@ -313,6 +315,8 @@ final class EditorSession {
     var batchExportTotal = 0
     @ObservationIgnored var batchExportTask: Task<Void, Never>?
     var showsAutomation = false
+    var filterStackEdit: FilterStackWorkspace? { didSet { resumeFileRequests() } }
+    var queuedLiquify: (nodeID: UUID, documentID: UUID, revision: UUID, layerID: UUID)?
     var edgeRefinement: EdgeRefinement?
     var fillLayerApplying = false
     var fillLayerDraft: FillLayerDraft?
@@ -376,7 +380,7 @@ final class EditorSession {
     var escapeHasNothingToCancel: Bool {
         textDraft == nil && levels == nil && brushStroke == nil && warpStroke == nil && lassoDraft == nil
             && shapeDraft == nil && gradientEdit == nil && cropRect == nil && guideDrag == nil && transformEdit == nil
-            && pixelMove == nil && pathEditing == nil && liquify == nil
+            && pixelMove == nil && pathEditing == nil && liquify == nil && filterStackEdit == nil
     }
     /// Canvas Only can be switched: there's a canvas, and no text layer being typed or dialog open (Hue/Saturation,
     /// Curves, the color picker…) for an F to belong to.
@@ -708,7 +712,7 @@ final class EditorSession {
     var isModified: Bool { history.isModified }
     var canUseHistory: Bool {
         _ = showsBusy
-        return !showsPrintSetup && pathEditing == nil && liquify == nil && selectionAmountOperation == nil && colorRange == nil && textDraft == nil && !isProjectBusy && !isImporting && brushStroke == nil && warpStroke == nil && levels == nil && filterEdit == nil && hueSaturation == nil && adjustmentEditingID == nil && effectsEditing == nil && !showsNewDocument && !showsImporter && renamingLayerID == nil && importError == nil && transformEdit == nil && !showsConversionSheet
+        return !showsPrintSetup && filterStackEdit == nil && pathEditing == nil && liquify == nil && selectionAmountOperation == nil && colorRange == nil && textDraft == nil && !isProjectBusy && !isImporting && brushStroke == nil && warpStroke == nil && levels == nil && filterEdit == nil && hueSaturation == nil && adjustmentEditingID == nil && effectsEditing == nil && !showsNewDocument && !showsImporter && renamingLayerID == nil && importError == nil && transformEdit == nil && !showsConversionSheet
     }
     var canUndo: Bool { canUseHistory && (history.canUndo || gradientEdit != nil) }
     var canRedo: Bool { canUseHistory && history.canRedo }
@@ -751,6 +755,15 @@ final class EditorSession {
     }
 
     func endEdit() {
+        if history.editDepth == 1, let before = history.pendingSnapshot?.document {
+            for index in document?.layers.indices ?? 0..<0 {
+                guard let current = document?.layers[index], let stack = current.filterStack,
+                      let old = before.layers.first(where: { $0.id == current.id }), old.filterStack == stack,
+                      current.asset?.image !== old.asset?.image else { continue }
+                // A direct pixel edit bakes the visible result. Keeping the old recipe would discard that edit later.
+                document?.layers[index].filterStack = nil
+            }
+        }
         if history.editDepth == 1, let before = history.pendingSnapshot,
            violatesLayerLocks(before: before.document, after: document) {
             document = before.document
@@ -918,8 +931,8 @@ final class EditorSession {
             do {
                 guard url.isFileURL else { throw ImageImportError.unsupported }
                 let usedPixels = document?.layers.reduce(0) { total, layer in
-                    guard let image = layer.asset?.image else { return total }
-                    return total + image.width * image.height
+                    total + (layer.asset.map { $0.image.width * $0.image.height } ?? 0)
+                        + (layer.filterStack.map { $0.source.image.width * $0.source.image.height } ?? 0)
                 } ?? 0
                 if RawImporter.matches(url) {
                     guard let size = RawImporter.pixelSize(url) else { throw ImageImportError.unreadable }

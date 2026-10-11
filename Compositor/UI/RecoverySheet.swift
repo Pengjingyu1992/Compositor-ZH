@@ -14,6 +14,8 @@ struct RecoverySheet: View {
             Text("Recovery Copies").font(.title2.bold())
             Text("Copies are stored locally and do not replace your saved projects. Recovering opens an unsaved draft in a new tab.")
                 .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            Text(L10n.format("%lld recovery copies · Limit: %lld", entries.count, store.recordLimit))
+                .font(.caption).foregroundStyle(.secondary)
             List(entries) { entry in
                 VStack(alignment: .leading, spacing: 6) {
                     Text(entry.title).font(.headline)
@@ -87,5 +89,6 @@ extension ProjectController {
             }))
             window.beginSheet(sheet)
         }
+        await workspace.retryFailedRecoveryCopies()
     }
 }

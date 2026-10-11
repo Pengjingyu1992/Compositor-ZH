@@ -33,7 +33,7 @@ CLI、MCP 和应用内“文件 → 编辑命令”现已共用同一候选文�
 
 MCP 使用 stdio JSON-RPC，协商版本 2025-11-25 / 2025-06-18 / 2024-11-05；不声称实现 2026 新协议。服务打开自己的内存文档，不遥控正在运行的图形窗口。支持请求取消、最多八个显式项目句柄及 `close_project`。本机文件访问由启动它的用户权限决定，没有网络监听器，也没有任意 shell 命令入口。
 
-命令 `kind`：`addFill` / `editFill` / `addImage` / `addText` / `editText` / `transform` / `opacity` / `blendMode` / `visibility` / `remove` / `invert` / `fillPixels` / `filter` / `effects` / `reorder` / `setMask` / `refineEdges`。已有图层用 `layerID`；未指定时只操作候选文档的活动层，不继承 GUI 多选集合。`addFill` 后它成为活动层，适合在下一条设置外观。命令模型见 `PosterCommand`；填充与文字模型见项目格式文档。初版不提供动作录制，也不导入外部脚本。
+命令 `kind`：`addFill` / `editFill` / `addImage` / `addText` / `editText` / `transform` / `opacity` / `blendMode` / `visibility` / `remove` / `invert` / `fillPixels` / `filter` / `effects` / `reorder` / `setMask` / `refineEdges` / `addPath` / `editPath` / `textOutlines` / `vectorMask`。已有图层用 `layerID`；未指定时只操作候选文档的活动层，不继承 GUI 多选集合。`addFill` 后它成为活动层，适合在下一条设置外观。命令模型见 `PosterCommand`；填充与文字模型见项目格式文档；路径命令见 [macos-paths-batch.md](macos-paths-batch.md)。当前不提供动作录制，也不导入外部脚本。
 
 `filter` 用 `FilterKind` 的英文固定名称。可选 `amount` 目前用于 Color Halftone（网点大小）、Mosaic（块大小）、Gaussian Blur（半径）、Grain（强度）；`halftone`、`selectiveColor`、`channelMixer`、`lut` 可传本批调色的完整参数。`Color Lookup` 必须提供 LUT，缺失时拒绝而非静默成功。自动抠图通过 `refineEdges.edge.selectSubject` 提供；Camera Raw 不通过此命令开放。`fillPixels` 复用选区/锁定填充路径，当前只接受不透明 RGB 色。
 

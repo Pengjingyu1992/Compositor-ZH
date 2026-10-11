@@ -11,8 +11,8 @@ extension UTType {
 }
 
 nonisolated struct ProjectManifest: Codable, Sendable {
-    /// The format version new saves write.
-    static let current = 13
+    /// Highest supported format. Session snapshots without editable filters still write version 13.
+    static let current = 15
     /// Every version `load` accepts. The package-header check, the manifest check and the error
     /// message all read this, so they cannot drift apart when `current` is bumped.
     static let supported = 1...ProjectManifest.current
@@ -55,12 +55,14 @@ nonisolated struct ProjectLayerRecord: Codable, Sendable {
     var text: LayerTextStyle? = nil
     var fill: LayerFillStyle? = nil
     var vectorMask: VectorPathStyle? = nil
+    var editableFilters: LayerFilterStackRecord? = nil
 }
 
 nonisolated struct ProjectSnapshot: @unchecked Sendable {
     let manifest: ProjectManifest
     let images: [UUID: ImportedImage]
     var masks: [UUID: ImportedImage] = [:]
+    var filterStacks: [UUID: LayerFilterStack] = [:]
 }
 
 nonisolated enum ProjectError: LocalizedError {
@@ -85,7 +87,8 @@ actor ProjectStore {
 
     func save(_ snapshot: ProjectSnapshot, to url: URL, quickLook: QuickLookImages? = nil,
               recoveryMetadata: Data? = nil, maximumPackageBytes: Int? = nil, mustNotExist: Bool = false) throws {
-        try validate(snapshot.manifest)
+        try validateSnapshot(snapshot)
+        let edits = try encodedFilterStacks(snapshot)
         var images: [String: FileWrapper] = [:]
         var pixels = 0, maskPixels = 0
         for layer in snapshot.manifest.layers {
@@ -116,6 +119,7 @@ actor ProjectStore {
             "manifest.json": FileWrapper(regularFileWithContents: metadata),
             "images": FileWrapper(directoryWithFileWrappers: images)
         ]
+        if !edits.isEmpty { contents["edits"] = FileWrapper(directoryWithFileWrappers: edits) }
         // Quick Look's Space-bar preview reads this by name; loading ignores it.
         if let quickLook {
             contents["QuickLook"] = FileWrapper(directoryWithFileWrappers: [
@@ -125,6 +129,7 @@ actor ProjectStore {
         if let recoveryMetadata { contents["recovery.json"] = FileWrapper(regularFileWithContents: recoveryMetadata) }
         if let maximumPackageBytes {
             let bytes = images.values.reduce(0) { $0 + ($1.regularFileContents?.count ?? 0) }
+                + edits.values.reduce(0) { $0 + ($1.regularFileContents?.count ?? 0) }
                 + metadata.count + (recoveryMetadata?.count ?? 0)
             guard bytes <= maximumPackageBytes else { throw RecoveryError.capacity }
         }
@@ -202,12 +207,16 @@ actor ProjectStore {
             if isMask { masks[layer.id] = asset } else { images[layer.id] = asset }
           }
         }
-        return ProjectSnapshot(manifest: manifest, images: images, masks: masks)
+        var snapshot = ProjectSnapshot(manifest: manifest, images: images, masks: masks)
+        snapshot.filterStacks = try readFilterStacks(manifest, from: url, usedPixels: pixels)
+        try validateSnapshot(snapshot)
+        return snapshot
     }
 
     func validateSnapshot(_ snapshot: ProjectSnapshot) throws {
         try validate(snapshot.manifest)
         var used = 0, masks = 0
+        var filterBytes = 0
         for layer in snapshot.manifest.layers {
             if layer.imageFile != nil {
                 guard let image = snapshot.images[layer.id]?.image else { throw ProjectError.missingImage }
@@ -216,6 +225,17 @@ actor ProjectStore {
             if layer.maskFile != nil {
                 guard let image = snapshot.masks[layer.id]?.image, LayerMask.isValid(image) else { throw ProjectError.invalid }
                 try checkSize(width: image.width, height: image.height, used: &masks)
+            }
+            if let record = layer.editableFilters {
+                guard let stack = snapshot.filterStacks[layer.id], stack.isValid,
+                      snapshot.manifest.version >= stack.minimumProjectVersion,
+                      record.sourceFile == LayerFilterStackRecord(layerID: layer.id, stack: stack).sourceFile,
+                      record.nodeFiles == LayerFilterStackRecord(layerID: layer.id, stack: stack).nodeFiles,
+                      let cache = snapshot.images[layer.id]?.image,
+                      cache.width == stack.source.image.width, cache.height == stack.source.image.height else { throw ProjectError.invalid }
+                try checkSize(width: stack.source.image.width, height: stack.source.image.height, used: &used)
+                filterBytes += stack.retainedBytes
+                guard filterBytes <= 256 * 1024 * 1024 else { throw ProjectError.tooLarge }
             }
         }
     }
@@ -230,6 +250,10 @@ actor ProjectStore {
         guard (1...DocumentLimits.maxSide).contains(manifest.width), (1...DocumentLimits.maxSide).contains(manifest.height),
               manifest.layers.count <= 10_000 else { throw ProjectError.tooLarge }
         for layer in manifest.layers {
+            if let stack = layer.editableFilters {
+                guard manifest.version >= 14, stack.isValid(layerID: layer.id), layer.imageFile != nil,
+                      layer.isGroup != true, layer.adjustment == nil, layer.text == nil, layer.shape == nil, layer.fill == nil else { throw ProjectError.invalid }
+            }
             if let vector = layer.shape?.vector {
                 guard manifest.version >= 13, vector.isValid, layer.shape?.kind == .path,
                       layer.imageFile != nil, layer.text == nil, layer.fill == nil,
@@ -289,6 +313,67 @@ actor ProjectStore {
         }
         if let id = manifest.activeLayerID, !ids.contains(id) { throw ProjectError.invalid }
         try validateGuides(manifest)
+    }
+
+    private func encodedFilterStacks(_ snapshot: ProjectSnapshot) throws -> [String: FileWrapper] {
+        var files: [String: FileWrapper] = [:]
+        var total = 0
+        let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
+        for layer in snapshot.manifest.layers {
+            guard let record = layer.editableFilters, let stack = snapshot.filterStacks[layer.id] else { continue }
+            let source = NSMutableData()
+            guard let destination = CGImageDestinationCreateWithData(source, UTType.png.identifier as CFString, 1, nil) else { throw ProjectError.encode }
+            CGImageDestinationAddImage(destination, stack.source.image, nil)
+            guard CGImageDestinationFinalize(destination), source.length <= 512 * 1024 * 1024 else { throw ProjectError.encode }
+            files[record.sourceFile] = FileWrapper(regularFileWithContents: source as Data)
+            for (node, filename) in zip(stack.nodes, record.nodeFiles) {
+                let bytes = try encoder.encode(node)
+                total += bytes.count
+                guard bytes.count <= 192 * 1024 * 1024, total <= 384 * 1024 * 1024 else { throw ProjectError.tooLarge }
+                files[filename] = FileWrapper(regularFileWithContents: bytes)
+            }
+        }
+        return files
+    }
+
+    private func readFilterStacks(_ manifest: ProjectManifest, from url: URL, usedPixels: Int) throws -> [UUID: LayerFilterStack] {
+        var stacks: [UUID: LayerFilterStack] = [:], used = usedPixels, total = 0, retained = 0
+        for layer in manifest.layers {
+            guard let record = layer.editableFilters else { continue }
+            let sourceURL = url.appendingPathComponent("edits").appendingPathComponent(record.sourceFile)
+            try checkFile(sourceURL, inside: url, maximumBytes: 512 * 1024 * 1024)
+            let asset: ImportedImage = try autoreleasepool {
+                let data = try Data(contentsOf: sourceURL)
+                guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+                      CGImageSourceGetType(source) as String? == UTType.png.identifier, CGImageSourceGetCount(source) == 1,
+                      let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+                      let width = properties[kCGImagePropertyPixelWidth] as? Int,
+                      let height = properties[kCGImagePropertyPixelHeight] as? Int,
+                      (properties[kCGImagePropertyDepth] as? Int ?? 8) <= 8 else { throw ProjectError.missingImage }
+                try checkSize(width: width, height: height, used: &used)
+                guard let image = CGImageSourceCreateImageAtIndex(source, 0, [kCGImageSourceShouldCacheImmediately: true] as CFDictionary) else { throw ProjectError.missingImage }
+                return ImportedImage(image: image, thumbnail: try PixelAdjust.thumbnail(of: image), name: layer.name)
+            }
+            var nodes: [EditableFilterNode] = []
+            for filename in record.nodeFiles {
+                let file = url.appendingPathComponent("edits").appendingPathComponent(filename)
+                try checkFile(file, inside: url, maximumBytes: 192 * 1024 * 1024)
+                let bytes = try Data(contentsOf: file)
+                total += bytes.count
+                guard total <= 384 * 1024 * 1024 else { throw ProjectError.tooLarge }
+                let node: EditableFilterNode
+                do { node = try JSONDecoder().decode(EditableFilterNode.self, from: bytes) }
+                catch { throw ProjectError.invalid }
+                guard node.isValid, filename == "\(layer.id.uuidString).\(node.id.uuidString).filter.json" else { throw ProjectError.invalid }
+                retained += node.retainedBytes
+                guard retained <= 256 * 1024 * 1024 else { throw ProjectError.tooLarge }
+                nodes.append(node)
+            }
+            let stack = LayerFilterStack(source: asset, nodes: nodes)
+            guard stack.isValid else { throw ProjectError.invalid }
+            stacks[layer.id] = stack
+        }
+        return stacks
     }
 
     private func validateGuides(_ manifest: ProjectManifest) throws {

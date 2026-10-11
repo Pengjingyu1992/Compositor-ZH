@@ -6,19 +6,24 @@ extension EditorSession {
         guard let document else { return nil }
         var images: [UUID: ImportedImage] = [:]
         var masks: [UUID: ImportedImage] = [:]
+        var stacks: [UUID: LayerFilterStack] = [:]
         let layers = document.layers.map { layer in
             if let asset = layer.asset { images[layer.id] = asset }
             if let mask = layer.mask { masks[layer.id] = mask.asset }
+            if let stack = layer.filterStack { stacks[layer.id] = stack }
             return ProjectLayerRecord(id: layer.id, name: layer.name, isVisible: layer.isVisible,
-                transform: layer.transform, imageFile: layer.asset == nil ? nil : "\(layer.id.uuidString).png", parentID: layer.parentID, isGroup: layer.isGroup, opacity: layer.opacity, blendMode: layer.blendMode, maskFile: layer.mask == nil ? nil : "\(layer.id.uuidString).mask.png", maskEnabled: layer.mask?.isEnabled, maskSourceID: layer.maskSourceID, adjustment: layer.adjustment, maskPlacement: layer.mask?.placement, maskLinked: layer.mask?.isLinked, shape: layer.liveShape?.style, effects: layer.effects, text: layer.liveText?.style, fill: layer.liveFill?.style, vectorMask: layer.mask?.vector)
+                transform: layer.transform, imageFile: layer.asset == nil ? nil : "\(layer.id.uuidString).png", parentID: layer.parentID, isGroup: layer.isGroup, opacity: layer.opacity, blendMode: layer.blendMode, maskFile: layer.mask == nil ? nil : "\(layer.id.uuidString).mask.png", maskEnabled: layer.mask?.isEnabled, maskSourceID: layer.maskSourceID, adjustment: layer.adjustment, maskPlacement: layer.mask?.placement, maskLinked: layer.mask?.isLinked, shape: layer.liveShape?.style, effects: layer.effects, text: layer.liveText?.style, fill: layer.liveFill?.style, vectorMask: layer.mask?.vector, editableFilters: layer.filterStack.map { LayerFilterStackRecord(layerID: layer.id, stack: $0) })
         }
-        return ProjectSnapshot(manifest: ProjectManifest(resolution: document.resolution, documentID: document.id, width: document.width,
+        let version = stacks.values.map(\.minimumProjectVersion).max() ?? 13
+        return ProjectSnapshot(manifest: ProjectManifest(version: version, resolution: document.resolution, documentID: document.id, width: document.width,
             height: document.height, activeLayerID: activeLayerID, layers: layers,
-            guides: document.guides.isEmpty ? nil : document.guides), images: images, masks: masks)
+            guides: document.guides.isEmpty ? nil : document.guides), images: images, masks: masks, filterStacks: stacks)
     }
 
     /// Called only after the entire package has successfully validated and loaded.
     func installProject(_ snapshot: ProjectSnapshot, from url: URL?) {
+        cancelFilterStack()
+        cancelLiquify()
         collapsedGroupIDs = []
         isMaskSelected = false
         cancelCrop()
@@ -56,6 +61,8 @@ extension EditorSession {
     }
 
     func clearProject() {
+        cancelFilterStack()
+        cancelLiquify()
         pathEditing = nil
         collapsedGroupIDs = []
         isMaskSelected = false
@@ -89,7 +96,7 @@ extension ProjectSnapshot {
                        shape: LayerShape.loaded($0.shape, image: images[$0.id]?.image),
                        effects: $0.effects,
                        text: LayerText.loaded($0.text, image: images[$0.id]?.image),
-                       fill: LayerFill.loaded($0.fill, image: images[$0.id]?.image))
+                       fill: LayerFill.loaded($0.fill, image: images[$0.id]?.image), filterStack: filterStacks[$0.id])
         }
     }
 }

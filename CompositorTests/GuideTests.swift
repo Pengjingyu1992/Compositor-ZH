@@ -56,7 +56,7 @@ struct GuideTests {
         session.addGuide(vertical)
         session.addGuide(horizontal)
         let snapshot = try #require(session.projectSnapshot())
-        #expect(snapshot.manifest.version == ProjectManifest.current)
+        #expect(snapshot.manifest.version == 13, "Ordinary session snapshots remain compatible with format 13")
         #expect(snapshot.manifest.guides == [vertical, horizontal])
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("Guides-\(UUID()).comp")
         defer { try? FileManager.default.removeItem(at: url) }

@@ -295,7 +295,7 @@ struct LiquifyRegressionChecks {
         try await ProjectStore.shared.save(snapshot, to: directory.appendingPathComponent("result.comp"))
         let loaded = try await ProjectStore.shared.load(from: directory.appendingPathComponent("result.comp"))
         check("save and reopen preserves liquid pixels", try await ImageExporter.shared.pngData(loaded) == png)
-        check("project format matches writer", loaded.manifest.version == ProjectManifest.current)
+        check("saved liquid uses v14 and preserves the snapshot format", snapshot.manifest.version == 14 && loaded.manifest.version == snapshot.manifest.version)
         session.undo()
         session.toggleSelectedLayerLock(.position)
         session.beginLiquify()

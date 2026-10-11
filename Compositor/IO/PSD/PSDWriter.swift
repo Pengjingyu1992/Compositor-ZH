@@ -83,6 +83,9 @@ nonisolated enum PSDWriter {
     }
     static func conversionNotes(_ snapshot: ProjectSnapshot) -> [String] {
         var notes: [String] = []
+        if snapshot.manifest.layers.contains(where: { $0.editableFilters != nil }) {
+            notes.append("Editable filter stacks and saved Liquify are exported as rendered pixels. Their source and settings remain editable in the Compositor project.")
+        }
         if snapshot.manifest.layers.contains(where: { $0.text != nil && !PSDEditableWriter.canWriteText($0, snapshot: snapshot) }) {
             notes.append("Vertical, warped, path-bound, or nonuniformly scaled text is exported as pixels. Ordinary horizontal text retains editable text and font/color runs.")
         }
@@ -119,7 +122,7 @@ nonisolated enum PSDWriter {
         c.translateBy(x: -bounds.minX, y: -bounds.minY)
         return c
     }
-    private static func rgbaPlanes(_ c: CGContext) throws -> [Data] {
+    private static func rgbaPlanes(_ c: CGContext, compositeWhiteMatte: Bool = false) throws -> [Data] {
         guard let pixels = c.data?.assumingMemoryBound(to: UInt8.self) else { throw ExportError.render }
         var planes = (0..<4).map { _ in Data(count: c.width * c.height) }
         for channel in 0..<4 {
@@ -129,8 +132,13 @@ nonisolated enum PSDWriter {
                     for x in 0..<c.width {
                         let from = pixels + y * c.bytesPerRow + x * 4
                         let a = Int(from[3])
-                        into[y * c.width + x] = channel == 3 ? from[3]
-                            : a == 0 ? 0 : UInt8(min(255, (Int(from[channel]) * 255 + a / 2) / a))
+                        if channel == 3 { into[y * c.width + x] = from[3] }
+                        else if compositeWhiteMatte && a > 0 && a < 255 {
+                            // PSD's merged RGB preview carries a white matte; individual layer channels do not.
+                            into[y * c.width + x] = UInt8(min(255, Int(from[channel]) + 255 - a))
+                        } else {
+                            into[y * c.width + x] = a == 0 ? 0 : UInt8(min(255, (Int(from[channel]) * 255 + a / 2) / a))
+                        }
                     }
                 }
             }
@@ -260,7 +268,7 @@ nonisolated enum PSDWriter {
         let c = try BrushRaster.context(width: composite.width, height: composite.height, mask: false)
         BrushRaster.draw(composite, in: CGRect(x: 0, y: 0, width: composite.width, height: composite.height), mask: false, context: c)
         output.u16(0)
-        for plane in try rgbaPlanes(c) { output.append(plane) }
+        for plane in try rgbaPlanes(c, compositeWhiteMatte: true) { output.append(plane) }
         guard output.data.count <= maximumBytes else { throw PSDExportError.tooLarge }
         try Task.checkCancellation()
         return output.data

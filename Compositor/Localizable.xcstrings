@@ -3690,6 +3690,12 @@
     "Create Copy": {
       "extractionState": "manual",
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create Copy"
+          }
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
@@ -19080,6 +19086,609 @@
           "stringUnit": {
             "state": "translated",
             "value": "sRGB"
+          }
+        }
+      }
+    },
+    "Add Filter": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加滤镜"
+          }
+        }
+      }
+    },
+    "Add a filter to keep its settings editable.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加滤镜后，可随时重新编辑参数。"
+          }
+        }
+      }
+    },
+    "Apply keeps the displacement and frozen areas editable. Reopen with Filter → Edit Saved Liquify.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用后保留可编辑的变形和冻结区域。可通过“滤镜 → 重新编辑液化”继续修改。"
+          }
+        }
+      }
+    },
+    "Apply or cancel these changes before opening Liquify.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请先应用或取消当前修改，再打开液化。"
+          }
+        }
+      }
+    },
+    "Clear Filter Mask": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除滤镜蒙版"
+          }
+        }
+      }
+    },
+    "Edit Filter Stack": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "编辑滤镜栈"
+          }
+        }
+      }
+    },
+    "Edit Saved Liquify…": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新编辑液化…"
+          }
+        }
+      }
+    },
+    "Editable Filters": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可编辑滤镜"
+          }
+        }
+      }
+    },
+    "Editable Filters…": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可编辑滤镜…"
+          }
+        }
+      }
+    },
+    "Editable filter stacks and saved Liquify are exported as rendered pixels. Their source and settings remain editable in the Compositor project.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可编辑滤镜栈和已保存的液化以渲染后的像素导出；原图和参数仍可在叠绘项目中编辑。"
+          }
+        }
+      }
+    },
+    "Editing Saved Liquify": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在编辑已保存的液化"
+          }
+        }
+      }
+    },
+    "Filter Opacity": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "滤镜不透明度"
+          }
+        }
+      }
+    },
+    "Filters run from top to bottom inside the layer bounds, before layer masks and styles. Pixel painting bakes the result; Undo restores editability.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "滤镜在图层范围内从上到下执行，随后应用图层蒙版和样式。像素绘制会固定当前效果；撤销可恢复滤镜编辑。"
+          }
+        }
+      }
+    },
+    "Move Filter Earlier": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "提前执行此滤镜"
+          }
+        }
+      }
+    },
+    "Move Filter Later": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "延后执行此滤镜"
+          }
+        }
+      }
+    },
+    "Preview is up to date.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "预览已更新。"
+          }
+        }
+      }
+    },
+    "Rasterize Filter Stack": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "栅格化滤镜栈"
+          }
+        }
+      }
+    },
+    "Refresh Preview": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刷新预览"
+          }
+        }
+      }
+    },
+    "Refresh the preview to see these changes.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请刷新预览以查看当前修改。"
+          }
+        }
+      }
+    },
+    "Remove Filter": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除滤镜"
+          }
+        }
+      }
+    },
+    "Saved displacement and frozen areas can be edited in Liquify.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可在液化工作区继续修改已保存的变形和冻结区域。"
+          }
+        }
+      }
+    },
+    "This layer exceeds the editable-filter working-memory budget. Use a smaller raster copy.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此图层超出可编辑滤镜的工作内存预算。请使用较小的像素副本。"
+          }
+        }
+      }
+    },
+    "This step uses the selection captured when it was added.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此步骤使用添加时保存的选区范围。"
+          }
+        }
+      }
+    },
+    "Text, shapes and fill layers are applied as a new raster copy.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文字、形状和填充图层将生成新的像素副本。"
+          }
+        }
+      }
+    },
+    "Automatic Channels": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatic Channels"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自动通道"
+          }
+        }
+      }
+    },
+    "RGB Channels": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RGB Channels"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RGB 通道"
+          }
+        }
+      }
+    },
+    "Grayscale Screen": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grayscale Screen"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "灰度网点"
+          }
+        }
+      }
+    },
+    "Legacy CMYK Print": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Legacy CMYK Print"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "传统 CMYK 印刷"
+          }
+        }
+      }
+    },
+    "Screen Channels": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screen Channels"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "网点通道"
+          }
+        }
+      }
+    },
+    "Max Radius": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Max Radius"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最大半径"
+          }
+        }
+      }
+    },
+    "Channel 1 Angle": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Channel 1 Angle"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通道 1 网角"
+          }
+        }
+      }
+    },
+    "Channel 2 Angle": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Channel 2 Angle"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通道 2 网角"
+          }
+        }
+      }
+    },
+    "Channel 3 Angle": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Channel 3 Angle"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通道 3 网角"
+          }
+        }
+      }
+    },
+    "Grayscale Angle": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grayscale Angle"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "灰度网角"
+          }
+        }
+      }
+    },
+    "Automatic uses one screen for gray pixels and three for color. Dark dots can overlap.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatic uses one screen for gray pixels and three for color. Dark dots can overlap."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自动模式对灰度图使用单组网点，对彩色图使用三组网点。深色区域的圆点会自然重叠。"
+          }
+        }
+      }
+    },
+    "Convert to Grayscale Copy…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Convert to Grayscale Copy…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "转换为灰度副本…"
+          }
+        }
+      }
+    },
+    "Convert to Grayscale Copy": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Convert to Grayscale Copy"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "转换为灰度副本"
+          }
+        }
+      }
+    },
+    "Create a new document from the visible layers as one grayscale layer. The source project stays open with its layers intact. Further editing uses the RGB tools.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create a new document from the visible layers as one grayscale layer. The source project stays open with its layers intact. Further editing uses the RGB tools."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将当前可见图层合成为单层灰度图，并在新标签中打开。原项目及其图层保留。后续编辑仍使用 RGB 工具。"
+          }
+        }
+      }
+    },
+    "%@ — Grayscale": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ — Grayscale"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ — 灰度"
+          }
+        }
+      }
+    },
+    "Couldn’t convert to grayscale": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t convert to grayscale"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法转换为灰度"
+          }
+        }
+      }
+    },
+    "Click or drag to sample the foreground color": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Click or drag to sample the foreground color"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "单击或拖动以吸取前景色"
+          }
+        }
+      }
+    },
+    "Recovery has reached the limit of %lld documents. Review recovery copies to free a slot; existing copies have been kept.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recovery has reached the limit of %lld documents. Review recovery copies to free a slot; existing copies have been kept."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复副本已达到 %lld 份文档的数量上限。请管理恢复副本以腾出名额；已有副本已保留。"
+          }
+        }
+      }
+    },
+    "%lld recovery copies · Limit: %lld": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld recovery copies · Limit: %lld"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已有 %lld 份恢复副本 · 数量上限：%lld"
+          }
+        }
+      }
+    },
+    "Retry Recovery": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retry Recovery"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重试备份"
           }
         }
       }

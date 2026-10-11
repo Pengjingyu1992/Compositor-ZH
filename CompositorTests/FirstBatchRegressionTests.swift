@@ -251,7 +251,7 @@ struct FirstBatchRegressionChecks {
         let recoveryURL = recoveryDirectory.appendingPathComponent(record.documentID.uuidString + ".comp")
         let recovered = try await recovery.load(recoveryURL)
         check("recovery keeps dirty state", recoverySession.isModified)
-        check("recovery preserves layers and format", recovered.manifest.layers.count == recoverySnapshot.manifest.layers.count && recovered.manifest.version == ProjectManifest.current)
+        check("recovery preserves layers and format", recovered.manifest.layers.count == recoverySnapshot.manifest.layers.count && recovered.manifest.version == recoverySnapshot.manifest.version)
         check("session locks do not enter project fields", !String(data: try JSONEncoder().encode(recoverySnapshot.manifest), encoding: .utf8)!.contains("lock"))
         for mode in LayerBlendMode.allCases {
             let test = EditorSession()
@@ -260,7 +260,12 @@ struct FirstBatchRegressionChecks {
             let snapshot = test.projectSnapshot()!
             let rendered = try await ImageExporter.shared.pngData(snapshot)
             let url = root.appendingPathComponent("mode.comp")
-            try await ProjectStore.shared.save(snapshot, to: url)
+            do { try await ProjectStore.shared.save(snapshot, to: url) }
+            catch {
+                let ns = error as NSError
+                print("Blend save \(mode.rawValue): \(ns.domain) \(ns.code) \(ns.userInfo)")
+                throw error
+            }
             let reopened = try await ProjectStore.shared.load(from: url)
             let again = try await ImageExporter.shared.pngData(reopened)
             check("blend round trip \(mode.rawValue)", rendered == again && reopened.manifest.layers.last?.blendMode == mode)

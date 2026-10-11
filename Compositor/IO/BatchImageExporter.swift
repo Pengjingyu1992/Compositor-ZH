@@ -43,7 +43,7 @@ actor BatchImageExporter {
             let layer = manifest.layers[index]
             manifest.layers[index].isVisible = layer.id == id || ancestors.contains(layer.id) || (included.contains(layer.id) && layer.isVisible)
         }
-        return ProjectSnapshot(manifest: manifest, images: snapshot.images, masks: snapshot.masks)
+        return ProjectSnapshot(manifest: manifest, images: snapshot.images, masks: snapshot.masks, filterStacks: snapshot.filterStacks)
     }
     func export(_ snapshot: ProjectSnapshot, selected: Set<UUID>, name: String,
                 options: BatchExportOptions, folder: URL,

@@ -5,6 +5,7 @@ import Combine
 
 struct ProjectWorkspaceView: View {
     let applicationDelegate: CompositorApplicationDelegate
+    @State private var retryingRecovery = false
     private var workspace: ProjectWorkspace { applicationDelegate.workspace }
     var body: some View {
         ContentView(session: workspace.current.session, applicationDelegate: applicationDelegate)
@@ -20,6 +21,14 @@ struct ProjectWorkspaceView: View {
                     HStack {
                         Text(error).font(.callout)
                         Spacer()
+                        Button("Review Recovery Copies") { Task { await applicationDelegate.projects.reviewRecoveryCopies() } }
+                        Button("Retry Recovery") {
+                            retryingRecovery = true
+                            Task {
+                                await workspace.retryFailedRecoveryCopies()
+                                retryingRecovery = false
+                            }
+                        }.disabled(retryingRecovery)
                         Button("Close") { workspace.current.session.recoveryError = nil }
                     }.padding(8)
                 }

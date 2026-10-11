@@ -293,6 +293,8 @@ struct CompositorApp: App {
                         .disabled(!session.canModifySelection)
                 }
                 CommandMenu("Image") {
+                    Button("Convert to Grayscale Copy…") { Task { await applicationDelegate.projects.grayscaleCopy() } }
+                        .disabled(session.document == nil || !applicationDelegate.projects.canStart)
                     Button("Curves…") { session.beginFilter(.curves) }
                         .configuredKeyboardShortcut("m").disabled(!session.canAdjustColors || session.hueSaturation != nil)
                     Button("Levels…") { session.beginLevels() }
@@ -328,6 +330,10 @@ struct CompositorApp: App {
                     }
                 }
                 CommandMenu("Filter") {
+                    Button("Editable Filters…") { session.beginFilterStack() }.disabled(!session.canEditFilterStack)
+                    Button("Edit Saved Liquify…") { Task { await session.beginSavedLiquify() } }.disabled(!session.canEditSavedLiquify)
+                    Button("Rasterize Filter Stack") { session.rasterizeFilterStack() }.disabled(!session.canEditFilterStack || session.activeLayer?.filterStack == nil)
+                    Divider()
                     Button("Advanced Liquify…") { session.beginLiquify() }
                         .configuredKeyboardShortcut("x", modifiers: [.command, .shift]).disabled(!session.canLiquify)
                     Button(session.lastFilter.map { L10n.format("Last Filter: %@", L10n.text($0.rawValue)) } ?? L10n.text("Last Filter")) {

@@ -12,6 +12,7 @@ struct LiquifySheet: View {
         VStack(spacing: 0) {
             HStack {
                 Text("Advanced Liquify").font(.title2.bold())
+                if edit.savedNodeID != nil { Text("Editing Saved Liquify").font(.caption).foregroundStyle(.secondary) }
                 Text(edit.layer.name).foregroundStyle(.secondary).lineLimit(1)
                 Spacer()
                 Button {
@@ -63,7 +64,7 @@ struct LiquifySheet: View {
                         Button("Thaw All") { edit.reset(onlyFreeze: true) }
                         Button("Restore All Warps") { edit.reset() }
                         if edit.mustUseCopy {
-                            Text("Text and shapes are applied as a new raster copy.").font(.caption).foregroundStyle(
+                            Text("Text, shapes and fill layers are applied as a new raster copy.").font(.caption).foregroundStyle(
                                 .secondary)
                         }
                         if edit.historyWasTrimmed {
@@ -71,6 +72,8 @@ struct LiquifySheet: View {
                                 .foregroundStyle(.orange)
                         }
                         Text("Edit in the layer’s original orientation. Its document rotation and scale are preserved.")
+                            .font(.caption).foregroundStyle(.secondary)
+                        Text("Apply keeps the displacement and frozen areas editable. Reopen with Filter → Edit Saved Liquify.")
                             .font(.caption).foregroundStyle(.secondary)
                         Text(L10n.format("%@ / %@ size · %@ / %@ hardness", ShortcutSettings.shared.keyLabel("["), ShortcutSettings.shared.keyLabel("]"), ShortcutSettings.shared.keyLabel("[", 8), ShortcutSettings.shared.keyLabel("]", 8)))
                             .font(.caption).foregroundStyle(.secondary)

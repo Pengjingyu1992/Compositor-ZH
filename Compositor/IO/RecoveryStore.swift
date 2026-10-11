@@ -2,11 +2,13 @@ import Foundation
 
 nonisolated enum RecoveryError: LocalizedError {
     case version, invalid, capacity
+    case recordLimit(Int)
     var errorDescription: String? {
         switch self {
         case .version: L10n.text("This recovery copy uses an unsupported version. The files have been kept.")
         case .invalid: L10n.text("This recovery copy is damaged. The files have been kept.")
         case .capacity: L10n.text("Recovery storage is full. Review recovery copies to free space; existing copies have been kept.")
+        case .recordLimit(let limit): L10n.format("Recovery has reached the limit of %lld documents. Review recovery copies to free a slot; existing copies have been kept.", limit)
         }
     }
 }
@@ -43,6 +45,8 @@ actor RecoveryStore {
     let byteLimit: Int
     let recordLimit: Int
     private var writing: Task<Void, Error>?
+    private let resources = RecoveryResources()
+    private(set) var lastWriteStatistics = RecoveryWriteStatistics()
     init(directory: URL = RecoveryStore.defaultDirectory, byteLimit: Int = 4 * 1024 * 1024 * 1024, recordLimit: Int = 32) {
         self.directory = directory; self.byteLimit = byteLimit; self.recordLimit = recordLimit
     }
@@ -55,7 +59,7 @@ actor RecoveryStore {
             }
     }
     private func validateLocation(_ url: URL) throws {
-        guard url.deletingLastPathComponent().standardizedFileURL == directory.standardizedFileURL,
+        guard url.deletingLastPathComponent().standardizedFileURL.path == directory.standardizedFileURL.path,
               url.pathExtension == "comp", UUID(uuidString: url.deletingPathExtension().lastPathComponent) != nil,
               (try? url.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) != true else { throw RecoveryError.invalid }
     }
@@ -105,23 +109,24 @@ actor RecoveryStore {
         let url = directory.appendingPathComponent(record.documentID.uuidString + ".comp", isDirectory: true)
         try validateLocation(url)
         let existing = try packages()
-        guard existing.contains(where: { $0.lastPathComponent == url.lastPathComponent }) || existing.count < recordLimit else { throw RecoveryError.capacity }
+        guard existing.contains(where: { $0.lastPathComponent == url.lastPathComponent }) || existing.count < recordLimit else { throw RecoveryError.recordLimit(recordLimit) }
         if existing.contains(where: { $0.lastPathComponent == url.lastPathComponent }) {
             // A future or damaged copy must not be overwritten by a later automatic save.
             do {
                 let previous = try metadata(url)
                 guard previous.version == RecoveryRecord.current,
                       ProjectManifest.supported.contains(previous.projectVersion) else { throw RecoveryError.version }
-                _ = try await ProjectStore.shared.load(from: url)
+                try await resources.validateExisting(url)
+                try await resources.removeInterruptedStages(beside: url)
             } catch {
                 if let known = error as? RecoveryError { throw known }
                 throw RecoveryError.invalid
             }
-        }
+        } else { await resources.forget(url) }
         let available = byteLimit - existing.filter { $0.lastPathComponent != url.lastPathComponent }.reduce(0) { $0 + bytes(in: $1) }
         guard available > 0 else { throw RecoveryError.capacity }
         let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
-        try await ProjectStore.shared.save(snapshot, to: url, recoveryMetadata: encoder.encode(record), maximumPackageBytes: available)
+        lastWriteStatistics = try await resources.write(snapshot, to: url, metadata: encoder.encode(record), maximumBytes: available)
     }
     func load(_ url: URL) async throws -> ProjectSnapshot {
         let record = try metadata(url)
@@ -138,8 +143,9 @@ actor RecoveryStore {
         record.closedNormally = true
         try JSONEncoder().encode(record).write(to: url.appendingPathComponent("recovery.json"), options: .atomic)
     }
-    func remove(_ url: URL) throws {
+    func remove(_ url: URL) async throws {
         try validateLocation(url)
         try FileManager.default.removeItem(at: url)
+        await resources.forget(url)
     }
 }

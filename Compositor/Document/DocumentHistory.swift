@@ -143,7 +143,7 @@ final class DocumentHistory {
     func retainedBytes(current: CanvasDocument?) -> Int {
         var seen = Set<ObjectIdentifier>()
         for layer in current?.layers ?? [] {
-            for asset in [layer.asset, layer.mask?.asset].compactMap({ $0 }) {
+            for asset in [layer.asset, layer.mask?.asset, layer.filterStack?.source].compactMap({ $0 }) {
                 seen.insert(ObjectIdentifier(asset.image))
                 seen.insert(ObjectIdentifier(asset.thumbnail))
             }
@@ -152,7 +152,9 @@ final class DocumentHistory {
         for entry in past + future {
             for snapshot in [entry.before, entry.after] {
                 for layer in snapshot.document?.layers ?? [] {
-                    for asset in [layer.asset, layer.mask?.asset].compactMap({ $0 }) {
+                    // Saved fields and LUTs count conservatively for each retained document snapshot.
+                    bytes += layer.filterStack?.retainedBytes ?? 0
+                    for asset in [layer.asset, layer.mask?.asset, layer.filterStack?.source].compactMap({ $0 }) {
                         for image in [asset.image, asset.thumbnail] where seen.insert(ObjectIdentifier(image)).inserted {
                             bytes += image.bytesPerRow * image.height
                         }

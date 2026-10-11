@@ -134,7 +134,7 @@ extension EditorSession {
             if locks.contains(.position), old.transform != new.transform { return true }
             if locks.contains(.position), let a = old.mask, let b = new.mask,
                a.placement != b.placement || a.isLinked != b.isLinked { return true }
-            if locks.contains(.content), old.asset?.image !== new.asset?.image || old.text != new.text || old.shape != new.shape || old.fill != new.fill
+            if locks.contains(.content), old.asset?.image !== new.asset?.image || old.text != new.text || old.shape != new.shape || old.fill != new.fill || old.filterStack != new.filterStack
                 || old.mask?.asset.image !== new.mask?.asset.image || old.adjustment != new.adjustment || old.maskSourceID != new.maskSourceID { return true }
             if locks.contains(.appearance), old.opacity != new.opacity || old.blendMode != new.blendMode
                 || old.effects != new.effects || old.isVisible != new.isVisible { return true }

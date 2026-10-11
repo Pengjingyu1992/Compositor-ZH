@@ -1,8 +1,8 @@
-# Compositor project format, versions 1–13
+# Compositor project format, versions 1–15
 
 A `.comp` file is a macOS document package containing `manifest.json` and an `images/` directory of `<layer UUID>.png` assets.
 
-The manifest identifies `com.compositor.project`, version `12` for new saves (versions `1`–`11` remain readable), and the sRGB working space. It stores document UUID, pixel dimensions, active layer UUID, and layers in bottom-to-top order. Each layer stores its UUID, name, visibility, transform (origin, size, clockwise rotation, flips, sampling), and optional image filename. Blank layers have no image asset.
+The manifest identifies `com.compositor.project` and the sRGB working space. The current reader supports versions `1`–`15`. Application snapshots with channel-screen halftone recipes write `15`; other editable filter stacks write `14`; ordinary application snapshots continue writing `13` for compatibility. It stores document UUID, pixel dimensions, active layer UUID, and layers in bottom-to-top order. Each layer stores its UUID, name, visibility, transform (origin, size, clockwise rotation, flips, sampling), and optional image filename. Blank layers have no image asset.
 
 Embedded PNGs preserve source pixels and transparency; transforms remain separate. Projects survive moving or deleting imported source photos. Saving uses a coordinated atomic package replacement. Unsupported versions, invalid metadata, missing assets, unsafe paths, and oversized data are rejected before replacing the live document.
 
@@ -38,7 +38,7 @@ Version 11 lets those letters use different faces too: optional `fontRuns` in th
 
 ### Version 12: editable fills, overlays and typography
 
-Version 12 adds `fill` to pixel layer records, `gradientOverlay`, `patternOverlay` and `bevel` to `effects`, and optional `vertical` plus alignment `Justified` to text. These properties require version 12; declaring them in an older manifest is invalid. Versions 1–11 remain readable. Version 13 is now the writer version; keep a copy when exchanging with an older build.
+Version 12 adds `fill` to pixel layer records, `gradientOverlay`, `patternOverlay` and `bevel` to `effects`, and optional `vertical` plus alignment `Justified` to text. These properties require version 12; declaring them in an older manifest is invalid. Versions 1–11 remain readable. Keep a copy when exchanging with an older build.
 
 `fill` is a `LayerFillStyle`: `kind` (`Solid Color`, `Linear`, `Radial`, `Pattern`); 2–32 ordered `stops` with unique UUID `id`, `position` (0–1) and RGBA `color` (0–1); `angle` (−180…180 degrees); `scale` (0.01…10); `reversed`; `pattern` (`Checkerboard`, `Stripes`, `Dots`); `cellSize` (4…512 local pixels). Solid uses the first stop; patterns use the first two; gradients use all stops. Coordinates are local to the layer. An image is required, and fill cannot coexist with text, shape, group or adjustment metadata. The PNG is the authoritative display fallback. Transform, duplicate, masks, canvas size and crop preserve editability; painting, pixel filters and image resampling rasterize it and omit `fill` on the next save.
 
@@ -48,7 +48,7 @@ Windows' bridge accepts v12 and preserves these records and resources. Its curre
 
 ### Version 13: paths, vector masks and text layouts
 
-Version 13 adds `shape.kind = "Path"` with required `shape.vector`, optional layer `vectorMask` (requires `maskFile`), and optional text `pathLayout` / `warp`. All require v13. Earlier projects remain readable; saving writes v13. The Windows bridge accepts and preserves v13, retaining its version on save. Visible unsupported properties require the saved composite preview and block visual editing; new Windows documents remain v11.
+Version 13 adds `shape.kind = "Path"` with required `shape.vector`, optional layer `vectorMask` (requires `maskFile`), and optional text `pathLayout` / `warp`. All require v13. Earlier projects remain readable; ordinary application snapshots write v13. The Windows bridge accepts and preserves v13, retaining its version on save. Visible unsupported properties require the saved composite preview and block visual editing; new Windows documents remain v11.
 
 `VectorPathStyle` stores `contours`, `evenOdd`, `fillEnabled`, `strokeEnabled`, RGB `strokeColor`, `strokeWidth` (0–5000) and `roundCaps`. Each contour stores `anchors`, `closed`, and optional RGB `color` for glyph color runs. Each anchor stores `point`, optional `incoming`/`outgoing` and `smooth`. CGPoint uses Foundation's two-element JSON array. Coordinates are fractions of the layer rectangle, origin at its top-left, y down; handles may be outside it (finite magnitude ≤1000). Consecutive anchors form a cubic using the previous outgoing and next incoming handle, defaulting absent handles to the anchor. Closed contours include the final cubic back to the first. Up to 10,000 nonempty contours and 40,000 anchors total are allowed. Fill uses winding or even-odd; strokes use round joins and butt/round caps. A path layer has an image, and cannot also be text, fill, group or adjustment.
 
@@ -57,6 +57,22 @@ Version 13 adds `shape.kind = "Path"` with required `shape.vector`, optional lay
 `text.pathLayout` has `path`, `offset` (document-local pixels, finite ±30000), `reversed`. It accepts exactly one contour with 2–3000 anchors, horizontal single-line text, and no simultaneous warp. Layout stores a copy of the path, not a layer reference. Too-short paths refuse rendering rather than truncating text. `text.warp` has `bend` (−1…1), a parabolic arc displacement in fractions of text-box height. Text content, font and color runs remain editable; exporting these layouts to PSD retains pixels with a conversion note. Pixel fallback is authoritative until an explicit edit triggers layout.
 
 Transforms, duplication, Canvas Size/Crop and undo preserve path metadata. Destructive pixel edits and Image Size resampling drop it. An image and a mask each keep their existing surface/document budgets; geometry count limits apply in addition to raster limits.
+
+### Version 14: editable filters and saved Liquify
+
+An optional `editableFilters` layer record references `sourceFile` (`<layer UUID>.source.png`) and ordered `nodeFiles` (`<layer UUID>.<node UUID>.filter.json`) under `edits/`. It requires v14, an image cache and a plain pixel layer; it cannot coexist with text, shape, fill, adjustment or group metadata. The cache and source have identical dimensions. Layer transforms, layer masks and styles apply outside the fixed source-pixel grid. Windows currently rejects v14; unknown-field passthrough does not bypass this version check.
+
+Each node is version 1 and has a unique UUID `id`, `kind` (`Gaussian Blur`, `Motion Blur`, `Add Noise`, `Color Halftone`, `Color Lookup`, `Advanced Liquify`), `enabled`, normal-mix `opacity` (0–1), stable UInt32 `seed`, complete filter settings and optional grayscale `coverage` (base64, exactly width × height bytes). Radius is 0.1–250; motion angle −90…90, distance 1–2000; noise amount 0.1–400 with Gaussian/monochromatic flags. `halftone` uses `ColorHalftoneSettings`; `lut` stores strength, input space and the complete validated `ColorLUT` table, without a source path. Enabled LUT steps require a table. There is no independent blend-mode field. Node order is execution order; blur output is clipped to layer bounds.
+
+Liquify nodes carry `liquify`: source width/height, grid step and grid dimensions, base64 `field` (little-endian Float32 dx/dy/frozen triples, 12 bytes/node), optional source-grid coverage, `keepsAlpha`, and brush diameter/hardness/strength/rate, edge/pressure/direction flags and tool. Step equals ceil(max(width,height)/1536), at least 1; grid dimensions follow `LiquifyWorkspace`. Displacements must be finite and ≤120000 in magnitude; freeze coverage is 0–1. This is a saved deformation field, not an archived stroke history. Re-editing evaluates preceding enabled nodes to supply the source; subsequent nodes are recomputed on apply.
+
+Every layer permits at most 32 nodes. Source images share the document image-pixel budget with display caches. Decoded field/selection/LUT data has a 256 MiB document budget; encoded node files are limited to 192 MiB each and 384 MiB total. Existing PNG/side limits apply to sources. Missing, unsafe, invalid or unknown-version records refuse the entire load. Save/recovery include these assets in their atomic package and capacity accounting. The cache provides display/export pixels; explicit recipe edits regenerate it from the stored source. Pixel edits and image resampling bake the cache and remove the recipe; transform, crop, canvas size, mask/style changes and resolution-only changes preserve it. Application snapshots without recipes write v13.
+
+### Version 15: channel-screen halftone recipes
+
+A Color Halftone node may carry `halftone.screen`: `Automatic Channels`, `RGB Channels`, `Grayscale Screen` or `Legacy CMYK Print`. A missing/null value retains the v14 CMYK algorithm, angles and cell-size interpretation. Explicit legacy mode has the same rendering. New channel screens interpret `size` as a maximum circle radius in source pixels (2–128), use complete overlapping dots with 4×4 sample coverage, and average 16 source samples in each rotated cell. RGB screens use three independently screened inverse RGB channels; a grayscale screen uses luminance and the `black` angle. Automatic mode selects one screen only when all nontransparent source pixels have equal RGB components within one byte; otherwise it uses RGB.
+
+Recipes using automatic/RGB/grayscale screening require v15, including disabled steps, so an older reader cannot silently recompute them with the v14 algorithm. Other editable recipes remain v14; ordinary/rasterized projects remain v13. Node schema version remains 1; the document version gates this optional field's new behavior. The grayscale-copy command creates a separate flattened 8-bit grayscale asset in an ordinary v13 project; it does not add a grayscale document mode or a new working-space flag.
 
 ### Additive layer fields
 

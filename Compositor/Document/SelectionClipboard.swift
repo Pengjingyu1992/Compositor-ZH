@@ -186,6 +186,13 @@ extension EditorSession {
     /// original, as Photoshop's do. The copies end up selected.
     func duplicateLayers(_ ids: [UUID], editName: String = "Duplicate Layer") {
         guard canEditLayers, !ids.isEmpty else { return }
+        if let document, document.layers.contains(where: { $0.filterStack != nil }) {
+            let included = ids.reduce(into: Set(ids)) { $0.formUnion(descendantIDs(of: $1)) }
+            let copies = document.layers.filter { included.contains($0.id) }
+            guard Self.fitsFilterResources(document.layers + copies) else {
+                brushError = ProjectError.tooLarge.localizedDescription; return
+            }
+        }
         let active = activeLayerID
         beginEdit(editName)
         var copiesOf: [UUID: UUID] = [:]
@@ -223,7 +230,7 @@ extension EditorSession {
                 transform: original.transform, parentID: original.parentID.map { mapping[$0] ?? $0 },
                 isGroup: original.isGroup, opacity: original.opacity, blendMode: original.blendMode,
                 mask: original.mask, maskSourceID: original.maskSourceID.map { mapping[$0] ?? $0 },
-                adjustment: original.adjustment, shape: original.shape, effects: original.effects, text: original.text, fill: original.liveFill)
+                adjustment: original.adjustment, shape: original.shape, effects: original.effects, text: original.text, fill: original.liveFill, filterStack: original.filterStack)
         }
         document?.layers.insert(contentsOf: copies, at: index + 1)
         for original in originals where collapsedGroupIDs.contains(original.id) {

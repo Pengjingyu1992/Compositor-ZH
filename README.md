@@ -28,9 +28,9 @@ Both editions support painting and image editing with layers, with different UI,
 | 语言切换 / Language switching | 保存语言选择后重启生效。 / The saved language choice takes effect after restarting. | 简体中文 / English 即时切换，选择保留到下次启动。 / Chinese/English switching is immediate and persists. |
 | 安装包 / Packages | `.app` 压缩包。 / A ZIP containing the app. | EXE 安装向导或便携 ZIP。 / An EXE installer or portable ZIP. |
 
-**项目兼容性：**两版使用 `.comp` 项目格式，macOS 版读取 v1–13、保存为 v13；Windows 版创建的新项目仍为 v11，并保留读取到的 v12/v13 元数据。v12/v13 新增的填充图层、叠加样式、竖排文字、路径和矢量蒙版在 Windows 上需使用保存的预览并限制编辑。交换项目时需复制整个 `.comp` 文件夹。两套渲染器及系统字体可能产生不同的文字排版、滤镜或效果结果；Windows 的画质基准定标仍待完成。Windows 遇到不能准确编辑的可见属性时，会明确使用项目保存的预览并限制编辑，同时保留未知字段和未改动资源。功能同名也可能采用不同算法，具体使用范围见各版说明。安装包均可直接使用，无需编译或安装开发工具。
+**项目兼容性：**两版使用 `.comp` 项目格式，macOS 版读取 v1–15，普通项目保存为 v13，含可编辑滤镜或持久液化的项目保存为 v14，使用新通道半调配方时保存为 v15；Windows 版创建的新项目仍为 v11，并保留读取到的 v12/v13 元数据。v12/v13 新增的填充图层、叠加样式、竖排文字、路径和矢量蒙版在 Windows 上需使用保存的预览并限制编辑。Windows 当前不支持 v14/v15；此类项目需导出 PSD/图像，或在副本上栅格化后保存为 v13。交换项目时需复制整个 `.comp` 文件夹。两套渲染器及系统字体可能产生不同的文字排版、滤镜或效果结果；Windows 的画质基准定标仍待完成。Windows 遇到不能准确编辑的可见属性时，会明确使用项目保存的预览并限制编辑，同时保留未知字段和未改动资源。功能同名也可能采用不同算法，具体使用范围见各版说明。安装包均可直接使用，无需编译或安装开发工具。
 
-**Project compatibility:** The macOS edition reads `.comp` v1–13 and saves v13. Windows-native new documents remain v11; its bridge preserves v12/v13 metadata, with saved-preview restrictions for new fill, overlay, vertical-text, path and vector-mask properties. Transfer the entire project folder. Different renderers and system fonts can produce different text layouts, filter results and effects; Windows image-quality calibration remains pending. When Windows cannot accurately edit a visible property, it explicitly uses the saved preview and restricts editing while preserving unknown fields and unchanged resources. Similarly named features can use different algorithms; consult each edition's documentation. Downloaded packages run directly without compilation or developer tools.
+**Project compatibility:** The macOS edition reads `.comp` v1–15; ordinary application saves remain v13, while editable filters and saved Liquify require v14, or v15 for channel-screen halftone recipes. Windows currently rejects v14/v15; exchange a rendered PSD/image or explicitly bake a copy before saving v13. Windows-native new documents remain v11; its bridge preserves v12/v13 metadata, with saved-preview restrictions for new fill, overlay, vertical-text, path and vector-mask properties. Transfer the entire project folder. Different renderers and system fonts can produce different text layouts, filter results and effects; Windows image-quality calibration remains pending. When Windows cannot accurately edit a visible property, it explicitly uses the saved preview and restricts editing while preserving unknown fields and unchanged resources. Similarly named features can use different algorithms; consult each edition's documentation. Downloaded packages run directly without compilation or developer tools.
 
 ## 下载与使用 / Download and use
 
@@ -61,7 +61,7 @@ Both editions support painting and image editing with layers, with different UI,
 | 对齐与分布 / Align and distribute | 6 种对齐、4 种分布；参照选中对象、画布或关键图层。 / Six alignment and four distribution operations, relative to the selection, canvas, or a key layer. |
 | 油漆桶 / Paint bucket | `K`；颜色容差、连续区域及采样全部图层，结合当前选区。 / `K`; tolerance, contiguous filling, sample-all-layers, and current-selection coverage. |
 | 马赛克 / Mosaic | 1–512 像素色块，支持预览、透明度、选区及撤销。 / 1–512 px blocks, preview, transparency, selections, and undo. |
-| 本地恢复副本 / Local recovery | 编辑后延迟写入恢复副本；恢复为独立未保存草稿。 / Delayed recovery snapshots after edits, restored as separate unsaved drafts. |
+| 本地恢复副本 / Local recovery | 空闲 2 秒或连续编辑最长等待 10 秒安排检查点，复用未变图像；恢复为独立未保存草稿。 / Checkpoints after 2 seconds idle or at most 10 seconds of continuous edits, reusing unchanged images; restored as separate unsaved drafts. |
 | PSD 导出 / PSD export | 普通横排文字、单色路径、支持的填充/调整/效果可编辑；同时保留像素、组、混合及蒙版。 / Editable supported text, paths, fills, adjustments and effects, alongside pixels, groups, blending and masks. |
 | 钢笔与路径 / Pen and paths | 锚点/控制柄、开闭路径、填充/描边、文字转轮廓、沿路径文字、弧形文字和矢量蒙版。 / Anchors/handles, open/closed paths, fill/stroke, text outlines, text on a path, arc text and vector masks. |
 | 1.4.8 上游更新 / Upstream updates | RAW 与半透明效果修复、命令搜索、重复滤镜、画布全屏、导航器、增强扫描线、打印单位、WebP 导入和自定义裁剪。 / RAW and translucent-effect fixes, command search, last-filter repeat, canvas-only view, Navigator, enhanced Scanlines, print units, WebP import and custom crop ratios. |
@@ -69,6 +69,8 @@ Both editions support painting and image editing with layers, with different UI,
 | 稳定性 / Reliability | 编辑许可与异步提交检查；修复尺寸调整时效果丢失等问题。 / Edit permissions, guarded asynchronous commits, and fixes including effects preservation during resizing. |
 | 新图标 / New icon | 薄荷绿、珊瑚粉、柔黄与淡紫的叠层图标。 / A layered icon in mint, coral, soft yellow, and lavender. |
 | 海报与照片编辑 / Poster and photo editing | 可编辑填充和图层叠加样式、手动修边、彩色半调、中文竖排、可选颜色、通道混合器、`.cube` LUT、多尺寸导出，以及 CLI/MCP 批量命令。详见 [使用说明](docs/macos-poster-batch.md)。 / Editable fills and layer overlays, manual edge refinement, color halftone, vertical Chinese text, selective color, channel mixer, `.cube` LUTs, multi-size export, and CLI/MCP batch commands. See the [feature guide](docs/macos-poster-batch.md). |
+| 基础滤镜栈 / Basic filter stack | 普通像素层保留原图，支持模糊、杂色、彩色半调及 LUT 的排序、启停、参数与选区范围；保存后可再编辑。 / Keep a pixel layer's source and re-edit blur, noise, color halftone and LUT steps, including order, enablement, settings and captured selections. |
+| 持久液化 / Saved Liquify | 保存位移、冻结区域及画笔参数，重开后可继续修改；复用现有高级液化。详见 [两项功能说明](docs/macos-editable-filters.md)。 / Reopen saved displacement, frozen areas and brush settings in the existing Advanced Liquify workspace; see the [guide](docs/macos-editable-filters.md). |
 
 macOS 版的基础图层、蒙版、画笔、文字、形状、选区、调整层、Camera Raw、PSD 导入及多项目标签等能力来自 Compositor。
 
@@ -77,7 +79,7 @@ The macOS edition's core layers, masks, brushes, text, shapes, selections, adjus
 ### 当前边界 / Current limits
 
 - PSD 保留普通横排文字、单色路径、支持的填充、调整及效果参数；其他内容转换为像素或要求合成导出，跨软件重新渲染可能不同。详见 [PSD 导出说明](docs/psd-export.md)。 / PSD retains supported text, paths, fills, adjustments and effects; other content uses pixels or flattened export. Rerendering can differ between editors.
-- 恢复副本延迟 2 秒写入，最后的改动可能尚未落盘。详见 [恢复说明](docs/recovery.md)。 / Recovery writes are delayed by two seconds; the latest edits may not have reached disk.
+- 恢复副本空闲 2 秒或连续编辑最长等待 10 秒安排写入，另需编码和写盘时间；最后的改动及未提交草稿可能尚未落盘。详见 [恢复说明](docs/recovery.md)。 / Recovery schedules writes after 2 seconds idle or at most 10 seconds of continuous editing, plus encoding and disk time; recent edits and uncommitted drafts may not have reached disk.
 - 更新菜单打开本仓库的下载页，手动安装新版本。 / The update command opens this edition's releases for manual installation.
 - 可编辑路径、文字轮廓、沿路径文字及矢量蒙版已加入，使用范围见 [路径说明](docs/macos-paths-batch.md)。 / Editable paths, text outlines, text on a path and vector masks are supported; see the [path guide](docs/macos-paths-batch.md).
 
@@ -108,3 +110,7 @@ Command Line Tools with a macOS 26 SDK can build the app. The standalone macOS 2
 详见 [第三方说明 / Third-party notices](THIRD_PARTY_NOTICES.md)、[源码来源 / Source provenance](UPSTREAM.md) 与 [发布审查 / Release review](docs/release-audit.md)。
 
 macOS 海报与照片编辑扩展、CLI/MCP 安装和使用范围见 [使用说明](docs/macos-poster-batch.md)。
+
+可编辑滤镜与液化重新编辑 / Editable filters and saved Liquify: [使用说明 / Guide](docs/macos-editable-filters.md).
+
+圆形半调与灰度副本 / Round halftone screens and grayscale copies: [40.22 使用说明 / Guide](docs/macos-halftone-grayscale.md). 完整颜色模式和高位深仍在[后续方案 / Future plan](docs/macos-color-engine-plan.md)中。

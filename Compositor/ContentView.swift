@@ -213,16 +213,17 @@ struct ContentView: View {
                     .accessibilityIdentifier("actualPixels").disabled(session.document == nil)
                     .padding(.horizontal, 4)
             }
-            ToolbarItem(placement: .primaryAction) {
-                HStack(spacing: 0) {
-                    Button { session.zoomKeyboard(by: 1) } label: {
-                        Image(systemName: "plus.magnifyingglass")
-                    }.help(L10n.format("Zoom in (%@)", ShortcutSettings.shared.keyLabel("=", 1, menu: true))).disabled(session.document == nil)
-                    Button { session.zoomKeyboard(by: -1) } label: {
-                        Image(systemName: "minus.magnifyingglass")
-                    }.help(L10n.format("Zoom out (%@)", ShortcutSettings.shared.keyLabel("-", 1, menu: true))).disabled(session.document == nil)
-                }
-                .padding(.horizontal, 4)
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button { session.zoomKeyboard(by: 1) } label: {
+                    Label("Zoom In", systemImage: "plus.magnifyingglass").labelStyle(.iconOnly)
+                }.accessibilityLabel(L10n.text("Zoom In"))
+                    .help(L10n.format("Zoom in (%@)", ShortcutSettings.shared.keyLabel("=", 1, menu: true))).disabled(session.document == nil)
+                    .padding(.horizontal, 4)
+                Button { session.zoomKeyboard(by: -1) } label: {
+                    Label("Zoom Out", systemImage: "minus.magnifyingglass").labelStyle(.iconOnly)
+                }.accessibilityLabel(L10n.text("Zoom Out"))
+                    .help(L10n.format("Zoom out (%@)", ShortcutSettings.shared.keyLabel("-", 1, menu: true))).disabled(session.document == nil)
+                    .padding(.horizontal, 4)
             }
         }
     }
@@ -230,6 +231,9 @@ struct ContentView: View {
     private var editorPanels: some View {
         editorChrome
         .sheet(isPresented: $session.showsAutomation) { AutomationSheet(session: session) }
+        .sheet(isPresented: Binding(get: { session.filterStackEdit != nil }, set: { if !$0 { session.cancelFilterStack() } }), onDismiss: { session.openQueuedLiquify() }) {
+            if let edit = session.filterStackEdit { FilterStackSheet(session: session, edit: edit) }
+        }
         .sheet(item: Binding(get: { session.batchExportDraft }, set: { if $0 == nil { session.cancelBatchExport() } })) { draft in BatchExportSheet(session: session, draft: draft) }
         .sheet(isPresented: Binding(get: { session.edgeRefinement != nil }, set: { if !$0 { session.cancelEdgeRefinement() } })) {
             if let edit = session.edgeRefinement { EdgeRefinementSheet(session: session, edit: edit) }
@@ -438,8 +442,9 @@ struct ContentView: View {
         case .crop: parts = [L10n.text("Drag to crop"), apply, cancel, pan]
         case .move: parts = [L10n.text("Drag to move · Handles to resize · Circle to rotate"), keys.opacityHelp, pan]
         case .hand: parts = [L10n.text("Drag to pan · Pinch to zoom")]
+        case .eyedropper: parts = [L10n.text("Click or drag to sample the foreground color"), pan]
         case .idle: parts = [L10n.text("No tool selected · Press a tool's key to pick one"), pan]
-        default: parts = [L10n.text("Click to zoom in · Option-click to zoom out · Drag right or left to zoom smoothly"), pan]
+        case .zoom: parts = [L10n.text("Click to zoom in · Option-click to zoom out · Drag right or left to zoom smoothly"), pan]
         }
         return parts.joined(separator: " · ")
     }

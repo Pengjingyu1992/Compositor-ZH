@@ -3,10 +3,14 @@ import SwiftUI
 struct PosterFilterControls: View {
     @Bindable var session: EditorSession
     let kind: FilterKind
+    var settingsOverride: Binding<FilterSettings>? = nil
+    var importLUTAction: (() -> Void)? = nil
     @State private var outputChannel = 0
-    private var settings: FilterSettings { session.filterEdit?.settings ?? FilterSettings() }
+    private var settings: FilterSettings { settingsOverride?.wrappedValue ?? session.filterEdit?.settings ?? FilterSettings() }
     private func update(_ change: (inout FilterSettings) -> Void) {
-        var value = settings; change(&value); session.updateFilter(value, preview: session.filterEdit?.preview ?? true)
+        var value = settings; change(&value)
+        if let settingsOverride { settingsOverride.wrappedValue = value }
+        else { session.updateFilter(value, preview: session.filterEdit?.preview ?? true) }
     }
     private func value(_ key: WritableKeyPath<FilterSettings, Double>) -> Binding<Double> {
         Binding(get: { settings[keyPath: key] }, set: { v in update { $0[keyPath: key] = v } })
@@ -19,20 +23,29 @@ struct PosterFilterControls: View {
             switch kind {
             case .colorHalftone:
                 HStack {
-                    Button("Classic Print") { update { $0.colorHalftone = ColorHalftoneSettings() } }
+                    Button("Color Halftone") { update { $0.colorHalftone = ColorHalftoneSettings() } }
                     Button("Newsprint") { update { $0.colorHalftone = ColorHalftoneSettings(size: 5) } }
                     Button("Pop Art") { update { $0.colorHalftone = ColorHalftoneSettings(size: 18, shape: .square) } }
+                }
+                Picker("Screen Channels", selection: Binding(get: { settings.colorHalftone.screen ?? .legacyCMYK }, set: { v in update { $0.colorHalftone.screen = v } })) {
+                    ForEach(HalftoneScreen.allCases, id: \.self) { Text(L10n.text($0.rawValue)).tag($0) }
                 }
                 Picker("Dot Shape", selection: Binding(get: { settings.colorHalftone.shape }, set: { v in update { $0.colorHalftone.shape = v } })) {
                     ForEach(HalftoneDot.allCases, id: \.self) { Text(L10n.text($0.rawValue)).tag($0) }
                 }
-                slider("Dot Size", \.colorHalftone.size, range: 2...128)
-                slider("Cyan Angle", \.colorHalftone.cyan, range: -180...180)
-                slider("Magenta Angle", \.colorHalftone.magenta, range: -180...180)
-                slider("Yellow Angle", \.colorHalftone.yellow, range: -180...180)
-                slider("Black Angle", \.colorHalftone.black, range: -180...180)
+                slider(settings.colorHalftone.usesLegacyScreen ? "Dot Size" : "Max Radius", \.colorHalftone.size, range: 2...128)
+                if settings.colorHalftone.screen != .grayscale {
+                    slider(settings.colorHalftone.usesLegacyScreen ? "Cyan Angle" : "Channel 1 Angle", \.colorHalftone.cyan, range: -180...180)
+                    slider(settings.colorHalftone.usesLegacyScreen ? "Magenta Angle" : "Channel 2 Angle", \.colorHalftone.magenta, range: -180...180)
+                    slider(settings.colorHalftone.usesLegacyScreen ? "Yellow Angle" : "Channel 3 Angle", \.colorHalftone.yellow, range: -180...180)
+                }
+                if settings.colorHalftone.screen != .rgb {
+                    slider(settings.colorHalftone.usesLegacyScreen ? "Black Angle" : "Grayscale Angle", \.colorHalftone.black, range: -180...180)
+                }
                 slider("Strength", \.colorHalftone.strength, range: 0...100)
-                Text("RGB print simulation; this does not change the document to CMYK.").font(.caption).foregroundStyle(.secondary)
+                Text(settings.colorHalftone.usesLegacyScreen
+                     ? "RGB print simulation; this does not change the document to CMYK."
+                     : "Automatic uses one screen for gray pixels and three for color. Dark dots can overlap.").font(.caption).foregroundStyle(.secondary)
             case .selectiveColor:
                 Picker("Colors", selection: Binding(get: { settings.selectiveColor.range }, set: { v in update { $0.selectiveColor.range = v } })) {
                     ForEach(SelectiveRange.allCases, id: \.self) { Text(L10n.text($0.rawValue)).tag($0) }
@@ -56,7 +69,7 @@ struct PosterFilterControls: View {
                 }
                 Button("Reset") { update { $0.channelMixer = ChannelMixerSettings() } }
             case .colorLUT:
-                Button("Import .cube LUT…") { session.importColorLUT() }
+                Button("Import .cube LUT…") { if let importLUTAction { importLUTAction() } else { session.importColorLUT() } }
                 Text(settings.colorLUT.table?.name ?? L10n.text("No LUT selected")).lineLimit(2)
                 Picker("LUT Input Space", selection: Binding(get: { settings.colorLUT.space }, set: { v in update { $0.colorLUT.space = v } })) {
                     ForEach(LUTSpace.allCases, id: \.self) { Text(L10n.text($0.rawValue)).tag($0) }

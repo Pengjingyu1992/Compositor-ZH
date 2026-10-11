@@ -113,6 +113,7 @@ extension EditorSession {
         document?.layers.reduce(0) { total, layer in
             total + (layer.asset.map { $0.image.width * $0.image.height } ?? 0)
                 + (layer.mask.map { $0.asset.image.width * $0.asset.image.height } ?? 0)
+                + (layer.filterStack.map { $0.source.image.width * $0.source.image.height } ?? 0)
         } ?? 0
     }
 

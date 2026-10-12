@@ -40,6 +40,6 @@ private extension CanvasDocument {
             if let radius = layer.adjustment?.blurRadius { small.adjustment?.blurRadius = radius * x }
             if let distance = layer.adjustment?.motionDistance { small.adjustment?.motionDistance = distance * x }
             return small
-        }, resolution: resolution)
+        }, resolution: resolution, animation: animation, displayedAnimationFrameID: currentAnimationFrameID)
     }
 }

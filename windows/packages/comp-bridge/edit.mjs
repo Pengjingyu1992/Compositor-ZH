@@ -23,14 +23,99 @@ export function projectData(manifest, resources, name = 'Untitled.comp') {
   if (pixels > LIMITS.pixels || masks > LIMITS.pixels) fail('limit');
   return { manifest: parsed, resources, sourceBytes, name, preview: resources.has('QuickLook/Preview.jpg'), analysis: analyze(parsed, pixels, masks) };
 }
-export function newProject(w, h) {
-  return projectData({ format: 'com.compositor.project', version: 11, documentID: randomUUID().toUpperCase(), colorSpace: 'sRGB', width: w, height: h, layers: [] }, new Map());
+export function newProject(w, h, resolution) {
+  const manifest = { format: 'com.compositor.project', version: 11, documentID: randomUUID().toUpperCase(), colorSpace: 'sRGB', width: w, height: h, layers: [] };
+  if (resolution !== undefined) manifest.resolution = resolution;
+  return projectData(manifest, new Map());
+}
+
+function animationEdit(data, op, codecs) {
+  const failAnimation = () => fail('gifLimit');
+  if (data.analysis.issues.length) fail('unsupported');
+  const m = clone(data.manifest), resources = new Map(data.resources);
+  if ([op.name,op.layerName].some(v => v !== undefined && (typeof v !== 'string' || v.length > 256))) fail('invalid');
+  const descendants = id => {
+    const ids = new Set([id]);
+    for (let n = 0; n < 64; n++) for (const l of m.layers) if (ids.has(l.parentID)) ids.add(l.id);
+    return ids;
+  };
+  const blank = () => {
+    const groupID = randomUUID().toUpperCase(), id = randomUUID().toUpperCase(), imageFile = `${id}.png`;
+    resources.set(`images/${imageFile}`, codecs.blankPNG(m.width, m.height, false));
+    return [{ id: groupID, name: 'Frame', isVisible: true, isGroup: true, transform: placement(m.width, m.height) },
+      { id, name: op.layerName ?? 'Layer', parentID: groupID, isVisible: true, imageFile, transform: placement(m.width, m.height) }];
+  };
+  if (op.action === 'create') {
+    if (m.animation) fail('invalid');
+    if (m.width * m.height > 16_000_000) failAnimation();
+    checkPermission(data, { kind: 'group', ids: m.layers.map(l => l.id) });
+    const groupID = randomUUID().toUpperCase();
+    for (const l of m.layers) if (!l.parentID) l.parentID = groupID;
+    m.layers.unshift({ id: groupID, name: op.name ?? 'Frame 1', isVisible: true, isGroup: true, transform: placement(m.width, m.height) });
+    m.animation = { frames: [{ groupID, durationMS: 100 }], loopCount: 0 };
+    m.activeLayerID ??= groupID;
+  } else {
+    const track = m.animation;
+    if (!track) fail('invalid');
+    const index = track.frames.findIndex(f => f.groupID === op.frameID);
+    if (op.action === 'loops') {
+      if (!Number.isInteger(op.value) || op.value < -1 || op.value > 65535) fail('invalid');
+      track.loopCount = op.value;
+    } else {
+      if (index < 0) fail('stale');
+      const current = track.frames[index], ids = descendants(current.groupID);
+      if (op.action === 'duration') {
+        if (!Number.isInteger(op.value) || op.value < 10 || op.value > 655350 || op.value % 10) fail('invalid');
+        current.durationMS = op.value;
+      } else if (op.action === 'move') {
+        if (![-1, 1].includes(op.direction) || !track.frames[index + op.direction]) fail('invalid');
+        [track.frames[index], track.frames[index + op.direction]] = [track.frames[index + op.direction], track.frames[index]];
+      } else if (op.action === 'delete') {
+        if (track.frames.length < 2) fail('invalid');
+        checkPermission(data, { kind: 'delete', id: current.groupID });
+        m.layers = m.layers.filter(l => !ids.has(l.id));
+        track.frames.splice(index, 1); m.activeLayerID = track.frames[Math.min(index, track.frames.length - 1)].groupID;
+      } else if (['add', 'duplicate'].includes(op.action)) {
+        if (track.frames.length >= 500 || m.width * m.height > 16_000_000 || m.width * m.height * (track.frames.length + 1) > 64_000_000) failAnimation();
+        let added;
+        if (op.action === 'duplicate') {
+          const original = m.layers.filter(l => ids.has(l.id)), map = new Map(original.map(l => [l.id, randomUUID().toUpperCase()]));
+          added = original.map(old => {
+            const copy = clone(old); copy.id = map.get(old.id);
+            if (copy.parentID) copy.parentID = map.get(copy.parentID) ?? copy.parentID;
+            if (copy.maskSourceID) copy.maskSourceID = map.get(copy.maskSourceID) ?? copy.maskSourceID;
+            for (const field of ['imageFile', 'maskFile']) if (copy[field]) {
+              const file = `${copy.id}${field === 'maskFile' ? '.mask' : ''}.png`;
+              resources.set(`images/${file}`, resources.get(`images/${copy[field]}`)); copy[field] = file;
+            }
+            return copy;
+          });
+        } else added = blank();
+        const group = added.find(l => l.isGroup && !l.parentID), insertion = m.layers.reduce((n, l, i) => ids.has(l.id) ? i + 1 : n, 0);
+        group.name = op.name ?? `Frame ${index + 2}`;
+        m.layers.splice(insertion, 0, ...added);
+        track.frames.splice(index + 1, 0, { groupID: group.id, durationMS: current.durationMS });
+        m.activeLayerID = added.find(l => !l.isGroup)?.id ?? group.id;
+      } else fail('invalid');
+    }
+  }
+  m.version = 16;
+  resources.delete('QuickLook/Preview.jpg'); resources.delete('QuickLook/Thumbnail.png');
+  const result = projectData(m, resources, data.name);
+  if (result.analysis.issues.length) fail(result.analysis.issues.includes('memory') ? 'limit' : 'unsupported');
+  result.locks = data.locks; result.selection = data.selection;
+  return result;
 }
 
 // Every operation builds a candidate. Validation precedes publication; failures
 // cannot leave a partially edited document or consume redo history.
 export function editProject(data, op, codecs) {
   if (!op || typeof op !== 'object' || typeof op.kind !== 'string') fail('invalid');
+  if (op.kind === 'animation') return animationEdit(data, op, codecs);
+  if (data.manifest.animation && ['delete', 'duplicate', 'duplicateTree', 'parent', 'ungroup', 'group', 'merge', 'reorder'].includes(op.kind)) {
+    const frames = new Set(data.manifest.animation.frames.map(f => f.groupID));
+    if ([op.id, ...(op.ids ?? [])].some(id => frames.has(id))) fail('unsupported');
+  }
   checkPermission(data, op);
   if(data.analysis.issues.length && op.kind==='selection' && op.action==='wand')fail('unsupported');
   if (op.kind === 'selection') return selectionEdit(data, op, codecs);

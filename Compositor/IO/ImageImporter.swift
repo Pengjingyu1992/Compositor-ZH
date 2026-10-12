@@ -10,15 +10,18 @@ nonisolated struct ImportedImage: @unchecked Sendable {
     let thumbnail: CGImage
     let name: String
     var raster: RasterSnapshot? = nil
+    var sourceResolution: Double? = nil
 }
 
 nonisolated enum ImageImportError: LocalizedError {
-    case unreadable, unsupported, tooLarge
+    case unreadable, unsupported, tooLarge, gifTooLarge, gifUnsupported
     var errorDescription: String? {
         switch self {
         case .unreadable: L10n.text("The image could not be read. It may be damaged or unavailable.")
-        case .unsupported: L10n.text("Choose a JPEG, PNG, HEIC, TIFF, WebP, or Photoshop (PSD) file.")
+        case .unsupported: L10n.text("Choose a JPEG, PNG, GIF, HEIC, TIFF, WebP, SVG, EPS, RAW, or Photoshop file.")
         case .tooLarge: L10n.format("This import exceeds the current %lld-megapixel document budget or %@-pixel side limit.", DocumentLimits.documentBudgetMegapixels, DocumentLimits.maxSide.formatted())
+        case .gifTooLarge: L10n.text("GIF supports up to 16 megapixels per frame, 500 frames, 64 million total frame pixels, and 64 MiB per file.")
+        case .gifUnsupported: L10n.text("GIF plain-text rendering blocks are not supported. Export image frames from the source application first.")
         }
     }
 }
@@ -28,6 +31,19 @@ actor ImageImporter {
     // Created only on first import, never during empty-app launch.
     private lazy var context = CIContext(options: [.cacheIntermediates: false])
     private let sRGB = CGColorSpace(name: CGColorSpace.sRGB)!
+
+    func decodeEPS(_ url: URL, remainingPixels: Int) throws -> ImportedImage {
+        let data = try EPSCodec.read(url)
+        if let own = try EPSCodec.ownImage(data, remainingPixels: remainingPixels) {
+            return ImportedImage(image: own.image, thumbnail: try PixelAdjust.thumbnail(of: own.image), name: url.deletingPathExtension().lastPathComponent, sourceResolution: own.resolution)
+        }
+        let png = try EPSCodec.render(data, remainingPixels: remainingPixels)
+        guard let source = CGImageSourceCreateWithData(png as CFData, [kCGImageSourceShouldCache: false] as CFDictionary) else { throw EPSError.render }
+        var asset = try decode(source, name: url.deletingPathExtension().lastPathComponent,
+                               remainingPixels: min(EPSCodec.maxPixels, remainingPixels), flattenedPhotoshop: false)
+        asset.sourceResolution = 144
+        return asset
+    }
 
     /// An SVG drawn once into pixels, by macOS's own SVG renderer: fitted to `fitting` (the canvas) when there is one,
     /// otherwise at the size the file declares. It comes in as an ordinary image layer, so it doesn't stay vector.
@@ -53,6 +69,10 @@ actor ImageImporter {
     /// `flattenedPhotoshop`: a PSD or PSB with no layer records (only a background), read as its merged image.
     func decode(_ url: URL, remainingPixels: Int = DocumentLimits.documentPixelBudget, flattenedPhotoshop: Bool = false) throws -> ImportedImage {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary) else { throw ImageImportError.unreadable }
+        if CGImageSourceGetType(source) as String? == UTType.gif.identifier {
+            let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+            guard let size = attributes[.size] as? NSNumber, size.int64Value <= 64 * 1024 * 1024 else { throw ImageImportError.gifTooLarge }
+        }
         return try decode(source, name: url.deletingPathExtension().lastPathComponent, remainingPixels: remainingPixels, flattenedPhotoshop: flattenedPhotoshop)
     }
 
@@ -67,15 +87,17 @@ actor ImageImporter {
             guard let identifier = CGImageSourceGetType(source) as String?,
                   let type = UTType(identifier) else { throw ImageImportError.unreadable }
             let photoshop = flattenedPhotoshop ? [UTType.photoshopImage, .photoshopLargeImage] : []
-            guard ([UTType.jpeg, .png, .heic, .tiff, .webP] + photoshop).contains(where: { type.conforms(to: $0) }) else {
+            guard ([UTType.jpeg, .png, .gif, .heic, .tiff, .webP] + photoshop).contains(where: { type.conforms(to: $0) }) else {
                 throw ImageImportError.unsupported
             }
             guard let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
                   let width = properties[kCGImagePropertyPixelWidth] as? Int,
                   let height = properties[kCGImagePropertyPixelHeight] as? Int,
                   width > 0, height > 0 else { throw ImageImportError.unreadable }
+            if type.conforms(to: .gif), (width > DocumentLimits.maxSide || height > DocumentLimits.maxSide || width * height > AnimationTrack.maxFramePixels) { throw ImageImportError.gifTooLarge }
+            let surfaceLimit = type.conforms(to: .gif) ? AnimationTrack.maxFramePixels : DocumentLimits.maxSurfacePixels
             guard width <= DocumentLimits.maxSide, height <= DocumentLimits.maxSide,
-                  width * height <= min(remainingPixels, DocumentLimits.maxSurfacePixels) else {
+                  width * height <= min(remainingPixels, surfaceLimit) else {
                 throw ImageImportError.tooLarge
             }
             guard let decoded = CGImageSourceCreateImageAtIndex(source, 0, [kCGImageSourceShouldCacheImmediately: true] as CFDictionary) else {

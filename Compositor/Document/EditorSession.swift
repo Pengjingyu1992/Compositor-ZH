@@ -73,14 +73,23 @@ struct CanvasDocument: Equatable {
     var guides: [CanvasGuide] = []
     /// Part of the document so undo/redo covers selection changes. Not saved to disk.
     var selection: DocumentSelection?
+    var animation: AnimationTrack?
+    /// Presentation only; seeking does not change document content or history.
+    var displayedAnimationFrameID: UUID?
+    static func == (a: Self, b: Self) -> Bool {
+        a.id == b.id && a.width == b.width && a.height == b.height && a.resolution == b.resolution
+            && a.layers == b.layers && a.guides == b.guides && a.selection == b.selection && a.animation == b.animation
+    }
     var size: CGSize { CGSize(width: width, height: height) }
-    init(id: UUID = UUID(), width: Int, height: Int, layers: [ImageLayer] = [], resolution: Double = 72, guides: [CanvasGuide] = []) {
+    init(id: UUID = UUID(), width: Int, height: Int, layers: [ImageLayer] = [], resolution: Double = 72, guides: [CanvasGuide] = [], animation: AnimationTrack? = nil, displayedAnimationFrameID: UUID? = nil) {
         self.id = id
         self.width = width
         self.height = height
         self.layers = layers
         self.resolution = resolution
         self.guides = guides
+        self.animation = animation
+        self.displayedAnimationFrameID = displayedAnimationFrameID
     }
 
     // Geometry limit; raster memory limits will be established with image import.
@@ -134,6 +143,7 @@ enum NavigationTool: String, CaseIterable {
 final class EditorSession {
     var skipsInitialClipboardCanvasSize = false
     var document: CanvasDocument?
+    var animationPlaying = false
     var canvasFocusRequest = 0
     var showsSampleRing = true
     var adjustmentOriginal: LayerAdjustment?
@@ -185,7 +195,7 @@ final class EditorSession {
     private var fileRequestWaiters: [CheckedContinuation<Void, Never>] = []
     var canStartProjectOperation: Bool {
         _ = showsBusy // Re-evaluate in the UI when a long operation starts or ends.
-        return !showsPrintSetup && filterStackEdit == nil && pathEditing == nil && liquify == nil && selectionAmountOperation == nil && colorRange == nil && textDraft == nil && !isProjectBusy && !isImporting && brushStroke == nil && warpStroke == nil && levels == nil && filterEdit == nil && hueSaturation == nil && adjustmentEditingID == nil && effectsEditing == nil && !showsNewDocument && !showsImporter && renamingLayerID == nil && importError == nil && !showsConversionSheet
+        return activeEditOwner == nil && !showsPrintSetup && filterStackEdit == nil && pathEditing == nil && liquify == nil && selectionAmountOperation == nil && colorRange == nil && textDraft == nil && !isProjectBusy && !isImporting && brushStroke == nil && warpStroke == nil && levels == nil && filterEdit == nil && hueSaturation == nil && adjustmentEditingID == nil && effectsEditing == nil && !showsNewDocument && !showsImporter && renamingLayerID == nil && importError == nil && !showsConversionSheet
     }
     func waitForFileRequest() async {
         while !canStartProjectOperation {
@@ -701,6 +711,7 @@ final class EditorSession {
         didSet {
             if activeLayerID != oldValue { isMaskSelected = false }
             selectedLayerIDs = activeLayerID.map { [$0] } ?? []
+            if let id = activeLayerID, let frame = animationFrame(containing: id) { document?.displayedAnimationFrameID = frame }
         }
     }
     var renamingLayerID: UUID? { didSet { resumeFileRequests() } }
@@ -712,7 +723,7 @@ final class EditorSession {
     var isModified: Bool { history.isModified }
     var canUseHistory: Bool {
         _ = showsBusy
-        return !showsPrintSetup && filterStackEdit == nil && pathEditing == nil && liquify == nil && selectionAmountOperation == nil && colorRange == nil && textDraft == nil && !isProjectBusy && !isImporting && brushStroke == nil && warpStroke == nil && levels == nil && filterEdit == nil && hueSaturation == nil && adjustmentEditingID == nil && effectsEditing == nil && !showsNewDocument && !showsImporter && renamingLayerID == nil && importError == nil && transformEdit == nil && !showsConversionSheet
+        return activeEditOwner == nil && !showsPrintSetup && filterStackEdit == nil && pathEditing == nil && liquify == nil && selectionAmountOperation == nil && colorRange == nil && textDraft == nil && !isProjectBusy && !isImporting && brushStroke == nil && warpStroke == nil && levels == nil && filterEdit == nil && hueSaturation == nil && adjustmentEditingID == nil && effectsEditing == nil && !showsNewDocument && !showsImporter && renamingLayerID == nil && importError == nil && transformEdit == nil && !showsConversionSheet
     }
     var canUndo: Bool { canUseHistory && (history.canUndo || gradientEdit != nil) }
     var canRedo: Bool { canUseHistory && history.canRedo }
@@ -770,6 +781,12 @@ final class EditorSession {
             activeLayerID = before.activeLayerID
             brushError = L10n.text("The operation was canceled because a layer or its folder is locked.")
         }
+        if history.editDepth == 1, let animation = document?.animation, let layers = document?.layers,
+           (try? animation.validate(layers: layers.map(\.hierarchyRecord))) == nil {
+            document = history.pendingSnapshot?.document
+            activeLayerID = history.pendingSnapshot?.activeLayerID
+            importError = L10n.text("Use the animation timeline to duplicate, delete, or reorder frame folders.")
+        }
         let revision = history.currentRevision
         history.end(document: document, selection: activeLayerID)
         if revision != history.currentRevision { recovery?.schedule() }
@@ -780,7 +797,7 @@ final class EditorSession {
     /// pixels) or for a moment's work, which flashed the whole panel gray for a frame. `canEditLayers` still blocks
     /// layer changes through all of them; the panel's actions check it themselves.
     var layersLookEditable: Bool {
-        selectionAmountOperation == nil && colorRange == nil && textDraft == nil && document != nil && !showsBusy
+        !animationPlaying && selectionAmountOperation == nil && colorRange == nil && textDraft == nil && document != nil && !showsBusy
             && !isImporting && !showsNewDocument && !showsImporter && renamingLayerID == nil
             && transformEdit?.persistent != true && cropRect == nil && gradientEdit == nil
             && hueSaturation == nil && levels == nil && filterEdit == nil && adjustmentEditingID == nil
@@ -946,6 +963,16 @@ final class EditorSession {
                     let thumbnail = try PixelAdjust.thumbnail(of: developed)
                     insert(ImportedImage(image: developed, thumbnail: thumbnail,
                                          name: url.deletingPathExtension().lastPathComponent), centeredAt: point)
+                } else if url.pathExtension.lowercased() == "gif" || GIFCodec.matches(url) {
+                    let gif = try await ImageImporter.shared.decodeGIF(url, remainingPixels: DocumentLimits.documentPixelBudget - usedPixels)
+                    try insertGIF(gif, centeredAt: point)
+                } else if EPSCodec.matches(url) {
+                    guard await confirmPSDConversions([PSDConversion(layerName: url.lastPathComponent,
+                        message: "EPS is imported as one raster layer. Text and paths will not remain editable. General EPS is rendered at 144 DPI.")],
+                        title: L10n.format("Open “%@”?", url.lastPathComponent), confirmTitle: "Import",
+                        notice: "Review this image conversion. Nothing is applied until you continue.") else { continue }
+                    let asset = try await ImageImporter.shared.decodeEPS(url, remainingPixels: DocumentLimits.documentPixelBudget - usedPixels)
+                    insert(asset, centeredAt: point)
                 } else if UTType(filenameExtension: url.pathExtension)?.conforms(to: .svg) == true {
                     let asset = try await ImageImporter.shared.decodeSVG(url, fitting: document?.size,
                                                                          remainingPixels: DocumentLimits.documentPixelBudget - usedPixels)
@@ -992,6 +1019,7 @@ final class EditorSession {
         defer { endEdit() }
         if document == nil {
             document = CanvasDocument(width: asset.image.width, height: asset.image.height)
+            if let dpi = asset.sourceResolution, dpi.isFinite, (1...9600).contains(dpi) { document?.resolution = dpi }
             viewport.fit(documentSize: document!.size)
         }
         guard let document else { return }
@@ -1032,11 +1060,11 @@ final class EditorSession {
         showsConversionSheet = false
         conversionRequest = nil
     }
-    func confirmPSDConversions(_ conversions: [PSDConversion], title: String, confirmTitle: String) async -> Bool {
+    func confirmPSDConversions(_ conversions: [PSDConversion], title: String, confirmTitle: String, notice: String? = nil) async -> Bool {
         if let confirmConversions { return await confirmConversions(conversions) }
         return await withCheckedContinuation { continuation in
             conversionContinuation = continuation
-            conversionRequest = PSDConversionRequest(title: title, confirmTitle: confirmTitle, conversions: conversions)
+            conversionRequest = PSDConversionRequest(title: title, confirmTitle: confirmTitle, conversions: conversions, notice: notice)
             showsConversionSheet = true
         }
     }

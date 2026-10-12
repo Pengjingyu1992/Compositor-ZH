@@ -22,7 +22,13 @@ async function license(name) {
   const directory = path.join(root, 'node_modules', name);
   const metadata = JSON.parse(await readFile(path.join(directory, 'package.json'), 'utf8'));
   const candidates = (await readdir(directory)).filter(n => /^licen[sc]e(?:\.|$)/i.test(n));
-  if (!candidates.length) throw new Error(`Missing license: ${name}`);
+  if (!candidates.length && name === 'omggif') {
+    // The pinned package embeds its MIT notice in omggif.js rather than a LICENSE file.
+    const source = await readFile(path.join(directory, 'omggif.js'), 'utf8');
+    const notice = source.split('\n').slice(0, 21).map(line => line.replace(/^\/\/ ?/, '')).join('\n');
+    if (!notice.includes('Dean McNamee') || !notice.includes('Permission is hereby granted') || !notice.includes('IN THE SOFTWARE.')) throw new Error('Missing omggif MIT notice');
+    await writeFile(path.join(destination, 'omggif-LICENSE'), notice + '\n');
+  } else if (!candidates.length) throw new Error(`Missing license: ${name}`);
   const safeName = name.replaceAll('/', '-').replace('@', '');
   for (const entry of candidates) await copyFile(path.join(directory, entry), path.join(destination, `${safeName}-${entry}`));
   index.push({ name, version: metadata.version, license: metadata.license });
@@ -31,5 +37,6 @@ async function license(name) {
 // Runtime libraries are compiled into the renderer; record their dependency notices.
 await license('pentrado'); await license('vue');
 await license('ag-psd'); await license('pngjs');
+await license('gifenc'); await license('omggif');
 await writeFile(path.join(destination, 'DEPENDENCIES.json'), JSON.stringify(index.sort((a, b) => a.name.localeCompare(b.name)), null, 2) + '\n');
 await build({ entryPoints: [path.join(root, 'packages/comp-bridge/codecs.mjs')], outfile: path.join(root, 'out/codecs/index.cjs'), platform: 'node', format: 'cjs', bundle: true, sourcemap: false, minify: true, target: 'node24' });

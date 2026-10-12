@@ -17,7 +17,8 @@ nonisolated enum ExportError: LocalizedError {
 actor ImageExporter {
     static let shared = ImageExporter()
 
-    func render(_ snapshot: ProjectSnapshot) throws -> ExportRaster {
+    func render(_ input: ProjectSnapshot) throws -> ExportRaster {
+        let snapshot = input.presentingAnimationFrame(input.displayedAnimationFrameID)
         let width = snapshot.manifest.width, height = snapshot.manifest.height
         guard (1...DocumentLimits.maxSide).contains(width), (1...DocumentLimits.maxSide).contains(height),
               width * height <= DocumentLimits.maxSurfacePixels else { throw ExportError.tooLarge }
@@ -109,6 +110,45 @@ actor ImageExporter {
         try encode(raster.image, type: .png, properties: [
             kCGImagePropertyDPIWidth: raster.resolution, kCGImagePropertyDPIHeight: raster.resolution
         ] as CFDictionary)
+    }
+
+    func animationGIF(_ snapshot: ProjectSnapshot?, fallback: ExportRaster, width: Int, height: Int,
+                      background: CGColor, keepTransparency: Bool) throws -> JPEGResult {
+        let track = snapshot?.manifest.animation
+        let count = track?.frames.count ?? 1
+        guard width * height <= AnimationTrack.maxFramePixels, width * height * count <= AnimationTrack.maxPixels else { throw ImageImportError.gifTooLarge }
+        var output = GIFCodec.header(width: width, height: height, loops: track?.loopCount ?? -1)
+        for index in 0..<count {
+            try Task.checkCancellation()
+            let rendered: ExportRaster
+            if let snapshot, let track { rendered = try render(snapshot.presentingAnimationFrame(track.frames[index].groupID)) }
+            else { rendered = fallback }
+            let sized = try resized(rendered, width: width, height: height)
+            let image: CGImage
+            if keepTransparency {
+                guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+                    space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGBitmapInfo.byteOrder32Big.rawValue | CGImageAlphaInfo.premultipliedLast.rawValue),
+                      let pixels = context.data?.assumingMemoryBound(to: UInt8.self) else { throw ExportError.render }
+                context.draw(sized.image, in: CGRect(x: 0, y: 0, width: width, height: height))
+                for at in stride(from: 0, to: width * height * 4, by: 4) {
+                    let alpha = Int(pixels[at + 3])
+                    for c in 0..<3 { pixels[at + c] = alpha < 128 ? 0 : UInt8(min(255, (Int(pixels[at + c]) * 255 + alpha / 2) / alpha)) }
+                    pixels[at + 3] = alpha < 128 ? 0 : 255
+                }
+                guard let binary = context.makeImage() else { throw ExportError.render }; image = binary
+            } else { image = try flattened(sized, over: background) }
+            let frame = try GIFCodec.encodedFrame(encode(image, type: .gif), width: width, height: height, duration: track?.frames[index].durationMS ?? 100)
+            guard output.count + frame.count + 1 <= 64 * 1024 * 1024 else { throw ImageImportError.gifTooLarge }
+            output.append(frame)
+        }
+        output.append(0x3b)
+        guard let source = CGImageSourceCreateWithData(output as CFData, nil), let preview = CGImageSourceCreateImageAtIndex(source, 0, nil) else { throw ExportError.encode }
+        return JPEGResult(data: output, preview: preview)
+    }
+
+    func epsData(_ raster: ExportRaster, background: CGColor) throws -> Data {
+        try EPSCodec.checkSize(raster.image.width, raster.image.height, remainingPixels: EPSCodec.maxPixels)
+        return try EPSCodec.encode(flattened(raster, over: background), resolution: raster.resolution)
     }
 
     /// The flattened canvas at another size, for Export As: resampled at high quality, keeping its resolution, so a

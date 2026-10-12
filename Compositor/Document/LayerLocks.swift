@@ -40,6 +40,7 @@ extension EditorSession {
 
     func allowsLayerEdit(_ id: UUID?, _ capability: LayerEditCapability) -> Bool {
         guard let id, document?.layers.contains(where: { $0.id == id }) == true else { return false }
+        if capability == .structure, document?.animation?.frames.contains(where: { $0.groupID == id }) == true { return false }
         let locks = effectiveLocks(for: id)
         if locks.contains(.all) { return false }
         switch capability {
@@ -58,6 +59,7 @@ extension EditorSession {
         }
         let targets = document.layers.filter { ids.contains($0.id) }
         guard targets.count == ids.count else { return false }
+        if capability == .structure, document.animation?.frames.contains(where: { ids.contains($0.groupID) }) == true { return false }
         guard document.id == lockDocumentID, !layerLocks.isEmpty else { return true }
         let locks = inheritedLocks(in: document)
         return targets.allSatisfy { target in

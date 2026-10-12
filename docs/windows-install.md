@@ -3,7 +3,7 @@
 ## 下载和安装
 
 1. 打开 [Windows 编辑器下载页](https://github.com/Pengjingyu1992/Compositor-ZH/releases/tag/windows-v0.3.0-alpha.1)。
-2. 目标系统：**Windows 10 22H2 / Windows 11，Intel/AMD x64**。下载 `Compositor-Windows-0.3.0-alpha.1-x64.exe`，运行安装向导。无需 Node.js 或 API Key；暂无 ARM64/32 位包。
+2. 目标系统：**Windows 10 22H2 / Windows 11，Intel/AMD x64**。下载 `Compositor-Windows-0.3.0-alpha.1-x64.exe`，运行安装向导。编辑器无需 Node.js 或 API Key；可选 AI 助手需配置自己的密钥。暂无 ARM64/32 位包。
 3. 便携版下载同名 ZIP，**完整解压**，运行 `Compositor.exe`。保留 resources、DLL、语言资源和许可证。
 4. 社区包未签名。核对来源和 SHA-256 后按系统提供的选项打开；无需关闭 Defender。
 5. 右上角切换简体中文 / English，即时生效并保留到下次启动。
@@ -39,12 +39,14 @@
 - 先写同卷临时完整包、逐文件刷新并回读验证，再提交。覆盖保存检查磁盘指纹；项目被其他程序修改时拒绝覆盖，需另存或重新打开。
 - 覆盖时保留完整原项目备份 `.compositor-<UUID>.backup.comp`。Windows 的两次目录重命名不是整体原子操作；保存日志与备份支持中断恢复。启动后尝试恢复，无法自动处理时提示人工检查。确认新项目与备份可用后可以手动删除旧备份。
 - 文件占用会有限退避重试，然后显示错误并保留项目/备份。OneDrive/同步盘可能占用或同步每个文件；首次建议保存到本机目录，完成后复制整个项目包。
-- 每次编辑后延迟写恢复副本到 `%APPDATA%\Compositor-Windows\recovery`；每个文档保留最近两份，包含项目格式版本与修订号。恢复写入不会标记项目已保存，也不会覆盖源项目。支持格式 1–13 的可读取恢复包；可见但尚不支持编辑的属性需要保存的预览，并限制视觉编辑。没有因“版本不同”而直接丢弃。
+- 每次编辑后延迟写恢复副本到 `%APPDATA%\Compositor-Windows\recovery`；每个文档保留最近两份，包含项目格式版本与修订号。恢复写入不会标记项目已保存，也不会覆盖源项目。支持格式 1–16 的可读取恢复包；可见但尚不支持编辑的属性需要保存的预览，并限制视觉编辑。没有因“版本不同”而直接丢弃。
 - 文件菜单“恢复未保存项目”恢复最近副本，恢复后需另存。正常保存或明确放弃关闭后清理该文档的恢复副本。退出/打开其他项目有保存、放弃、取消提示。
 - 未改动的图像/未知资源按原始字节保留，未知嵌套字段保留。视觉编辑删除过期 QuickLook 预览，不会把旧预览当作新图。
-- 不上传项目、无遥测/账号/自动更新。恢复副本含作品内容，仅存在本机；共享电脑请自行管理该目录。语言设置仍只存语言，不记录项目路径。
+- 不自动上传项目文件或图像像素，无遥测/账号/自动更新。使用可选 AI 助手时，你输入的提示词和图层元数据会发送到你配置的接口；不会发送图像像素或整个项目。恢复副本含作品内容，仅存在本机；共享电脑请自行管理该目录。语言设置仍只存语言，不记录项目路径。
 
-## PSD 与 PNG
+## PSD、PNG、EPS 与 GIF
+
+- 源码新增 完整动画 GIF 导入/编辑/导出，以及像素 EPS 导入/导出；普通 EPS 需要单独安装 Ghostscript。旧安装包需等待包含本次改动的新发行版。支持范围和安装步骤见 [EPS/GIF 说明](eps-gif.md)。
 
 - 导入预算内的 **8 位 RGB PSD**（不支持 PSB）。基础像素层、组、顺序、位移、不透明度、混合和栅格蒙版进行分层转换；文字使用保存的像素。复杂效果、矢量/智能对象等无法准确转换时，先提示，用户可取消或选择“导入保存的合成图”（一个像素层）。
 - PSD 导出说明明确显示文字/形状转换为像素。分层导出保留像素层、组、顺序、位移、不透明度、混合和蒙版；位置/旋转会烘焙到有边界的像素区域。剪贴要求连续同级层；无法表示时拒绝分层导出。
@@ -79,14 +81,14 @@ npm start
 npm run package:win
 ```
 
-需要 Node.js 22.12 或更高版本（与 `windows/package.json` 的 `engines` 字段一致）和 Git。输出在 windows/release。云端工作流做源码/本地化审查、类型检查、编辑/保存故障注入、独立 PSD 读取、软件 GPU 打包 GUI 检查与许可证/包审查。按要求开发者本机不运行测试、应用或构建。
+需要 Node.js 22.12 或更高版本（与 `windows/package.json` 的 `engines` 字段一致）和 Git。输出在 windows/release。云端工作流做源码/本地化审查、类型检查、编辑/保存故障注入、独立 PSD 读取、软件 GPU 打包 GUI 检查与许可证/包审查。
 
 ## English summary
 
-Install the x64 EXE or fully extract the ZIP from the [Windows editor download page](https://github.com/Pengjingyu1992/Compositor-ZH/releases/tag/windows-v0.3.0-alpha.1). No Node.js or API key is required. Verify SHA-256; packages are unsigned. Target: Windows 10 22H2 / Windows 11 x64; hardware, IME, high-DPI and real Photoshop acceptance remain pending.
+Install the x64 EXE or fully extract the ZIP from the [Windows editor download page](https://github.com/Pengjingyu1992/Compositor-ZH/releases/tag/windows-v0.3.0-alpha.1). The editor needs no Node.js or API key; the optional AI assistant uses your own key. Verify SHA-256; packages are unsigned. Target: Windows 10 22H2 / Windows 11 x64; hardware, IME, high-DPI and real Photoshop acceptance remain pending.
 
 Use 17 tools: selections, crop/resize, Chinese text, editable shapes, gradients/bucket, painting/masks, clone/healing/smear, navigation and eyedropper. Multi-select, align/distribute, group/duplicate/merge, 21 filters, adjustments/effects, clipboard, undo/redo, Save/Save As, recovery and PSD/PNG conversion are available. Unknown data is retained. Text/shapes save parameters with pixels; painting rasterizes them. Locks are session-only. Unsupported compositions remain read-only with explicit saved-preview fallback. All 24 blends use sRGB, with image-quality calibration pending; spatial filters/effects use bounded approximations.
 
-Overwrite saves stage and validate a complete package, reject external changes, retain a complete backup, and use a durable journal for interruption recovery. Two directory renames are not one atomic operation. Recovery copies never mark the project saved. PSD layers preserve core structure/masks; text/shapes rasterize and adjustment/effect projects require explicit flattened PSD export. No telemetry or project upload.
+Overwrite saves stage and validate a complete package, reject external changes, retain a complete backup, and use a durable journal for interruption recovery. Two directory renames are not one atomic operation. Recovery copies never mark the project saved. PSD layers preserve core structure/masks; text/shapes rasterize and adjustment/effect projects require explicit flattened PSD export. No telemetry; optional AI requests send your prompt and layer metadata to the endpoint you configure, without image pixels or project files.
 
 Thank you to [Robbie Tilton, Compositor](https://github.com/robbietilton/Compositor) and [Terry Jia, Pentrado](https://github.com/jtydhr88/pentrado). See [Windows notices](../windows/THIRD_PARTY_NOTICES.md).

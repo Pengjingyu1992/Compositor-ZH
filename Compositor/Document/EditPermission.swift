@@ -32,7 +32,7 @@ extension EditorSession {
         _ = showsBusy
         guard document != nil else { return .noDocument }
         if let owner, !ownsEdit(owner) { return .stale }
-        if (isProjectBusy && owner == nil) || isImporting { return .busy }
+        if ((isProjectBusy || activeEditOwner != nil) && owner == nil) || isImporting { return .busy }
         if showsPrintSetup || selectionAmountOperation != nil || colorRange != nil || textDraft != nil || brushStroke != nil
             || warpStroke != nil || showsNewDocument || showsImporter || renamingLayerID != nil
             || transformEdit != nil || cropRect != nil || gradientEdit != nil || pixelMove != nil

@@ -8,7 +8,7 @@ export const LIMITS = Object.freeze({ manifest: 4 * 1024 ** 2, asset: 64 * 1024 
 export const BLEND_MODES = Object.freeze(['Normal', 'Darken', 'Multiply', 'Color Burn', 'Linear Burn', 'Lighten', 'Screen', 'Color Dodge', 'Linear Dodge (Add)', 'Overlay', 'Soft Light', 'Hard Light', 'Vivid Light', 'Linear Light', 'Pin Light', 'Hard Mix', 'Difference', 'Exclusion', 'Subtract', 'Divide', 'Hue', 'Saturation', 'Color', 'Luminosity']);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const KNOWN_LAYER = new Set(['id', 'name', 'isVisible', 'transform', 'imageFile', 'parentID', 'isGroup', 'opacity', 'blendMode', 'maskFile', 'maskEnabled', 'maskSourceID', 'adjustment', 'maskPlacement', 'maskLinked', 'shape', 'effects', 'text']);
-const KNOWN_TOP = new Set(['format', 'version', 'colorSpace', 'resolution', 'documentID', 'width', 'height', 'activeLayerID', 'layers', 'guides']);
+const KNOWN_TOP = new Set(['format', 'version', 'colorSpace', 'resolution', 'documentID', 'width', 'height', 'activeLayerID', 'layers', 'guides', 'animation']);
 const KNOWN_TRANSFORM = new Set(['origin', 'size', 'rotation', 'flipX', 'flipY', 'sampling']);
 
 export class ProjectError extends Error {
@@ -35,7 +35,7 @@ export function parseManifest(bytes) {
   let m;
   try { m = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)); } catch { throw new ProjectError('invalid'); }
   requireValue(record(m) && m.format === 'com.compositor.project');
-  requireValue(Number.isInteger(m.version) && m.version >= 1 && m.version <= 13, 'version');
+  requireValue(Number.isInteger(m.version) && m.version >= 1 && m.version <= 16, 'version');
   requireValue(m.colorSpace === 'sRGB', 'colorSpace');
   requireValue(UUID.test(m.documentID) && optionalID(m.activeLayerID));
   requireValue([m.width, m.height].every(n => Number.isInteger(n) && n >= 1 && n <= LIMITS.side));
@@ -91,6 +91,20 @@ export function parseManifest(bytes) {
   if (m.guides !== undefined) {
     requireValue(m.version >= 8 && Array.isArray(m.guides) && m.guides.length <= 1000);
     for (const g of m.guides) requireValue(record(g) && UUID.test(g.id) && ['horizontal', 'vertical'].includes(g.axis) && finite(g.position, -1_000_000, 1_000_000));
+  }
+  if (m.animation !== undefined) {
+    const a = m.animation;
+    requireValue(m.version >= 16 && record(a) && Array.isArray(a.frames) && a.frames.length > 0 && a.frames.length <= 500);
+    requireValue(Number.isInteger(a.loopCount) && a.loopCount >= -1 && a.loopCount <= 65535);
+    const frameIDs = new Set();
+    for (const f of a.frames) {
+      requireValue(record(f) && typeof f.groupID === 'string' && UUID.test(f.groupID));
+      const id = f.groupID.toUpperCase(), group = ids.get(id);
+      requireValue(!frameIDs.has(id) && group?.isGroup && !group.parentID && Number.isInteger(f.durationMS) && f.durationMS >= 10 && f.durationMS <= 655350 && f.durationMS % 10 === 0);
+      frameIDs.add(id);
+    }
+    const frameFor = id => { let l = ids.get(id.toUpperCase()); for (let n = 0; l && n < 65; n++, l = l.parentID && ids.get(l.parentID.toUpperCase())) if (frameIDs.has(l.id.toUpperCase())) return l.id.toUpperCase(); };
+    for (const l of m.layers) if (l.maskSourceID) requireValue(frameFor(l.id) === frameFor(l.maskSourceID));
   }
   return freezeDeep(m);
 }
@@ -165,7 +179,7 @@ export function analyze(manifest, sourcePixels = 0, maskPixels = 0) {
     children.get(k).push(l);
   }
   const unknownTop = Object.keys(manifest).some(k => !KNOWN_TOP.has(k));
-  if (unknownTop) issues.add('unknown');
+  if (unknownTop || manifest.animation && (Object.keys(manifest.animation).some(k => !['frames', 'loopCount'].includes(k)) || manifest.animation.frames.some(f => Object.keys(f).some(k => !['groupID', 'durationMS'].includes(k))))) issues.add('unknown');
   let pixelFallback = 0, previewOnly = 0, simple = 0;
   const visit = (parent, opacity, visible, depth) => {
     for (const l of children.get(parent) ?? []) {
@@ -193,10 +207,13 @@ export function analyze(manifest, sourcePixels = 0, maskPixels = 0) {
   const canvasPixels = manifest.width * manifest.height;
   // Conservative peak estimate: three float targets, presentation/readback,
   // encoded resources, source canvases, uploaded textures, and flip copies.
-  const placedInputs = rows.filter(l => l.effectiveVisible && l.effectiveOpacity > 0 && l.imageFile && !l.isGroup).reduce((n, l) => n + 1 + (l.maskFile && l.maskEnabled !== false ? 1 : 0), 0);
-  // npm Pentrado 0.1.1 consumes full-canvas placed textures (unlike the newer
-  // repository quad API). Include CPU and GPU copies of each placed input.
-  const placedMasks = rows.filter(l => l.maskFile).length;
+  const groups = new Set(manifest.animation?.frames.map(f => f.groupID.toUpperCase()) ?? []), byID = new Map(rows.map(l => [l.id.toUpperCase(), l]));
+  const frameFor = l => { for (let n = 0; l && n < 65; n++, l = l.parentID && byID.get(l.parentID.toUpperCase())) if (groups.has(l.id.toUpperCase())) return l.id.toUpperCase(); };
+  const budgets = [...(groups.size ? groups : [null])].map(id => {
+    const active = rows.filter(l => !frameFor(l) || frameFor(l) === id);
+    return { inputs: active.filter(l => l.effectiveVisible && l.effectiveOpacity > 0 && l.imageFile && !l.isGroup).reduce((n, l) => n + 1 + (l.maskFile && l.maskEnabled !== false ? 1 : 0), 0), masks: active.filter(l => l.maskFile).length };
+  });
+  const placedInputs = Math.max(...budgets.map(v => v.inputs)), placedMasks = Math.max(...budgets.map(v => v.masks));
   const estimatedBytes = canvasPixels * (192 + placedInputs * 12 + placedMasks * 4) + sourcePixels * 8 + maskPixels * 8;
   if (canvasPixels > 16_000_000 || estimatedBytes > 768 * 1024 ** 2) issues.add('memory');
   return { rows, issues: [...issues], estimatedBytes, coverage: { simple, pixelFallback, previewOnly, total: rows.length } };

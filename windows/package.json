@@ -1,7 +1,7 @@
 {
   "name": "compositor-windows",
-  "version": "0.3.0-alpha.1",
-  "description": "Compositor / \u53e0\u7ed8 Windows layer editor, built with the Pentrado engine",
+  "version": "0.4.0-alpha.1",
+  "description": "Compositor / 叠绘 Windows layer editor, built with the Pentrado engine",
   "author": "Compositor-ZH contributors",
   "license": "MIT",
   "private": true,
@@ -26,6 +26,8 @@
     "electron": "44.5.1",
     "electron-builder": "26.15.3",
     "esbuild": "0.28.2",
+    "gifenc": "1.0.3",
+    "omggif": "1.0.10",
     "pentrado": "0.1.1",
     "pngjs": "7.0.0",
     "typescript": "5.9.3",

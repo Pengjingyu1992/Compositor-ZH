@@ -114,8 +114,9 @@ extension EditorSession {
         guard document?.id == snapshot.manifest.documentID else { return }
         beginEdit(actionName)
         let m = snapshot.manifest
+        let shown = document?.currentAnimationFrameID
         document = CanvasDocument(id: m.documentID, width: m.width, height: m.height,
-            layers: snapshot.documentLayers, resolution: m.resolution ?? 72, guides: m.guides ?? [])
+            layers: snapshot.documentLayers, resolution: m.resolution ?? 72, guides: m.guides ?? [], animation: m.animation, displayedAnimationFrameID: shown)
         endEdit()
         viewport.fit(documentSize: document!.size)
     }

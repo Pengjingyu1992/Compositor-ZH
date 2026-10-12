@@ -1,8 +1,8 @@
-# Compositor project format, versions 1–15
+# Compositor project format, versions 1–16
 
 A `.comp` file is a macOS document package containing `manifest.json` and an `images/` directory of `<layer UUID>.png` assets.
 
-The manifest identifies `com.compositor.project` and the sRGB working space. The current reader supports versions `1`–`15`. Application snapshots with channel-screen halftone recipes write `15`; other editable filter stacks write `14`; ordinary application snapshots continue writing `13` for compatibility. It stores document UUID, pixel dimensions, active layer UUID, and layers in bottom-to-top order. Each layer stores its UUID, name, visibility, transform (origin, size, clockwise rotation, flips, sampling), and optional image filename. Blank layers have no image asset.
+The manifest identifies `com.compositor.project` and the sRGB working space. The current reader supports versions `1`–`16`. Animation documents write `16`; snapshots with channel-screen halftone recipes write `15`; other editable filter stacks write `14`; ordinary application snapshots continue writing `13` for compatibility. It stores document UUID, pixel dimensions, active layer UUID, and layers in bottom-to-top order. Each layer stores its UUID, name, visibility, transform (origin, size, clockwise rotation, flips, sampling), and optional image filename. Blank layers have no image asset.
 
 Embedded PNGs preserve source pixels and transparency; transforms remain separate. Projects survive moving or deleting imported source photos. Saving uses a coordinated atomic package replacement. Unsupported versions, invalid metadata, missing assets, unsafe paths, and oversized data are rejected before replacing the live document.
 
@@ -88,3 +88,22 @@ Pixel layer records may include optional `text` metadata: content, PostScript fo
 ### Layer effects
 
 An optional `effects` record contains independent `stroke`, `shadow`, `colorOverlay`, `innerShadow`, `outerGlow` and `innerGlow` records, plus the v12 overlays and bevel described above. Stroke carries a size (0–500 layer pixels), a color, an opacity and an `inside` flag choosing which side of the edge it sits on; drop shadow and inner shadow each carry an angle, a distance, a blur, a color and an opacity; color overlay carries a color and an opacity; outer glow and inner glow each carry a size (0–500 layer pixels), a color and an opacity. Each supports optional `enabled` visibility (missing means visible); hidden effects keep all parameters and remain listed under their layer. Effects, including their visibility, are saved and participate in document undo. Canvas Size, Crop, Trim, color adjustments and selection transforms preserve them. Image Size scales their pixel sizes, distances and blurs with the image, using the geometric mean of the horizontal and vertical factors for nonuniform resizing and clamping to supported ranges. Canvas previews run on a serial background worker with a shared pixel budget; exports render the full-resolution effects. A record omitting an effect means that layer does not have it, so older readers see the effects they understand and ignore the rest.
+
+## Version 16: frame animation
+
+Optional top-level `animation` makes root layer folders into animation frames:
+
+```json
+"animation": {
+  "frames": [{"groupID": "00000000-0000-0000-0000-000000000001", "durationMS": 100}],
+  "loopCount": 0
+}
+```
+
+- `frames` is an ordered, nonempty array of at most 500 entries. Each `groupID` refers to a unique existing root group; it may contain ordinary nested layers, masks, text, shapes and effects. Frame folders cannot be nested or removed through ordinary layer structure commands; use the timeline. Reordering `frames` changes playback order without changing layer stacking.
+- `durationMS` is an integer multiple of 10, from 10 to 655350 inclusive. GIF zero/unspecified delays normalize to 100 ms on import; positive 10 ms delays are retained.
+- `loopCount` mirrors GIF's Netscape extension: `-1` means absent (play once), `0` means repeat forever, and `1...65535` counts additional iterations after the first play.
+- Exactly one frame folder is presented at a time. Its existing visibility and ancestor rules still apply. Layers outside all frame folders are shared by every frame and retain their stacking positions. Clipping relationships must stay within one frame, or entirely within shared layers.
+- Preview frame selection and playback are transient. They do not change saved visibility flags, history, revision or dirty state. On open, derive the frame from `activeLayerID`'s ancestry, falling back to the first frame. Project saving and recovery retain all frames/resources/timing; still-image export presents the current frame. PSD retains frame folders and current visibility but does not encode an animation timeline.
+- GIF import/export and frame creation/duplication additionally enforce 16 million pixels per frame, 500 frames, 64 million total frame pixels, and 64 MiB GIF input/output. General project limits and Windows rendering budgets also apply. Canvas resizing can make a project too large to export as GIF; the project remains saveable.
+- A reader that does not implement `animation` must reject version 16 or explicitly offer a preview. Drawing every frame folder together is invalid. Older files continue using their existing version; EPS alone does not change the project format. Windows recognizes v16 animation but keeps unsupported macOS properties explicit and read-only, preserving their original records and resources.

@@ -13,12 +13,13 @@ export interface LayerRow {
   effectiveVisible: boolean; effectiveOpacity: number;
   category: 'simple' | 'pixels' | 'preview';
 }
+export interface AnimationTrack { frames: {groupID:string;durationMS:number}[]; loopCount:number }
 export interface ViewerProject {
   id: string; name: string; preview: boolean; urls: Record<string, string>;
   selection?: {width:number;height:number;data:Uint8Array}|null;
   locks?: Record<string,Record<string,boolean>>;
   revision: string; dirty: boolean; canUndo: boolean; canRedo: boolean; hasLocation: boolean;
-  manifest: { width: number; height: number; version: number; layers: LayerRow[]; resolution?: number; guides?:{id:string;axis:string;position:number}[] };
+  manifest: { width: number; height: number; version: number; activeLayerID?: string; layers: LayerRow[]; animation?: AnimationTrack; resolution?: number; guides?:{id:string;axis:string;position:number}[] };
   analysis: { rows: LayerRow[]; issues: string[]; estimatedBytes: number;
     coverage: { simple: number; pixelFallback: number; previewOnly: number; total: number } };
 }
@@ -54,7 +55,7 @@ declare global {
       edit(id: string, revision: string, op: Record<string, unknown>): Promise<OpenResult>;
       history(id: string, revision: string, direction: string): Promise<OpenResult>;
       save(id: string, revision: string, as?: boolean): Promise<OpenResult>;
-      importImage(id: string, revision: string): Promise<OpenResult>;
+      importImage(id?: string, revision?: string): Promise<OpenResult>;
       importPSD(): Promise<OpenResult>;
       export(id: string, revision: string, type: string, payload: Record<string, unknown>): Promise<OpenResult>;
       recover(): Promise<OpenResult>;

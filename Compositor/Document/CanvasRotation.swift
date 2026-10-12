@@ -51,7 +51,7 @@ extension EditorSession {
         }
         var turned = CanvasDocument(id: document.id, width: document.height, height: document.width, layers: layers,
                                     resolution: document.resolution,
-                                    guides: document.guides.map { $0.quarterTurned(clockwise: clockwise, canvas: canvas) })
+                                    guides: document.guides.map { $0.quarterTurned(clockwise: clockwise, canvas: canvas) }, animation: document.animation, displayedAnimationFrameID: document.currentAnimationFrameID)
         if let selection = document.selection {
             var turn = clockwise ? CGAffineTransform(a: 0, b: 1, c: -1, d: 0, tx: canvas.height, ty: 0)
                                  : CGAffineTransform(a: 0, b: -1, c: 1, d: 0, tx: 0, ty: canvas.width)

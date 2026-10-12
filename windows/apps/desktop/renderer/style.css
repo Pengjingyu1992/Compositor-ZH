@@ -211,3 +211,9 @@ summary { cursor: pointer; font-size: 12px; font-weight: 600; color: #c9c9c9; }
 .editor-preview img { max-height:210px;max-width:100%;object-fit:contain; }
 .dialog-actions { justify-content:flex-end; }
 .complete-panel .button-row { flex-wrap:wrap; }
+
+.animation-timeline{border-top:1px solid var(--border,#383838);background:var(--panel,#242424);padding:8px 12px;min-width:0}
+.animation-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px}
+.animation-actions label{display:flex;align-items:center;gap:5px}.animation-actions input{width:78px}
+.animation-frames{display:flex;gap:6px;overflow-x:auto;padding-top:7px}.animation-frames button{min-width:68px;display:flex;flex-direction:column;gap:3px;align-items:center}
+.animation-frames button[aria-pressed=true]{border-color:var(--accent,#74bda5);background:#315246}.animation-frames small{color:var(--muted,#aaa)}

@@ -36,6 +36,16 @@ POST {endpoint}/chat/completions
 { "model": …, "temperature": 0, "messages": [ {system}, {user} ] }
 ```
 
+## Privacy and data sent
+
+The assistant is optional and makes no request until you invoke it or test a
+connection. An editing request sends your prompt and layer metadata (IDs, names,
+visibility, opacity, blend mode, group relationships, adjustment kind and mask
+presence) to the endpoint you configured. It does not send layer pixels or the
+`.comp` project. The key is supplied by you, encrypted with Electron
+`safeStorage` on Windows, and sent as bearer authorization to that endpoint.
+Only HTTPS is accepted except HTTP on loopback for a local model server.
+
 ## What it can do
 
 The assistant is offered 26 of the editor's 39 operations:

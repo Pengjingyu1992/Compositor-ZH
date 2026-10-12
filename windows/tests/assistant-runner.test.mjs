@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { fixture, IDS } from './fixtures.mjs';
@@ -14,7 +14,7 @@ import { connectionSettings } from '../packages/platform/ai-settings.mjs';
 
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
 async function setup(t) {
-  const directory = await mkdtemp(path.join(os.tmpdir(), 'comp-ai-regression-'));
+  const directory = await mkdtemp(path.join(await realpath(os.tmpdir()), 'comp-ai-regression-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const location = path.join(directory, 'sample.comp');
   await fixture(location);

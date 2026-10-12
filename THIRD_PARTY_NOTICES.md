@@ -25,3 +25,5 @@
 感谢 Compositor 和 Pentrado 的作者及贡献者。这个项目的目的，是做好中文本地化与实际改进，并在适合时将通用修复反馈给上游。
 
 Thank you to the authors and contributors of Compositor and Pentrado. This project's purpose is Chinese localization and practical improvements, with general fixes shared upstream when appropriate.
+
+EPS import can invoke a separately installed Ghostscript interpreter. No Ghostscript executable, library, fonts or source are bundled or linked. Its separate distribution has its own license. Raster EPS encoding/decoding is original code; macOS GIF uses ImageIO. Windows GIF dependencies and their MIT licenses are listed in `windows/THIRD_PARTY_NOTICES.md` and included in Windows packages.

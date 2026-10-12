@@ -8,12 +8,14 @@ struct PSDConversionRequest: Identifiable, Equatable, Sendable {
     /// The file is still being read: the sheet is up so the click feels answered, but it has
     /// nothing to report yet.
     var isReading: Bool
-    init(id: UUID = UUID(), title: String, confirmTitle: String, conversions: [PSDConversion], isReading: Bool = false) {
+    var notice: String?
+    init(id: UUID = UUID(), title: String, confirmTitle: String, conversions: [PSDConversion], isReading: Bool = false, notice: String? = nil) {
         self.id = id
         self.title = title
         self.confirmTitle = confirmTitle
         self.conversions = conversions
         self.isReading = isReading
+        self.notice = notice
     }
 }
 
@@ -25,7 +27,7 @@ struct PSDConversionSheet: View {
         VStack(alignment: .leading, spacing: 16) {
             Text(L10n.text(request.title)).font(.title2.bold())
             Text(L10n.text(request.isReading ? "Reading the file to see what needs converting."
-                 : "Compositor will convert these Photoshop features. Nothing is applied until you continue."))
+                 : request.notice ?? "Compositor will convert these Photoshop features. Nothing is applied until you continue."))
                 .foregroundStyle(.secondary)
             if request.isReading {
                 HStack(spacing: 10) {

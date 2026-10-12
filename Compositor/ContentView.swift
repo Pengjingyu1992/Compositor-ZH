@@ -132,6 +132,7 @@ struct ContentView: View {
             }
             if !session.canvasOnly {
                 Divider()
+                AnimationTimeline(session: session)
                 // Keeps its own height however short the window gets; the tools scroll instead.
                 statusBar.fixedSize(horizontal: false, vertical: true)
                     .modifier(WidthReader(width: $windowWidth))

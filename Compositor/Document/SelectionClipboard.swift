@@ -186,6 +186,10 @@ extension EditorSession {
     /// original, as Photoshop's do. The copies end up selected.
     func duplicateLayers(_ ids: [UUID], editName: String = "Duplicate Layer") {
         guard canEditLayers, !ids.isEmpty else { return }
+        if document?.animation?.frames.contains(where: { ids.contains($0.groupID) }) == true {
+            importError = L10n.text("Use the animation timeline to duplicate, delete, or reorder frame folders.")
+            return
+        }
         if let document, document.layers.contains(where: { $0.filterStack != nil }) {
             let included = ids.reduce(into: Set(ids)) { $0.formUnion(descendantIDs(of: $1)) }
             let copies = document.layers.filter { included.contains($0.id) }

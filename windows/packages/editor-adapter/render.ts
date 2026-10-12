@@ -1,3 +1,4 @@
+import { frameForLayer, projectForFrame } from './animation';
 import { createWebGLCompositor, type EffectiveMode, type BlendFn } from 'pentrado/engine';
 import type { LayerRow, Placement, ViewerProject } from '../../apps/desktop/renderer/types';
 
@@ -27,6 +28,7 @@ export async function exportPlaced(url:string,p:Placement){
 }
 export function createPreviewRenderer() {
   const engine = createWebGLCompositor(), worker = new Worker(new URL('./pixels-worker.ts', import.meta.url), { type: 'module' });
+  let initialized = false, failure: (() => void) | undefined;
   let live = true, width = 0, height = 0, frame = 0, requestID = 0, lossTimer: ReturnType<typeof setTimeout> | undefined;
   const pending = new Map<number, { resolve: (v: ImageData) => void; reject: (e: Error) => void }>();
   worker.onmessage = event => { const p = pending.get(event.data.id); if (!p) return; pending.delete(event.data.id); if (event.data.error) p.reject(new Error('asset')); else { try { const r = event.data.result; p.resolve(new ImageData(r.data,r.width,r.height)); } catch { p.reject(new Error('asset')); } } };
@@ -50,14 +52,21 @@ export function createPreviewRenderer() {
   const release = (c: HTMLCanvasElement) => { c.width=c.height=1; };
   return {
     async render(project: ViewerProject, output: HTMLCanvasElement, failed: () => void) {
-      width=project.manifest.width; height=project.manifest.height;
-      const probe = new OffscreenCanvas(1,1), gl=probe.getContext('webgl2');
-      if (!gl || !gl.getExtension('EXT_color_buffer_float')) throw new Error('gpu');
-      const limit=Math.min(gl.getParameter(gl.MAX_TEXTURE_SIZE),gl.getParameter(gl.MAX_RENDERBUFFER_SIZE)); gl.getExtension('WEBGL_lose_context')?.loseContext();
-      if(width>limit||height>limit)throw new Error('gpu');
+      project = projectForFrame(project, frameForLayer(project, project.manifest.activeLayerID));
+      failure = failed;
+      if (!live) throw new Error('stale');
+      if (initialized && (width !== project.manifest.width || height !== project.manifest.height)) throw new Error('stale');
+      if (!initialized) {
+        width=project.manifest.width; height=project.manifest.height;
+        const probe = new OffscreenCanvas(1,1), gl=probe.getContext('webgl2');
+        if (!gl || !gl.getExtension('EXT_color_buffer_float')) throw new Error('gpu');
+        const limit=Math.min(gl.getParameter(gl.MAX_TEXTURE_SIZE),gl.getParameter(gl.MAX_RENDERBUFFER_SIZE)); gl.getExtension('WEBGL_lose_context')?.loseContext();
+        if(width>limit||height>limit)throw new Error('gpu');
+        if(!engine.init({width,height,onContextRestored:()=>failure?.()}))throw new Error('gpu');
+        engine.getCanvas()?.addEventListener('webglcontextlost',()=>{lossTimer=setTimeout(()=>{if(live)failure?.();},1500);});
+        initialized = true;
+      }
       output.width=width;output.height=height;
-      if(!engine.init({width,height,onContextRestored:failed}))throw new Error('gpu');
-      engine.getCanvas()?.addEventListener('webglcontextlost',()=>{lossTimer=setTimeout(()=>{if(live)failed();},1500);});
       const rows=project.analysis.rows, byID=new Map(rows.map(l=>[l.id.toUpperCase(),l]));
       const backdrop=makeCanvas(width,height), masks=new Map<string,Uint8ClampedArray>();
       const maskFor=async(l:LayerRow)=>{

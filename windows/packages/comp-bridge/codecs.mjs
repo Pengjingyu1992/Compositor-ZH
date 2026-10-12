@@ -3,6 +3,12 @@ import { readPsd, writePsdBuffer, getLayerImageData, getLayerMaskImageData, getC
 import { randomUUID } from 'node:crypto';
 import { pngDimensions, BLEND_MODES, ProjectError, LIMITS } from './project.mjs';
 import { projectData, placement } from './edit.mjs';
+import omggif from 'omggif';
+import gifenc from 'gifenc';
+import { encodeRasterEPS, decodeRasterEPS } from './eps-raster.mjs';
+import { gifSize, inspectGIF, validateGIF } from './gif-validation.mjs';
+
+const { GIFEncoder, quantize, applyPalette } = gifenc;
 
 const bound = (w, h) => {
   if (![w, h].every(v => Number.isInteger(v) && v >= 1 && v <= LIMITS.side) || w * h > 16_000_000) throw new ProjectError('limit');
@@ -40,6 +46,109 @@ export function importPNG(value) {
   bound(b.readUInt32BE(16),b.readUInt32BE(20));
   // External PNGs may be grayscale, indexed or 16-bit. Stored assets are RGBA8.
   return encodePixels(PNG.sync.read(b,{checkCRC:true}));
+}
+function gifReader(value) {
+  const b = bytes(value);
+  if (b.length < 14 || !['GIF87a', 'GIF89a'].includes(b.toString('ascii', 0, 6))) throw new ProjectError('gifInvalid');
+  gifSize(b.readUInt16LE(6), b.readUInt16LE(8));
+  const info = inspectGIF(b);
+  let reader;
+  try { reader = new omggif.GifReader(b); } catch { throw new ProjectError('gifInvalid'); }
+  if (reader.numFrames() !== info.frames.length) throw new ProjectError('gifInvalid');
+  for (let i = 0; i < info.frames.length; i++) Object.assign(reader.frameInfo(i), info.frames[i]);
+  reader.loopCount = () => info.loopCount;
+  validateGIF(reader, b);
+  return reader;
+}
+export function gifInfo(value) {
+  const reader = gifReader(value);
+  return { width: reader.width, height: reader.height, frames: reader.numFrames() };
+}
+function blitGIF(reader, index, data) {
+  const frame = reader.frameInfo(index);
+  if (!frame.interlaced) { reader.decodeAndBlitFrameRGBA(index, data); return; }
+  // omggif advances only one interlace pass per row; short images can skip
+  // past their bounds. Decode sequential rows, then apply all four GIF passes.
+  const patch = new Uint8ClampedArray(data.length);
+  frame.interlaced = false;
+  try { reader.decodeAndBlitFrameRGBA(index, patch); }
+  finally { frame.interlaced = true; }
+  let sourceRow = 0;
+  for (const [start, step] of [[0, 8], [4, 8], [2, 4], [1, 2]]) {
+    for (let y = start; y < frame.height; y += step, sourceRow++) {
+      let from = ((frame.y + sourceRow) * reader.width + frame.x) * 4;
+      let to = ((frame.y + y) * reader.width + frame.x) * 4;
+      for (let x = 0; x < frame.width; x++, from += 4, to += 4) {
+        if (patch[from + 3]) data.set(patch.subarray(from, from + 4), to);
+      }
+    }
+  }
+}
+export function importGIF(value, language = 'en') {
+  const reader = gifReader(value), data = new Uint8ClampedArray(reader.width * reader.height * 4), input = bytes(value);
+  const background = [0, 0, 0, 0];
+  if (input[10] & 0x80) {
+    const size = 1 << ((input[10] & 7) + 1), index = input[11];
+    if (index < size && 13 + size * 3 <= input.length) background.splice(0, 4, input[13 + index * 3], input[14 + index * 3], input[15 + index * 3], 255);
+  }
+  if (reader.frameInfo(0).transparent_index === null) for (let at = 0; at < data.length; at += 4) data.set(background, at);
+  const m = { format: 'com.compositor.project', version: 16, colorSpace: 'sRGB', documentID: randomUUID().toUpperCase(), width: reader.width, height: reader.height,
+    layers: [], animation: { frames: [], loopCount: reader.loopCount() ?? -1 } }, resources = new Map();
+  let encoded = 0;
+  for (let i = 0; i < reader.numFrames(); i++) {
+    const f = reader.frameInfo(i), previous = f.disposal === 3 ? data.slice() : null;
+    blitGIF(reader, i, data);
+    const groupID = randomUUID().toUpperCase(), id = randomUUID().toUpperCase(), imageFile = `${id}.png`;
+    const resource = encodePixels({ width: reader.width, height: reader.height, data });
+    encoded += resource.bytes.length; if (encoded > 192 * 1024 ** 2) throw new ProjectError('gifLimit');
+    resources.set(`images/${imageFile}`, resource);
+    m.layers.push({ id: groupID, name: `${language === 'zh-Hans' ? '帧' : 'Frame'} ${i + 1}`, isVisible: true, isGroup: true, transform: placement(m.width, m.height) },
+      { id, name: `${language === 'zh-Hans' ? '帧' : 'Frame'} ${i + 1}`, parentID: groupID, isVisible: true, imageFile, transform: placement(m.width, m.height) });
+    m.animation.frames.push({ groupID, durationMS: f.delay ? f.delay * 10 : 100 });
+    m.activeLayerID ??= id;
+    if (f.disposal === 2) {
+      const fill = f.transparent_index === null ? background : [0, 0, 0, 0];
+      for (let y = f.y; y < f.y + f.height; y++) for (let x = f.x; x < f.x + f.width; x++) data.set(fill, (y * reader.width + x) * 4);
+    } else if (previous) data.set(previous);
+  }
+  return projectData(m, resources, 'Animation.comp');
+}
+export function exportGIF(payload) {
+  const frames = payload.frames, gif = GIFEncoder();
+  if (!Array.isArray(frames) || !frames.length || frames.length > 500 || !Number.isInteger(payload.loopCount) || payload.loopCount < -1 || payload.loopCount > 65535) throw new ProjectError('gifInvalid');
+  let width, height, encoded = 0;
+  for (const frame of frames) {
+    if (!Number.isInteger(frame.durationMS) || frame.durationMS < 10 || frame.durationMS > 655350 || frame.durationMS % 10) throw new ProjectError('gifInvalid');
+    const image = decodePNG({ bytes: bytes(frame.png) });
+    width ??= image.width; height ??= image.height;
+    if (image.width !== width || image.height !== height || width * height * frames.length > 64_000_000) throw new ProjectError('gifLimit');
+    encoded += frame.png.byteLength; if (encoded > 192 * 1024 ** 2) throw new ProjectError('gifLimit');
+    for (let at = 0; at < image.data.length; at += 4) {
+      if (payload.keepTransparency !== false) {
+        if (image.data[at + 3] < 128) image.data.fill(0, at, at + 4); else image.data[at + 3] = 255;
+      } else {
+        const alpha = image.data[at + 3];
+        for (let c = 0; c < 3; c++) image.data[at + c] = Math.round((image.data[at + c] * alpha + 255 * (255 - alpha)) / 255);
+        image.data[at + 3] = 255;
+      }
+    }
+    // A transparent global background makes disposal 2 deterministic, even
+    // when the first frame is opaque and a later frame introduces transparency.
+    const palette = [[0, 0, 0, 0], ...quantize(image.data, 255, { format: 'rgba4444', oneBitAlpha: true }).filter(c => c[3] !== 0)];
+    const indexed = applyPalette(image.data, palette, 'rgba4444');
+    const transparentIndex = 0;
+    gif.writeFrame(indexed, width, height, { palette, repeat: payload.loopCount, delay: frame.durationMS, dispose: 2,
+      transparent: transparentIndex >= 0, transparentIndex: Math.max(0, transparentIndex) });
+    if (gif.bytesView().length > 64 * 1024 ** 2) throw new ProjectError('gifLimit');
+  }
+  gif.finish(); return Buffer.from(gif.bytes());
+}
+export function importRasterEPS(value) {
+  const image = decodeRasterEPS(value);
+  return image ? { ...encodePixels(image), resolution: image.resolution } : null;
+}
+export function exportEPS(value, resolution = 72) {
+  return encodeRasterEPS(decodePNG(validatePNG(value)), resolution);
 }
 export function blankPNG(w, h, mask, value = 0) {
   bound(w, h); const data = Buffer.alloc(w * h * 4);
@@ -141,7 +250,14 @@ function pixels(value, w, h) {
   const decoded = PNG.sync.read(r.bytes); return { width: r.width, height: r.height, data: new Uint8ClampedArray(decoded.data) };
 }
 export function exportPSD(data, payload) {
-  const { width, height, layers } = data.manifest;
+  const { width, height } = data.manifest;
+  let layers = data.manifest.layers;
+  if (data.manifest.animation) {
+    const track = data.manifest.animation;
+    if (!track.frames.some(f => f.groupID === payload.frameID)) throw new ProjectError('gifInvalid');
+    const hidden = new Set(track.frames.filter(f => f.groupID !== payload.frameID).map(f => f.groupID));
+    layers = layers.map(l => hidden.has(l.id) ? { ...l, isVisible: false } : l);
+  }
   bound(width, height);
   let allocated = width * height * 24;
   const encodedInputs = [payload.composite, ...(payload.flatten ? [] : [...(payload.layers ?? []), ...(payload.masks ?? [])].map(v=>v.image))];

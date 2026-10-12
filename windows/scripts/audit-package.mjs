@@ -15,7 +15,7 @@ for (const entry of entries.filter(p => /\.(?:js|mjs|cjs|json|html|css)$/.test(p
 }
 for (const license of ['LICENSE.electron.txt', 'LICENSES.chromium.html']) await readFile(path.join(unpacked, license));
 const notices = await readdir(path.join(unpacked, 'resources/licenses'));
-for (const name of ['Compositor-LICENSE.txt', 'pentrado-LICENSE', 'ag-psd-LICENSE', 'pngjs-LICENSE', 'Typr-LICENSE.txt', 'DEPENDENCIES.json', 'THIRD_PARTY_NOTICES.md']) {
+for (const name of ['Compositor-LICENSE.txt', 'pentrado-LICENSE', 'ag-psd-LICENSE', 'pngjs-LICENSE', 'gifenc-LICENSE.md', 'omggif-LICENSE', 'Typr-LICENSE.txt', 'DEPENDENCIES.json', 'THIRD_PARTY_NOTICES.md']) {
   if (!notices.includes(name)) throw new Error(`Missing notice: ${name}`);
 }
 const artifacts = (await readdir(directory)).filter(p => /^Compositor-Windows-.*\.(?:exe|zip)$/.test(p));

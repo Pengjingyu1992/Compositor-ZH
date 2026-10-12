@@ -7,12 +7,13 @@ extension UTType {
     static let compositorProject = UTType(exportedAs: "com.compositor.project", conformingTo: .package)
     nonisolated static let photoshopImage = UTType(importedAs: "com.adobe.photoshop-image")
     nonisolated static let photoshopLargeImage = UTType(importedAs: "com.adobe.photoshop-large-image")
-    static let importableImages: [UTType] = [.jpeg, .png, .heic, .tiff, .webP, .photoshopImage, .photoshopLargeImage, .rawImage, .svg]
+    nonisolated static let encapsulatedPostScript = UTType(importedAs: "com.adobe.encapsulated-postscript", conformingTo: .image)
+    static let importableImages: [UTType] = [.jpeg, .png, .gif, .heic, .tiff, .webP, .photoshopImage, .photoshopLargeImage, .rawImage, .svg, .encapsulatedPostScript]
 }
 
 nonisolated struct ProjectManifest: Codable, Sendable {
-    /// Highest supported format. Session snapshots without editable filters still write version 13.
-    static let current = 15
+    /// Highest supported format. Ordinary snapshots without animation or editable filters still write version 13.
+    static let current = 16
     /// Every version `load` accepts. The package-header check, the manifest check and the error
     /// message all read this, so they cannot drift apart when `current` is bumped.
     static let supported = 1...ProjectManifest.current
@@ -28,6 +29,7 @@ nonisolated struct ProjectManifest: Codable, Sendable {
     var layers: [ProjectLayerRecord]
     /// Alignment guides. Missing on versions 1–7.
     var guides: [CanvasGuide]? = nil
+    var animation: AnimationTrack? = nil
 }
 
 nonisolated struct ProjectLayerRecord: Codable, Sendable {
@@ -63,6 +65,7 @@ nonisolated struct ProjectSnapshot: @unchecked Sendable {
     let images: [UUID: ImportedImage]
     var masks: [UUID: ImportedImage] = [:]
     var filterStacks: [UUID: LayerFilterStack] = [:]
+    var displayedAnimationFrameID: UUID? = nil
 }
 
 nonisolated enum ProjectError: LocalizedError {
@@ -301,6 +304,10 @@ actor ProjectStore {
                   (layer.isGroup != true || (blend == .normal && (manifest.version >= 8 || opacity == 1))) else { throw ProjectError.invalid }
         }
         try LayerHierarchy.validate(manifest.layers)
+        if let animation = manifest.animation {
+            guard manifest.version >= 16 else { throw ProjectError.invalid }
+            try animation.validate(layers: manifest.layers)
+        }
         try LiveMaskGraph.validate(manifest.layers)
         if manifest.version < 5, manifest.layers.contains(where: { $0.maskSourceID != nil }) { throw ProjectError.invalid }
         if manifest.version == 1, manifest.layers.contains(where: { $0.parentID != nil || $0.isGroup == true }) { throw ProjectError.invalid }

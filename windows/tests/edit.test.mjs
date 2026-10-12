@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, readFile, writeFile, mkdir } from 'node:fs/promises';
+import { mkdtemp, rm, readFile, writeFile, mkdir, realpath } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import os from 'node:os';
@@ -11,7 +11,7 @@ import { readProject, resourceDigests } from '../packages/comp-bridge/project.mj
 import { ProjectSession } from '../packages/platform/project-session.mjs';
 import { saveProject, fingerprint, recoverSaves, RecoveryStore } from '../packages/platform/save-project.mjs';
 import { fixture, IDS, manifest, png } from './fixtures.mjs';
-async function sample(t) { const directory=await mkdtemp(path.join(os.tmpdir(),'comp-editor-'));t.after(()=>rm(directory,{recursive:true,force:true}));const location=path.join(directory,'source.comp');await fixture(location);return {directory,location,data:await readProject(location)}; }
+async function sample(t) { const directory=await mkdtemp(path.join(await realpath(os.tmpdir()),'comp-editor-'));t.after(()=>rm(directory,{recursive:true,force:true}));const location=path.join(directory,'source.comp');await fixture(location);return {directory,location,data:await readProject(location)}; }
 const change = (data,op) => editProject(data,{id:IDS[0],...op},codecs);
 test('all adjustment/effect families produce schema-valid candidates',async t=>{
   const {data}=await sample(t);

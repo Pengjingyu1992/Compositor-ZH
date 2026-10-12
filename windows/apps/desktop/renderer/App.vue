@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import AnimationTimeline from './AnimationTimeline.vue';
+import { frameForLayer, projectForFrame } from '../../../packages/editor-adapter/animation';
 import { computed, ref, reactive, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import { messages } from '../../../packages/locales';
 import { createPreviewRenderer, pngBytes, exportPlaced, makeCanvas } from '../../../packages/editor-adapter/render';
@@ -15,6 +17,8 @@ import { visibleLayers } from '../../../packages/editor-adapter/layer-list';
 import type { Language, ViewerProject, OpenResult, LayerRow } from './types';
 
 const language = ref<Language>('zh-Hans'), version = ref(''), project = ref<ViewerProject>();
+const activeFrameID = ref<string>(), animationPlaying = ref(false), frameRendering = ref(false);
+let playbackEpoch = 0;
 const iconURL = 'compositor://app/icon.png';
 const selected = ref<LayerRow>(), busy = ref(false), error = ref(''), settingError = ref(false);
 const query = ref(''), collapsed = ref(new Set<string>()), dropping = ref(false), reportState = ref<'idle' | 'copied' | 'error'>('idle');
@@ -28,7 +32,7 @@ const tools=TOOL_LIST,toolKeys=TOOL_KEYS;
 function toolLabel(key:string){return String(full.labels[key as keyof typeof full.labels] ?? t.value.editor[key as keyof typeof t.value.editor] ?? key);}
 const ui = computed(() => t.value.workspace);
 const thumbURL = (row: LayerRow, mask=false) => project.value?.urls[`images/${mask ? row.maskFile : row.imageFile}`];
-function selectLayer(row: LayerRow,event?:MouseEvent) { full.select(row,event); inspectorTab.value=row.adjustment?'adjustments':'properties'; }
+function selectLayer(row: LayerRow,event?:MouseEvent) { if(animationPlaying.value||frameRendering.value||busy.value||painting.value)return; const p = project.value, frame = p && frameForLayer(p, row.id); if (frame && frame !== activeFrameID.value) { activeFrameID.value = frame; void renderAnimationFrame(); } full.select(row,event); inspectorTab.value=row.adjustment?'adjustments':'properties'; }
 function showEffects() { if(selected.value?.imageFile)inspectorTab.value='effects'; }
 function showDetails() { detailsDialog.value=true; }
 function toggleSearch() { searchOpen.value=!searchOpen.value; if(!searchOpen.value)query.value=''; }
@@ -41,7 +45,7 @@ function tabKey(event: KeyboardEvent) {
   inspectorTab.value = tabs[event.key==='Home'?0:event.key==='End'?2:(i+(event.key==='ArrowRight'?1:2))%3];
   nextTick(() => document.getElementById('tab-'+inspectorTab.value)?.focus());
 }
-const editable=computed(()=>!!project.value&&!busy.value&&!painting.value&&source.value==='engine'&&!issues.value.length);
+const editable=computed(()=>!!project.value&&!busy.value&&!painting.value&&!animationPlaying.value&&!frameRendering.value&&source.value==='engine'&&!issues.value.length);
 const t = computed(() => messages[language.value]);
 const issues = computed(() => [...(project.value?.analysis.issues ?? []), ...extraIssues.value]);
 const rows = computed(() => visibleLayers(project.value?.analysis.rows ?? [], query.value, collapsed.value));
@@ -51,6 +55,7 @@ const formattedProperties = computed(() => {
   const original = project.value.manifest.layers.find(l => l.id === selected.value?.id);
   return JSON.stringify(original, null, 2);
 });
+let rendererOwner = '';
 let renderer: ReturnType<typeof createPreviewRenderer> | undefined, epoch = 0, operation = 0, requests = 0, dragDepth = 0;
 const subscriptions: (() => void)[] = [];
 function fit() {
@@ -66,10 +71,13 @@ async function accept(result: OpenResult) {
   if (result.exported) status.value=t.value.editor.exported;
   if (result.warnings?.length) status.value=result.warnings.map(k=>t.value.editor[k as keyof typeof t.value.editor]??k).join(' · ');
   if (!result.project) return;
+  stopPlayback();
   const same=project.value?.id===result.project.id, selectedID=selected.value?.id, previousZoom=zoom.value,oldActive=(project.value?.manifest as any)?.activeLayerID,newActive=(result.project.manifest as any).activeLayerID;
-  const own = ++epoch;
+  const own = ++epoch; frameRendering.value = false;
   renderer?.dispose(); renderer = undefined;
   project.value = result.project; selected.value = result.project.analysis.rows.find(l=>l.id===(newActive!==oldActive?newActive:same?selectedID:undefined)); error.value = ''; extraIssues.value = [];
+  const frames = result.project.manifest.animation?.frames;
+  activeFrameID.value = frameForLayer(result.project, selected.value?.id) ?? (same && frames?.some(f => f.groupID === activeFrameID.value) ? activeFrameID.value : frames?.[0]?.groupID);
   if(!same){query.value = ''; searchOpen.value=false; collapsed.value = new Set(); status.value='';}
   if(newActive!==oldActive && selected.value)inspectorTab.value=selected.value.adjustment?'adjustments':'properties';reportState.value = 'idle';
   if(result.backup)status.value=t.value.editor.backup;
@@ -78,8 +86,8 @@ async function accept(result: OpenResult) {
   if (epoch !== own || project.value?.id !== result.project.id) return;
   if (source.value === 'engine' && canvas.value) {
     try {
-      const preview = createPreviewRenderer(); renderer = preview;
-      await preview.render(project.value, canvas.value, () => {
+      const preview = createPreviewRenderer(); renderer = preview; rendererOwner = project.value.id + ':' + project.value.revision;
+      await preview.render(projectForFrame(project.value, activeFrameID.value), canvas.value, () => {
         if (epoch !== own) return;
         extraIssues.value = ['gpu']; fallback();
       });
@@ -91,7 +99,8 @@ async function accept(result: OpenResult) {
   }
 }
 async function request(action: () => Promise<OpenResult>): Promise<void> {
-  if (busy.value) return;
+  if (busy.value || frameRendering.value) return;
+  stopPlayback();
   const own = ++operation;
   requests++; busy.value = true; reportState.value = 'idle';
   try { const result = await action(); if (operation === own) await accept(result); }
@@ -102,12 +111,13 @@ function open() { return request(() => window.viewer.open()); }
 function reload() { const id = project.value?.id; if (id) return request(() => window.viewer.reload(id)); }
 async function closeProject() {
   const result=await window.viewer.close();if(!result.closed){if(result.error)error.value=result.error;return;}
-  operation++; epoch++; renderer?.dispose(); renderer = undefined;
+  stopPlayback(); operation++; epoch++; renderer?.dispose(); renderer = undefined;
   drag = undefined;
-  project.value = undefined; selected.value = undefined; source.value = 'none'; error.value = ''; extraIssues.value = [];
+  project.value = undefined; frameRendering.value=false; selected.value = undefined; source.value = 'none'; error.value = ''; extraIssues.value = [];
   query.value = ''; collapsed.value = new Set(); reportState.value = 'idle';
 }
 async function submitEdit(op:Record<string,unknown>,owner:Pick<ViewerProject,'id'|'revision'>|undefined=project.value,finishingStroke=false):Promise<OpenResult>{
+  if (animationPlaying.value || frameRendering.value) return {error:'busy'};
   const denied=editRejection(op,owner,project.value,{busy:busy.value,painting:painting.value,source:source.value,issues:issues.value},finishingStroke);
   if(denied){error.value=denied;return {error:denied};}
   let result:OpenResult={error:'read'};
@@ -117,7 +127,7 @@ async function submitEdit(op:Record<string,unknown>,owner:Pick<ViewerProject,'id
 function edit(op:Record<string,unknown>){const p=project.value;if(!p)return;if(op.kind==='transform'&&(full.ids.length>1||selected.value?.isGroup))op={...op,kind:'transformLayers',ids:full.ids};return submitEdit({id:selected.value?.id,...op},p);}
 function history(direction:string){const p=project.value;if(p)return request(()=>window.editor.history(p.id,p.revision,direction));}
 function save(as=false){const p=project.value;if(p)return request(()=>window.editor.save(p.id,p.revision,as));}
-function importImage(): Promise<void> | undefined {const p=project.value;if(p)return request(()=>window.editor.importImage(p.id,p.revision));}
+function importImage(): Promise<void> {const p=project.value;return request(()=>window.editor.importImage(p?.id,p?.revision));}
 function importPSD(){return request(()=>window.editor.importPSD());}
 function recover(){return request(()=>window.editor.recover());}
 function add(type:string,adjustment?:string){return edit({kind:'add',type,adjustment,name:type==='group'?t.value.editor.group:type==='adjustment'?t.value.adjustments[ADJUSTMENTS.indexOf(adjustment!)]:t.value.raster,parentID:selected.value?.isGroup?selected.value.id:selected.value?.parentID});}
@@ -125,9 +135,27 @@ function numberEvent(e:Event){return Number((e.target as HTMLInputElement).value
 function transformPair(field:'origin'|'size',index:number,e:Event){if(!selected.value)return;const value=[...(full.selectionTransform??selected.value.transform)[field]];value[index]=numberEvent(e);return edit({kind:'transform',field,value});}
 async function create(){newDialog.value=false;await request(()=>window.editor.create(newWidth.value,newHeight.value));}
 async function exportImage(type:string,flatten=false){
-  const p=project.value,c=canvas.value;if(!p||!c||source.value!=='engine')return;psdDialog.value=false;
-  await request(async()=>{
-    const composite=await pngBytes(c),layers:{id:string;image:Uint8Array;left:number;top:number}[]=[],masks:{id:string;image:Uint8Array;left:number;top:number}[]=[];
+  stopPlayback();
+  const p=project.value,c=canvas.value;if(!p||!c||source.value!=='engine'||frameRendering.value||painting.value)return;psdDialog.value=false;
+  try { await request(async()=>{
+    const composite=await pngBytes(c),layers:{id:string;image:Uint8Array;left:number;top:number}[]=[],masks:{id:string;image:Uint8Array;left:number;top:number}[]=[],frames:{png:Uint8Array}[]=[];
+    if(type==='gif'){
+      const track=p.manifest.animation;
+      if(p.manifest.width*p.manifest.height*(track?.frames.length??1)>64_000_000)return {error:'gifLimit'};
+      if(track){
+        // Keep at most one frame's render surfaces alive; encoded frames have a separate budget.
+        renderer?.dispose();renderer=undefined;
+        let encoded=0;
+        const preview=createPreviewRenderer(),surface=makeCanvas(p.manifest.width,p.manifest.height);
+        try{for(const f of track.frames){
+          if(project.value?.id!==p.id||project.value?.revision!==p.revision)return {error:'stale'};
+          let failed=false;
+          await preview.render(projectForFrame(p,f.groupID),surface,()=>{failed=true;});
+          if(failed)throw new Error('gpu');
+          const png=await pngBytes(surface);encoded+=png.byteLength;if(encoded>192*1024**2)return {error:'gifLimit'};frames.push({png});
+        }}finally{preview.dispose();surface.width=surface.height=1;}
+      }else frames.push({png:composite});
+    }
     if(type==='psd'&&!flatten){
       if(p.manifest.layers.filter(l=>l.imageFile).length*p.manifest.width*p.manifest.height*8>512*1024**2)return {error:'limit'};
       for(const l of p.manifest.layers){
@@ -135,8 +163,36 @@ async function exportImage(type:string,flatten=false){
         if(l.maskFile)masks.push({id:l.id,...await exportPlaced(p.urls[`images/${l.maskFile}`],l.maskPlacement??l.transform)});
       }
     }
-    return window.editor.export(p.id,p.revision,type,{composite,layers,masks,flatten});
-  });
+    return await window.editor.export(p.id,p.revision,type,{composite,layers,masks,flatten,frames,frameID:activeFrameID.value});
+  }); } finally { if(type==='gif'&&p.manifest.animation&&project.value?.id===p.id&&project.value?.revision===p.revision)await renderAnimationFrame(); }
+}
+function stopPlayback(){ animationPlaying.value=false;playbackEpoch++; }
+async function renderAnimationFrame(){
+  const p=project.value,c=canvas.value;if(!p||!c||source.value!=='engine')return;
+  const own=++epoch;frameRendering.value=true;
+  const key=p.id+':'+p.revision;
+  if(rendererOwner!==key){renderer?.dispose();renderer=undefined;}
+  try{const preview=renderer??createPreviewRenderer();renderer=preview;rendererOwner=key;await preview.render(projectForFrame(p,activeFrameID.value),c,()=>{if(epoch===own){extraIssues.value=['gpu'];fallback();stopPlayback();}});}
+  catch(e){if(epoch===own){error.value=(e as Error).message==='asset'?'asset':'gpu';fallback();stopPlayback();}}
+  finally{if(epoch===own)frameRendering.value=false;}
+}
+async function seekFrame(id:string){
+  if(!editable.value||!project.value?.manifest.animation?.frames.some(f=>f.groupID===id))return;
+  activeFrameID.value=id;
+  const row=project.value.analysis.rows.find(l=>l.parentID===id&&!l.isGroup)??project.value.analysis.rows.find(l=>l.id===id);
+  if(row)full.select(row);
+  await renderAnimationFrame();
+}
+async function playAnimation(){
+  if(animationPlaying.value){stopPlayback();return;}
+  const p=project.value,track=p?.manifest.animation;if(!p||!track||!editable.value)return;
+  const own=++playbackEpoch;animationPlaying.value=true;let cycle=0;
+  try{do{for(const f of track.frames){
+    if(own!==playbackEpoch||project.value?.id!==p.id||project.value?.revision!==p.revision)return;
+    const deadline=performance.now()+f.durationMS;activeFrameID.value=f.groupID;await renderAnimationFrame();
+    if(own!==playbackEpoch)return;await new Promise(resolve=>setTimeout(resolve,Math.max(0,deadline-performance.now())));
+  }cycle++;}while(track.loopCount===0||track.loopCount>0&&cycle<=track.loopCount);}
+  finally{if(own===playbackEpoch){stopPlayback();const row=p.analysis.rows.find(l=>l.parentID===activeFrameID.value&&!l.isGroup);if(row)full.select(row);}}
 }
 const layeredPSD=computed(()=>project.value&&!project.value.manifest.layers.some(l=>l.adjustment||l.effects&&Object.values(l.effects).some(e=>e.enabled!==false)));
 function dragEnter(event: DragEvent) {
@@ -178,10 +234,11 @@ function onKey(event: KeyboardEvent) {
     const first=fields[0],last=fields.at(-1);
     if(first && ((!event.shiftKey && (document.activeElement===last || !modal?.contains(document.activeElement))) || (event.shiftKey && (document.activeElement===first || !modal?.contains(document.activeElement))))) { event.preventDefault(); (event.shiftKey?last:first)?.focus(); }
   }
+  if(event.key===' '&&!event.repeat&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&!((event.target as HTMLElement)?.closest('input,textarea,select,[contenteditable]'))&&project.value?.manifest.animation){event.preventDefault();void playAnimation();return;}
   full.key(event);
   const input=(event.target as HTMLElement)?.closest('input,textarea,select,[contenteditable]');
   if(!painting.value&&!input&&!event.ctrlKey&&!event.altKey&&!event.metaKey){const k=event.key.toLowerCase();if(['b','e','v','h'].includes(k))tool.value=({b:'brush',e:'eraser',v:'move',h:'pan'} as Record<string,string>)[k];}
-  if(event.key==='Escape'){cancelStroke();newDialog.value=false;psdDialog.value=false;detailsDialog.value=false;}
+  if(event.key==='Escape'){stopPlayback();cancelStroke();newDialog.value=false;psdDialog.value=false;detailsDialog.value=false;}
   if (event.ctrlKey && event.key.toLowerCase() === 'r') { event.preventDefault(); reload(); }
   if (event.ctrlKey && event.key.toLowerCase() === 'w') { event.preventDefault(); closeProject(); }
   if (event.ctrlKey && event.key === '+') { event.preventDefault(); scale(1.25); }
@@ -205,11 +262,11 @@ onMounted(async () => {
   const settings = await window.viewer.settings(); language.value = settings.language; version.value = settings.version;
   document.documentElement.lang = language.value;
   subscriptions.push(window.viewer.onOpen(open), window.viewer.onReload(reload), window.viewer.onClose(closeProject), window.viewer.onFit(fit), window.viewer.onActual(() => zoom.value = 1));
-  const commands: Record<string, () => unknown> = {...full.commands,new:()=>{newDialog.value=true;},image:importImage,importPSD,save:()=>save(),saveAs:()=>save(true),png:()=>exportImage('png'),exportPSD:()=>{psdDialog.value=true;},recover,undo:()=>history('undo'),redo:()=>history('redo'),addPixels:()=>add('pixels'),addGroup:()=>add('group'),addMask:()=>{if(selected.value)edit({kind:'mask',action:'add'});},details:showDetails,properties:()=>{inspectorTab.value='properties';},effects:showEffects};
+  const commands: Record<string, () => unknown> = {...full.commands,new:()=>{newDialog.value=true;},image:importImage,importPSD,save:()=>save(),saveAs:()=>save(true),png:()=>exportImage('png'),gif:()=>exportImage('gif'),eps:()=>exportImage('eps'),exportPSD:()=>{psdDialog.value=true;},recover,undo:()=>history('undo'),redo:()=>history('redo'),addPixels:()=>add('pixels'),addGroup:()=>add('group'),addMask:()=>{if(selected.value)edit({kind:'mask',action:'add'});},details:showDetails,properties:()=>{inspectorTab.value='properties';},effects:showEffects};
   for(const [name,action] of Object.entries(commands))subscriptions.push(window.editor.onCommand(name,()=>{if(painting.value&&!(full.clipboardBusy&&['copy','copyMerged','cut','paste'].includes(name)))return;if(['copy','cut','paste','selectAll'].includes(name)&&document.activeElement?.closest('input,textarea,[contenteditable]')){void window.editor.textClipboard(name);return;}action();}));
   window.addEventListener('keydown', onKey); window.addEventListener('resize', fit);
 });
-onUnmounted(() => { operation++; epoch++; cancelStroke();renderer?.dispose(); full.closeModal(); subscriptions.forEach(stop => stop()); window.removeEventListener('keydown', onKey); window.removeEventListener('resize', fit); });
+onUnmounted(() => { stopPlayback(); operation++; epoch++; cancelStroke();renderer?.dispose(); full.closeModal(); subscriptions.forEach(stop => stop()); window.removeEventListener('keydown', onKey); window.removeEventListener('resize', fit); });
 </script>
 
 <template>
@@ -271,7 +328,7 @@ onUnmounted(() => { operation++; epoch++; cancelStroke();renderer?.dispose(); fu
               <div class="new-dimensions"><label>{{ t.editor.width }}<span class="unit-field"><input type="number" v-model.number="newWidth" min="1" max="30000" required><span>px</span></span></label><button class="icon-button" type="button" :aria-label="t.editor.swap" :title="t.editor.swap" @click="[newWidth,newHeight]=[newHeight,newWidth]"><Icon name="swap"/></button><label>{{ t.editor.height }}<span class="unit-field"><input type="number" v-model.number="newHeight" min="1" max="30000" required><span>px</span></span></label></div>
               <div class="welcome-actions"><button type="button" :disabled="busy" @click="open">{{ t.open }}</button><button class="primary" type="submit" :disabled="busy">{{ t.editor.create }}</button></div>
             </form>
-            <div class="welcome-secondary"><button class="text-button" :disabled="busy" @click="importPSD">{{ t.editor.importPSD }}</button><button class="text-button" :disabled="busy" data-testid="recover" @click="recover">{{ t.editor.recover }}</button></div>
+            <div class="welcome-secondary"><button class="text-button" :disabled="busy" @click="importImage">{{ t.editor.importImage }}</button><button class="text-button" :disabled="busy" @click="importPSD">{{ t.editor.importPSD }}</button><button class="text-button" :disabled="busy" data-testid="recover" @click="recover">{{ t.editor.recover }}</button></div>
           </div>
           <div v-else-if="source!=='none'" class="canvas-surround" :style="{minWidth:project.manifest.width * zoom + 80 + 'px',minHeight:project.manifest.height * zoom + 80 + 'px'}">
             <div ref="artboard" class="artboard" :class="'tool-'+tool" :style="{width:project.manifest.width * zoom + 'px',height:project.manifest.height * zoom + 'px'}">
@@ -353,6 +410,7 @@ onUnmounted(() => { operation++; epoch++; cancelStroke();renderer?.dispose(); fu
         </section>
       </aside>
     </main>
+    <AnimationTimeline v-if="project" :language="language" :track="project.manifest.animation" :active="activeFrameID" :disabled="!editable" :playing="animationPlaying" @frame="seekFrame" @play="playAnimation" @edit="edit" @export="exportImage('gif')"/>
     <div class="statusbar">
       <span class="canvas-status">{{ busy ? ui.loading : project ? Math.round(zoom*100) + '%' : ui.transparent }}</span>
       <span v-if="project">{{ project.manifest.width.toLocaleString() }} × {{ project.manifest.height.toLocaleString() }} px · sRGB</span>
@@ -364,7 +422,7 @@ onUnmounted(() => { operation++; epoch++; cancelStroke();renderer?.dispose(); fu
     <AiPanel :language="language" :project="project" :busy="busy" :editable="editable" :edit="submitEdit" :history="history"/>
     <CompleteControls :e="full" mode="dialogs" :tool="tool" :disabled="!editable" :selected="selected" :color="color" :size="brushSize" :opacity="brushOpacity" :target="paintTarget"/>
     <div v-if="newDialog" class="modal-shade" @click.self="newDialog=false"><form class="dialog" role="dialog" aria-modal="true" :aria-label="t.editor.newCanvas" @submit.prevent="create"><h2>{{ t.editor.newCanvas }}</h2><p>{{ ui.transparent }}</p><div class="new-dimensions"><label>{{ t.editor.width }}<input type="number" v-model.number="newWidth" min="1" max="30000" required></label><button class="icon-button" type="button" :aria-label="t.editor.swap" :title="t.editor.swap" @click="[newWidth,newHeight]=[newHeight,newWidth]"><Icon name="swap"/></button><label>{{ t.editor.height }}<input type="number" v-model.number="newHeight" min="1" max="30000" required></label></div><div class="button-row"><button type="button" @click="newDialog=false">{{ t.editor.cancel }}</button><button class="primary" type="submit">{{ t.editor.create }}</button></div></form></div>
-    <div v-if="psdDialog" class="modal-shade" @click.self="psdDialog=false"><div class="dialog" role="dialog" aria-modal="true" :aria-label="t.editor.conversion"><h2>{{ t.editor.conversion }}</h2><p>{{ t.editor.conversionNote }}</p><div class="button-row"><button @click="psdDialog=false">{{ t.editor.cancel }}</button><button :disabled="!layeredPSD || !editable" @click="exportImage('psd')">{{ t.editor.layered }}</button><button :disabled="!editable" class="primary" @click="exportImage('psd',true)">{{ t.editor.flattened }}</button></div></div></div>
+    <div v-if="psdDialog" class="modal-shade" @click.self="psdDialog=false"><div class="dialog" role="dialog" aria-modal="true" :aria-label="t.editor.conversion"><h2>{{ t.editor.conversion }}</h2><p>{{ t.editor.conversionNote }}</p><p v-if="project?.manifest.animation">{{ language==='en'?'PSD keeps frame folders with current visibility. Save .comp or GIF to retain animation timing.':'PSD 保留帧文件夹和当前帧的可见性。动画时长请保存在 .comp 或 GIF 中。' }}</p><div class="button-row"><button @click="psdDialog=false">{{ t.editor.cancel }}</button><button :disabled="!layeredPSD || !editable" @click="exportImage('psd')">{{ t.editor.layered }}</button><button :disabled="!editable" class="primary" @click="exportImage('psd',true)">{{ t.editor.flattened }}</button></div></div></div>
     <div v-if="detailsDialog" class="modal-shade" @click.self="detailsDialog=false"><section class="dialog details-dialog" role="dialog" aria-modal="true" :aria-label="ui.details"><div class="dialog-heading"><h2>{{ ui.details }}</h2><button class="icon-button" :aria-label="t.close" @click="detailsDialog=false"><Icon name="close"/></button></div><p>{{ t.sourceNote }}</p><p>{{ t.readonly }} · {{ version }}</p><template v-if="project"><p>{{ ui.source }}：{{ source==='engine'?t.engine:source==='saved'?t.saved:t.metadata }}</p><section class="coverage"><h3>{{ t.coverage }}</h3><dl><div><dt>{{ t.simple }}</dt><dd>{{ project.analysis.coverage.simple }}</dd></div><div><dt>{{ t.pixels }}</dt><dd>{{ project.analysis.coverage.pixelFallback }}</dd></div><div><dt>{{ t.preview }}</dt><dd>{{ project.analysis.coverage.previewOnly }}</dd></div></dl><p>{{ t.coverageNote }}</p><button :disabled="busy" data-testid="copy-report" @click="copyReport">{{ t.copyReport }}</button><small>{{ t.reportPrivacy }}</small><small v-if="reportState!=='idle'" role="status">{{ reportState==='copied'?t.reportCopied:t.reportError }}</small></section><details v-if="selected" class="raw-properties"><summary>{{ t.properties }}</summary><pre>{{ formattedProperties }}</pre></details></template><div class="button-row"><button class="primary" @click="detailsDialog=false">{{ t.close }}</button></div></section></div>
   </div>
 </template>

@@ -123,7 +123,7 @@ final class ProjectWorkspace {
     func installRecovery(_ snapshot: ProjectSnapshot, title: String) -> ProjectTab {
         let source = snapshot.manifest
         let manifest = ProjectManifest(version: source.version, resolution: source.resolution, documentID: UUID(), width: source.width,
-            height: source.height, activeLayerID: source.activeLayerID, layers: source.layers, guides: source.guides)
+            height: source.height, activeLayerID: source.activeLayerID, layers: source.layers, guides: source.guides, animation: source.animation)
         let recovered = ProjectSnapshot(manifest: manifest, images: snapshot.images, masks: snapshot.masks, filterStacks: snapshot.filterStacks)
         let tab = ProjectTab(name: L10n.format("Recovered %@", title), recoveryStore: recoveryStore)
         tab.controller.workspace = self; tab.controller.window = window

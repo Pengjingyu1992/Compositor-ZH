@@ -21,6 +21,8 @@
 			<array>
 				<string>public.jpeg</string>
 				<string>public.png</string>
+				<string>com.compuserve.gif</string>
+				<string>com.adobe.encapsulated-postscript</string>
 				<string>public.heic</string>
 				<string>public.tiff</string>
 				<string>org.webmproject.webp</string>
@@ -77,6 +79,19 @@
 	</array>
 	<key>UTImportedTypeDeclarations</key>
 	<array>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array><string>public.image</string></array>
+			<key>UTTypeDescription</key>
+			<string>Encapsulated PostScript</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.adobe.encapsulated-postscript</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array><string>eps</string><string>epsf</string><string>epsi</string></array>
+			</dict>
+		</dict>
 		<dict>
 			<key>UTTypeConformsTo</key>
 			<array>

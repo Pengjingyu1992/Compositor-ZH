@@ -9,8 +9,10 @@ import { getLanguage, setLanguage } from '../../../packages/platform/preferences
 import { ProjectSession } from '../../../packages/platform/project-session.mjs';
 import { compatibilityReport } from '../../../packages/platform/compatibility-report.mjs';
 import { RecoveryStore, recoverSaves, fingerprint } from '../../../packages/platform/save-project.mjs';
-import { safeDirectory, safeRead, readProject, jpegDimensions, ProjectError, LIMITS } from '../../../packages/comp-bridge/project.mjs';
+import { safeDirectory, safeRead, readProject, jpegDimensions, pngDimensions, ProjectError, LIMITS } from '../../../packages/comp-bridge/project.mjs';
 import { registerAiAssistant } from './ai-assistant.mjs';
+import { renderEPS } from '../../../packages/platform/eps-import.mjs';
+import { EPS_LIMITS } from '../../../packages/comp-bridge/eps-raster.mjs';
 
 const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 const RENDERER = path.join(ROOT, 'out', 'renderer');
@@ -56,6 +58,7 @@ function nativeMenu() {
       { id: 'file-save-as', label: zh ? '另存为…' : 'Save As…', accelerator: 'Ctrl+Shift+S', enabled: !!session.current && !session.pending, click: () => win?.webContents.send('editor:saveAs') },
       { id: 'file-export-png', label: zh ? '导出 PNG…' : 'Export PNG…', click: () => win?.webContents.send('editor:png') },
       { id: 'file-export-psd', label: zh ? '导出 PSD…' : 'Export PSD…', click: () => win?.webContents.send('editor:exportPSD') },
+      ...['gif', 'eps'].map(type => ({ id: `file-export-${type}`, label: zh ? `导出 ${type.toUpperCase()}…` : `Export ${type.toUpperCase()}…`, enabled: !!session.current && !session.pending, click: () => win?.webContents.send(`editor:${type}`) })),
       { id: 'file-recover', label: zh ? '恢复未保存项目…' : 'Recover unsaved project…', click: () => win?.webContents.send('editor:recover') },
       { id: 'file-reload', label: zh ? '重新加载项目' : 'Reload project', accelerator: 'Ctrl+R', enabled: !!session.current && !session.pending, click: () => win?.webContents.send('viewer:reload') },
       { id: 'file-close', label: zh ? '关闭项目' : 'Close project', accelerator: 'Ctrl+W', enabled: !!session.current || session.pending, click: () => win?.webContents.send('viewer:close') },
@@ -195,6 +198,23 @@ function buildEdit(data,op) {
     worker.once('message',r=>{clearTimeout(timer);worker.terminate();if(r.error)reject(new ProjectError(r.error));else resolve(r.data);});worker.once('error',()=>{clearTimeout(timer);reject(new ProjectError('invalid'));});
   });
 }
+function imageCodec(operation, bytes, resolution) {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(new URL('../../../packages/platform/image-codec-worker.mjs', import.meta.url), {
+      workerData: { operation, bytes, resolution, codecPath: path.join(ROOT, 'out/codecs/index.cjs') },
+      resourceLimits: { maxOldGenerationSizeMb: 256, maxYoungGenerationSizeMb: 32 }
+    });
+    let settled = false;
+    const finish = (error, result) => {
+      if (settled) return; settled = true; clearTimeout(timer); worker.terminate();
+      if (error) reject(new ProjectError(error)); else resolve(result);
+    };
+    const timer = setTimeout(() => finish('limit'), 30000);
+    worker.once('message', value => finish(value.error, value.result));
+    worker.once('error', () => finish('asset'));
+    worker.once('exit', () => { if (!settled) finish('asset'); });
+  });
+}
 handler('editor:edit', (id,revision,op)=>{
   const heavy=o=>['stroke','fill','gradient','bucket','filter','imageSize','applyMask','selectionMask'].includes(o?.kind)||o?.kind==='selection'||(o?.kind==='batch'&&Array.isArray(o.operations)&&o.operations.some(heavy));
   return projectRequest(async()=>{const result=heavy(op)?await session.editAsync(id,revision,op,buildEdit):session.edit(id,revision,op);nativeMenu();return result;});
@@ -213,14 +233,45 @@ handler('editor:textClipboard',action=>{if(!['copy','cut','paste','selectAll'].i
 handler('editor:history', (id, revision, dir) => { const result = session.history(id, revision, dir); nativeMenu(); return result; });
 handler('editor:save', (id, revision, as) => projectRequest(() => session.save(id, revision, c => chooseSave(c, as === true))));
 handler('editor:image', async (id, revision) => {
-  if (!session.current || session.current.id !== id || session.revision !== revision || session.pending) return { error: 'stale' };
-  session.pending = true;
+  if (session.pending) return { error: 'busy' };
+  if (session.current ? session.current.id !== id || session.revision !== revision : id != null || revision != null) return { error: 'stale' };
+  const owner = session.current, generation = session.generation;
+  session.pending = true; nativeMenu();
   try {
-    const choice = await dialog.showOpenDialog(win, { properties: ['openFile'], filters: [{ name: 'Image', extensions: ['png', 'jpg', 'jpeg'] }] }); if (choice.canceled) return { canceled: true };
-    await safeDirectory(path.dirname(choice.filePaths[0])); let b = await safeRead(choice.filePaths[0], LIMITS.asset);
-    if (path.extname(choice.filePaths[0]).toLowerCase() !== '.png') { jpegDimensions(b); const image = nativeImage.createFromBuffer(b); if (image.isEmpty()) throw new ProjectError('asset'); b = image.toPNG(); }
-    if (session.current.id !== id || session.revision !== revision) return { error: 'stale' };
-    session.pending = false; return session.edit(id, revision, { kind: 'importPixels', png: new Uint8Array(b), name: path.basename(choice.filePaths[0]).slice(0, 256) });
+    const choice = await dialog.showOpenDialog(win, { properties: ['openFile'], filters: [{ name: 'Image', extensions: ['png', 'jpg', 'jpeg', 'gif', 'eps', 'epsf', 'epsi'] }] }); if (choice.canceled) return { canceled: true };
+    const extension = path.extname(choice.filePaths[0]).toLowerCase();
+    let imageResolution;
+    await safeDirectory(path.dirname(choice.filePaths[0])); let b = await safeRead(choice.filePaths[0], ['.eps', '.epsf', '.epsi'].includes(extension) ? EPS_LIMITS.bytes : LIMITS.asset);
+    if (['.eps', '.epsf', '.epsi'].includes(extension)) {
+      const answer = await dialog.showMessageBox(win, { type: 'warning', buttons: language === 'en' ? ['Cancel', 'Import pixels'] : ['取消', '导入像素'], defaultId: 0, cancelId: 0,
+        message: language === 'en' ? 'EPS opens as one raster layer. Text and paths will not remain editable. General EPS is rendered at 144 DPI; Ghostscript 10 must be installed.' : 'EPS 将导入为一个像素图层，文字和路径不再可编辑。普通 EPS 以 144 DPI 渲染，需安装 Ghostscript 10。' });
+      if (answer.response !== 1) return { canceled: true };
+      const own = await imageCodec('importRasterEPS', b);
+      imageResolution = own?.resolution ?? 144;
+      b = own ? Buffer.from(own.bytes) : Buffer.from((await imageCodec('importPNG', await renderEPS(b, app.getPath('temp')))).bytes);
+    } else if (b.subarray(0, 3).toString('ascii') === 'GIF') {
+      // Build every frame before replacing the document. Canceled/failed imports keep the old project.
+      const imported = await imageCodec('importGIF', b, language);
+      if (session.current !== owner || generation !== session.generation || owner && session.revision !== revision) return { error: 'stale' };
+      session.pending = false;
+      if (!(await canLeave())) return { canceled: true };
+      if (session.current !== owner || generation !== session.generation || owner && session.revision !== revision) return { error: 'stale' };
+      for (const r of imported.resources.values()) r.bytes = Buffer.from(r.bytes);
+      imported.sourceBytes = Buffer.from(imported.sourceBytes);
+      imported.name = path.basename(choice.filePaths[0]).replace(/\.gif$/i, '.comp');
+      session.generation++;
+      const result = session.install(imported); session.scheduleRecovery(); return result;
+    } else if (extension !== '.png') { jpegDimensions(b); const image = nativeImage.createFromBuffer(b); if (image.isEmpty()) throw new ProjectError('asset'); b = image.toPNG(); }
+    if (session.current !== owner || generation !== session.generation || owner && session.revision !== revision) return { error: 'stale' };
+    session.pending = false;
+    if (!owner) {
+      const asset = codecs.validatePNG(new Uint8Array(b)), created = session.create(asset.width, asset.height, imageResolution);
+      if (created.error) return created;
+      id = session.current.id; revision = session.revision;
+    }
+    const result = session.edit(id, revision, { kind: 'importPixels', png: new Uint8Array(b), name: path.basename(choice.filePaths[0]).slice(0, 256) });
+    if (!owner && result.error) session.close();
+    return result;
   } catch (e) { return { error: e.code ?? 'asset' }; } finally { session.pending = false; nativeMenu(); }
 });
 handler('editor:importPSD', async () => {
@@ -241,12 +292,34 @@ handler('editor:importPSD', async () => {
 });
 handler('editor:export', async (id, revision, type, payload) => {
   if (!session.current || session.current.id !== id || session.revision !== revision || session.pending) return { error: 'stale' };
-  if (!['png', 'psd'].includes(type) || session.current.data.analysis.issues.length) return { error: 'unsupported' };
-  session.pending = true;
+  if (!['png', 'psd', 'gif', 'eps'].includes(type) || session.current.data.analysis.issues.length) return { error: 'unsupported' };
+  const owner = session.current;
+  session.pending = true; nativeMenu();
   try {
+    if (type === 'gif' || type === 'eps') {
+      const answer = await dialog.showMessageBox(win, { type: 'warning', buttons: language === 'en' ? ['Cancel', 'Export'] : ['取消', '导出'], defaultId: 1, cancelId: 0,
+        message: type === 'gif' ? (language === 'en' ? 'Export all animation frames with their timing and repeats. Each frame uses up to 256 colors and binary transparency.' : '导出全部动画帧，保留帧时长和循环次数。每帧最多 256 色，保留二值透明度。') : (language === 'en' ? 'Export a flattened RGB raster EPS. Transparent areas are filled with white. Text, paths and layers will not remain editable.' : '导出扁平 RGB 像素 EPS，透明区域填为白色，不保留可编辑文字、路径和图层。') });
+      if (answer.response !== 1) return { canceled: true };
+    }
     const choice = await dialog.showSaveDialog(win, { filters: [{ name: type.toUpperCase(), extensions: [type] }], defaultPath: `Export.${type}` }); if (choice.canceled || !choice.filePath) return { canceled: true };
     if (session.current.id !== id || session.revision !== revision) return { error: 'stale' };
-    const bytes = type === 'png' ? codecs.validatePNG(payload.composite).bytes : codecs.exportPSD(session.current.data, payload);
+    let bytes;
+    if (type === 'gif') {
+      const m = session.current.data.manifest, frames = m.animation?.frames ?? [{ durationMS: 100 }];
+      if (!Array.isArray(payload.frames) || payload.frames.length !== frames.length || m.width * m.height * frames.length > 64_000_000) throw new ProjectError('gifLimit');
+      let encoded = 0;
+      const validated = payload.frames.map((f, i) => {
+        if (!(f.png instanceof Uint8Array) || f.png.byteLength > LIMITS.asset) throw new ProjectError('gifLimit');
+        const png = pngDimensions(Buffer.from(f.png.buffer, f.png.byteOffset, f.png.byteLength));
+        if (png.width !== m.width || png.height !== m.height) throw new ProjectError('gifInvalid');
+        encoded += f.png.byteLength; if (encoded > 192 * 1024 ** 2) throw new ProjectError('gifLimit');
+        return { png: f.png, durationMS: frames[i].durationMS };
+      });
+      bytes = Buffer.from(await imageCodec('exportGIF', { frames: validated, loopCount: m.animation?.loopCount ?? -1, keepTransparency: true }));
+    } else if (type === 'png') bytes = codecs.validatePNG(payload.composite).bytes;
+    else if (type === 'psd') bytes = codecs.exportPSD(session.current.data, payload);
+    else bytes = Buffer.from(await imageCodec('exportEPS', payload.composite, session.current.data.manifest.resolution ?? 72));
+    if (session.current !== owner || session.revision !== revision) return { error: 'stale' };
     await writeExport(choice.filePath, bytes); return { exported: true };
   } catch (e) { return { error: e.code ?? 'write' }; } finally { session.pending = false; nativeMenu(); }
 });

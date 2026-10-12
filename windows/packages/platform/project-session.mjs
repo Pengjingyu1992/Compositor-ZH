@@ -33,9 +33,9 @@ export class ProjectSession {
     this.undoStack = []; this.redoStack = []; return this.view();
   }
 
-  create(w, h) {
+  create(w, h, resolution) {
     if (this.pending) return { error: 'busy' };
-    try { this.generation++; return this.install(newProject(w, h)); } catch (e) { return { error: e.code ?? (['limit','selection','source'].includes(e.message)?e.message:'invalid') }; }
+    try { this.generation++; return this.install(newProject(w, h, resolution)); } catch (e) { return { error: e.code ?? (['limit','selection','source'].includes(e.message)?e.message:'invalid') }; }
   }
 
   edit(id, revision, op) {

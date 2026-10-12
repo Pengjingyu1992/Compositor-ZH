@@ -19692,6 +19692,693 @@
           }
         }
       }
+    },
+    "%lld frames": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld frames"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 帧"
+          }
+        }
+      }
+    },
+    "Animation": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Animation"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "动画"
+          }
+        }
+      }
+    },
+    "Animation Timing": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Animation Timing"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "动画时长"
+          }
+        }
+      }
+    },
+    "Animation folders retain the current frame visibility in PSD; timing and repeats remain in the Compositor project.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Animation folders retain the current frame visibility in PSD; timing and repeats remain in the Compositor project."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PSD 保留帧文件夹和当前帧可见性；时长与循环设置保留在叠绘项目中。"
+          }
+        }
+      }
+    },
+    "Choose Ghostscript Folder": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择 Ghostscript 目录"
+          }
+        }
+      }
+    },
+    "Choose Ghostscript Folder…": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择 Ghostscript 目录…"
+          }
+        }
+      }
+    },
+    "Choose a JPEG, PNG, GIF, HEIC, TIFF, WebP, SVG, EPS, RAW, or Photoshop file.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请选择 JPEG、PNG、GIF、HEIC、TIFF、WebP、SVG、EPS、RAW 或 Photoshop 文件。"
+          }
+        }
+      }
+    },
+    "Choose the installation root containing bin/gs and its dependencies. For Homebrew, choose its prefix folder.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请选择包含 bin/gs 及其依赖的安装根目录。使用 Homebrew 时，请选择其安装前缀目录。"
+          }
+        }
+      }
+    },
+    "Create Animation": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create Animation"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "创建动画"
+          }
+        }
+      }
+    },
+    "Delete Animation Frame": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete Animation Frame"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除动画帧"
+          }
+        }
+      }
+    },
+    "Duplicate Animation Frame": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Duplicate Animation Frame"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制动画帧"
+          }
+        }
+      }
+    },
+    "Duration (ms)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Duration (ms)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "时长（毫秒）"
+          }
+        }
+      }
+    },
+    "EPS": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "EPS"
+          }
+        }
+      }
+    },
+    "EPS Import": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "EPS 导入"
+          }
+        }
+      }
+    },
+    "EPS is imported as one raster layer. Text and paths will not remain editable. General EPS is rendered at 144 DPI.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "EPS 将导入为一个像素图层，文字和路径不再可编辑。普通 EPS 以 144 DPI 渲染。"
+          }
+        }
+      }
+    },
+    "EPS rendering took too long and was stopped.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "EPS 渲染超时，已停止处理。"
+          }
+        }
+      }
+    },
+    "EPS supports up to 16 megapixels, 30,000 pixels per side, and 128 MiB per file.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "EPS 最多支持 1600 万像素，单边不超过 30,000 像素，单个文件不超过 128 MiB。"
+          }
+        }
+      }
+    },
+    "Forget Folder": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消目录授权"
+          }
+        }
+      }
+    },
+    "Frame %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Frame %lld"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第 %lld 帧"
+          }
+        }
+      }
+    },
+    "GIF": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GIF"
+          }
+        }
+      }
+    },
+    "GIF plain-text rendering blocks are not supported. Export image frames from the source application first.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GIF plain-text rendering blocks are not supported. Export image frames from the source application first."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚不支持 GIF 的文本渲染块，请先在来源软件导出图像帧。"
+          }
+        }
+      }
+    },
+    "GIF supports up to 16 megapixels per frame, 500 frames, 64 million total frame pixels, and 64 MiB per file.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GIF supports up to 16 megapixels per frame, 500 frames, 64 million total frame pixels, and 64 MiB per file."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GIF 每帧最多 1600 万像素、500 帧、总计 6400 万帧像素，文件最多 64 MiB。"
+          }
+        }
+      }
+    },
+    "GIF · all animation frames · up to 256 colors per frame": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GIF · all animation frames · up to 256 colors per frame"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GIF · 导出全部动画帧 · 每帧最多 256 色"
+          }
+        }
+      }
+    },
+    "General EPS requires a current Ghostscript 10 installation. Select its installation folder, including libraries and fonts, to allow read-only access.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入普通 EPS 需要安装当前 Ghostscript 10。选择包含程序、依赖库和字体的安装目录，授予只读访问权限。"
+          }
+        }
+      }
+    },
+    "Ghostscript folder authorized.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已授权 Ghostscript 目录。"
+          }
+        }
+      }
+    },
+    "Install the current Ghostscript 10 release, then choose its folder in Settings → EPS Import. Compositor's own raster EPS files open without it.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请安装当前 Ghostscript 10 发行版，再到“设置 → EPS 导入”选择安装目录。叠绘自身导出的像素 EPS 无需此组件。"
+          }
+        }
+      }
+    },
+    "Keep GIF Transparency": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep GIF Transparency"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保留 GIF 透明度"
+          }
+        }
+      }
+    },
+    "Move Frame Earlier": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move Frame Earlier"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将帧前移"
+          }
+        }
+      }
+    },
+    "Move Frame Later": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move Frame Later"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将帧后移"
+          }
+        }
+      }
+    },
+    "New Animation Frame": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New Animation Frame"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新建动画帧"
+          }
+        }
+      }
+    },
+    "Pause Animation": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pause Animation"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂停动画"
+          }
+        }
+      }
+    },
+    "Play Animation": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Play Animation"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "播放动画"
+          }
+        }
+      }
+    },
+    "Raster EPS · flattened RGB image · text and paths are not editable": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "像素 EPS · 扁平 RGB 图像 · 文字和路径不再可编辑"
+          }
+        }
+      }
+    },
+    "Reorder Animation Frames": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reorder Animation Frames"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "调整动画帧顺序"
+          }
+        }
+      }
+    },
+    "Repeats (−1 once, 0 forever)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repeats (−1 once, 0 forever)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重复次数（−1 单次，0 无限）"
+          }
+        }
+      }
+    },
+    "Review this image conversion. Nothing is applied until you continue.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请查看以下图像转换说明。确认后才会导入。"
+          }
+        }
+      }
+    },
+    "Some dropped items couldn’t be read. Drag supported image, GIF, EPS, or Photoshop files from Finder.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "部分拖入的项目无法读取。请从访达拖入支持的图像、GIF、EPS 或 Photoshop 文件。"
+          }
+        }
+      }
+    },
+    "The EPS could not be rendered. Embedded fonts or external resources may be unavailable.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "EPS 渲染失败，可能缺少字体或外部资源。"
+          }
+        }
+      }
+    },
+    "The EPS file is damaged or has no usable bounding box.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "EPS 文件损坏，或没有有效的边界框。"
+          }
+        }
+      }
+    },
+    "Turn this canvas into editable GIF frames": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn this canvas into editable GIF frames"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将当前画布变为可编辑的 GIF 帧"
+          }
+        }
+      }
+    },
+    "Use a Ghostscript installation under /opt/homebrew or /usr/local for sandboxed EPS import.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use a Ghostscript installation under /opt/homebrew or /usr/local for sandboxed EPS import."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "沙盒 EPS 导入仅支持安装在 /opt/homebrew 或 /usr/local 下的 Ghostscript。"
+          }
+        }
+      }
+    },
+    "Use the animation timeline to duplicate, delete, or reorder frame folders.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use the animation timeline to duplicate, delete, or reorder frame folders."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请使用动画时间轴复制、删除或调整帧文件夹顺序。"
+          }
+        }
+      }
+    },
+    "Common sizes": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "常用尺寸"
+          }
+        }
+      }
+    },
+    "Set your canvas size and start creating.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设置画布尺寸，开始创作"
+          }
+        }
+      }
+    },
+    "Square canvas": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "方形"
+          }
+        }
+      }
+    },
+    "Or drop an image into the workspace": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "或将图像拖入工作区"
+          }
+        }
+      }
+    },
+    "Canvas preview": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "画布预览"
+          }
+        }
+      }
+    },
+    "Enter a valid canvas size to preview.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "输入有效的画布尺寸以预览。"
+          }
+        }
+      }
+    },
+    "Start with a transparent, white or black canvas.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新建透明、白色或黑色画布。"
+          }
+        }
+      }
+    },
+    "Resolution: 72 for screens, 300 for print.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分辨率：屏幕用 72 DPI，印刷用 300 DPI。"
+          }
+        }
+      }
+    },
+    "72 DPI": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "72 DPI"
+          }
+        }
+      }
+    },
+    "300 DPI": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "300 DPI"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

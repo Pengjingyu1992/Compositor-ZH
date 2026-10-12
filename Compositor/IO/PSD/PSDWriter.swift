@@ -83,6 +83,7 @@ nonisolated enum PSDWriter {
     }
     static func conversionNotes(_ snapshot: ProjectSnapshot) -> [String] {
         var notes: [String] = []
+        if snapshot.manifest.animation != nil { notes.append("Animation folders retain the current frame visibility in PSD; timing and repeats remain in the Compositor project.") }
         if snapshot.manifest.layers.contains(where: { $0.editableFilters != nil }) {
             notes.append("Editable filter stacks and saved Liquify are exported as rendered pixels. Their source and settings remain editable in the Compositor project.")
         }
@@ -323,7 +324,8 @@ nonisolated enum PSDWriter {
 
 actor PSDExporter {
     static let shared = PSDExporter()
-    func data(_ snapshot: ProjectSnapshot, mode: PSDExportMode) async throws -> Data {
+    func data(_ input: ProjectSnapshot, mode: PSDExportMode) async throws -> Data {
+        let snapshot = input.presentingAnimationFrame(input.displayedAnimationFrameID)
         let composite = try await ImageExporter.shared.render(snapshot).image
         return try autoreleasepool { try PSDWriter.encode(snapshot, composite: composite, mode: mode) }
     }

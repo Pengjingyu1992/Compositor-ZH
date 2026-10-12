@@ -14,14 +14,15 @@ extension EditorSession {
             return ProjectLayerRecord(id: layer.id, name: layer.name, isVisible: layer.isVisible,
                 transform: layer.transform, imageFile: layer.asset == nil ? nil : "\(layer.id.uuidString).png", parentID: layer.parentID, isGroup: layer.isGroup, opacity: layer.opacity, blendMode: layer.blendMode, maskFile: layer.mask == nil ? nil : "\(layer.id.uuidString).mask.png", maskEnabled: layer.mask?.isEnabled, maskSourceID: layer.maskSourceID, adjustment: layer.adjustment, maskPlacement: layer.mask?.placement, maskLinked: layer.mask?.isLinked, shape: layer.liveShape?.style, effects: layer.effects, text: layer.liveText?.style, fill: layer.liveFill?.style, vectorMask: layer.mask?.vector, editableFilters: layer.filterStack.map { LayerFilterStackRecord(layerID: layer.id, stack: $0) })
         }
-        let version = stacks.values.map(\.minimumProjectVersion).max() ?? 13
+        let version = document.animation == nil ? (stacks.values.map(\.minimumProjectVersion).max() ?? 13) : 16
         return ProjectSnapshot(manifest: ProjectManifest(version: version, resolution: document.resolution, documentID: document.id, width: document.width,
             height: document.height, activeLayerID: activeLayerID, layers: layers,
-            guides: document.guides.isEmpty ? nil : document.guides), images: images, masks: masks, filterStacks: stacks)
+            guides: document.guides.isEmpty ? nil : document.guides, animation: document.animation), images: images, masks: masks, filterStacks: stacks, displayedAnimationFrameID: document.currentAnimationFrameID)
     }
 
     /// Called only after the entire package has successfully validated and loaded.
     func installProject(_ snapshot: ProjectSnapshot, from url: URL?) {
+        stopAnimation()
         cancelFilterStack()
         cancelLiquify()
         collapsedGroupIDs = []
@@ -33,6 +34,7 @@ extension EditorSession {
         transformEdit = nil
         document = CanvasDocument(id: manifest.documentID, width: manifest.width, height: manifest.height,
             layers: snapshot.documentLayers, resolution: manifest.resolution ?? 72, guides: manifest.guides ?? [])
+        document?.animation = manifest.animation
         activeLayerID = manifest.activeLayerID
         projectURL = url
         renamingLayerID = nil
@@ -61,6 +63,7 @@ extension EditorSession {
     }
 
     func clearProject() {
+        stopAnimation()
         cancelFilterStack()
         cancelLiquify()
         pathEditing = nil

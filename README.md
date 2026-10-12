@@ -34,11 +34,13 @@ Both editions support painting and image editing with layers, with different UI,
 
 ## 下载与使用 / Download and use
 
+源码新增 **EPS / GIF 导入与导出**（完整动画 GIF、像素 EPS）；普通 EPS 导入需单独安装 Ghostscript。范围、入口及安装方法见 [EPS/GIF 说明](docs/eps-gif.md)。旧发行安装包尚未包含本次新增。 / Source now includes EPS/GIF import and export (full animated GIF and raster EPS). General EPS import requires a separate Ghostscript installation. See the [format guide](docs/eps-gif.md); older release packages do not include these additions.
+
 ### Windows 10 / 11
 
 - **[Windows 下载 / Windows downloads](https://github.com/Pengjingyu1992/Compositor-ZH/releases/tag/windows-v0.3.0-alpha.1)** · **[安装说明 / Installation guide](docs/windows-install.md)** · **[工具与快捷键 / Tools and shortcuts](docs/windows-full-editor.md)**
 - Windows 10 22H2 / Windows 11，x64。0.3.0 编辑器提供 17 类工具：选区、裁剪、中文文字、可编辑形状、绘画/蒙版、渐变/油漆桶、仿制/修复/涂抹、取色与导航；另有多层变换、对齐/分布、编组/合并、21 项滤镜、调整/效果、剪贴板、撤销、保存、恢复和 PSD/PNG 转换，中英文即时切换。 / Windows 10 22H2 / Windows 11, x64. The 0.3.0 editor provides 17 tools for selections, crop, Chinese text, editable shapes, painting/masks, gradients/fill, clone/healing/smear, eyedropper and navigation, plus multi-layer transforms, arrangement, groups/merge, 21 filters, adjustments/effects, clipboard, undo, saving, recovery, PSD/PNG conversion, and Chinese/English switching.
-- 基于 Pentrado 引擎，提供 EXE 安装包和便携 ZIP，无需 Node.js 或 API Key。 / Built with the Pentrado engine; available as an EXE installer or portable ZIP. No Node.js or API key is required.
+- 基于 Pentrado 引擎，提供 EXE 安装包和便携 ZIP；编辑器无需 Node.js 或 API Key，可选 AI 助手需配置你自己的密钥。 / Built with the Pentrado engine; available as an EXE installer or portable ZIP. The editor needs no Node.js or API key; the optional AI assistant uses your own key.
 
 ### macOS
 

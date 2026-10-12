@@ -1,10 +1,12 @@
 import SwiftUI
 
-/// File › Export As…: the flattened canvas as PNG, JPEG, PDF or CMYK TIFF, at its own size or scaled, previewed
+/// File › Export As…: the flattened canvas in the selected format, at its own size or scaled, previewed
 /// as it will be written. A light take on Photoshop's Export As: one image, the settings that matter, and its size.
 struct ExportAsSheet: View {
     let raster: ExportRaster
     let session: EditorSession
+    let animationSnapshot: ProjectSnapshot?
+    @State private var gifTransparency = true
     let finish: ((data: Data, format: ExportFormat)?) -> Void
     @State private var format: ExportFormat
     @State private var options: JPEGOptions
@@ -17,6 +19,7 @@ struct ExportAsSheet: View {
          finish: @escaping ((data: Data, format: ExportFormat)?) -> Void) {
         self.raster = raster
         self.session = session
+        self.animationSnapshot = session.projectSnapshot()
         self.finish = finish
         var start = JPEGOptions()
         if let saved = UserDefaults.standard.object(forKey: Self.qualityKey) as? Double, saved.isFinite {
@@ -35,6 +38,7 @@ struct ExportAsSheet: View {
         var width: Int
         var height: Int
         var printSettings: PrintSettings
+        var gifTransparency: Bool
     }
     struct Encoded {
         let settings: Settings
@@ -42,7 +46,7 @@ struct ExportAsSheet: View {
         let preview: CGImage
         let original: CGImage?
     }
-    private var settings: Settings { Settings(format: format, options: options, width: width, height: height, printSettings: session.printSettings) }
+    private var settings: Settings { Settings(format: format, options: options, width: width, height: height, printSettings: session.printSettings, gifTransparency: gifTransparency) }
     @State private var result: Encoded?
     @State private var error: String?
     @State private var comparesOriginal = false
@@ -132,6 +136,12 @@ struct ExportAsSheet: View {
                 }
             }
             if format == .cmykTIFF { PrintControls(session: session, showsPreviewControls: false) }
+            if format == .gif {
+                Toggle("Keep GIF Transparency", isOn: $gifTransparency)
+                Text("GIF · all animation frames · up to 256 colors per frame").font(.caption).foregroundStyle(.secondary)
+            } else if format == .eps {
+                Text("Raster EPS · flattened RGB image · text and paths are not editable").font(.caption).foregroundStyle(.secondary)
+            }
             HStack(spacing: 12) {
                 Text(L10n.text(format == .cmykTIFF ? "CMYK · ICC profile embedded" : format == .png ? "Transparency kept · sRGB" : "sRGB"))
                     .foregroundStyle(.secondary)
@@ -173,6 +183,16 @@ struct ExportAsSheet: View {
                     let encoded = try await ImageExporter.shared.jpeg(sized, options: requested.options)
                     (data, preview) = (encoded.data, encoded.preview)
                 case .png: (data, preview) = (try await ImageExporter.shared.pngData(sized), sized.image)
+                case .gif:
+                    let background = CGColor(srgbRed: requested.options.red, green: requested.options.green,
+                                             blue: requested.options.blue, alpha: 1)
+                    let encoded = try await ImageExporter.shared.animationGIF(animationSnapshot, fallback: sized, width: requested.width, height: requested.height, background: background, keepTransparency: requested.gifTransparency)
+                    (data, preview) = (encoded.data, encoded.preview)
+                case .eps:
+                    let background = CGColor(srgbRed: requested.options.red, green: requested.options.green,
+                                             blue: requested.options.blue, alpha: 1)
+                    (data, preview) = (try await ImageExporter.shared.epsData(sized, background: background),
+                                       try await ImageExporter.shared.flattened(sized, over: background))
                 case .cmykTIFF:
                     let encoded = try await ImageExporter.shared.cmykTIFF(sized, settings: requested.printSettings)
                     (data, preview) = (encoded.data, encoded.preview)

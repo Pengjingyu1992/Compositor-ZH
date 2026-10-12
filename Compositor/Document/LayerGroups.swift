@@ -85,7 +85,7 @@ extension CanvasDocument {
         return folders.mapValues { LayerOpacity.effective($0.opacity, parent: $0.parentID) { folders[$0] } }
     }
     /// Every layer and folder in drawing order (each folder before what's inside it), and which of them show.
-    var hierarchy: LayerOrder.Result { LayerOrder.resolve(layers) }
+    var hierarchy: LayerOrder.Result { LayerOrder.resolve(layers, hiding: animation?.hiddenGroups(showing: currentAnimationFrameID) ?? []) }
     var effectiveVisibleIDs: Set<UUID> { hierarchy.visible }
     var renderLayers: [ImageLayer] {
         let order = hierarchy.drawn
@@ -116,8 +116,8 @@ nonisolated enum LayerOrder {
     private static let lock = NSLock()
     nonisolated(unsafe) private static var last: (nodes: [Node], result: Result)?
 
-    static func resolve(_ layers: [ImageLayer]) -> Result {
-        let nodes = layers.map { Node(id: $0.id, parentID: $0.parentID, isGroup: $0.isGroup, isVisible: $0.isVisible) }
+    static func resolve(_ layers: [ImageLayer], hiding: Set<UUID> = []) -> Result {
+        let nodes = layers.map { Node(id: $0.id, parentID: $0.parentID, isGroup: $0.isGroup, isVisible: $0.isVisible && !hiding.contains($0.id)) }
         if let known = lock.withLock({ last }), known.nodes == nodes { return known.result }
         let children = Dictionary(grouping: nodes, by: \.parentID)
         var order: [UUID] = [], visible = Set<UUID>(), drawn: [UUID] = []
@@ -291,7 +291,8 @@ extension EditorSession {
     func canPlaceLayer(_ id: UUID, in parent: UUID?) -> Bool {
         guard canEditLayers, allowsLayerEdit(id, .structure), document?.layers.contains(where: { $0.id == id }) == true else { return false }
         guard let parent else { return true }
-        return allowsLayerEdit(parent, .structure) && parent != id && !descendantIDs(of: id).contains(parent)
+        // Frame roots stay in the timeline, but their unlocked contents can be rearranged.
+        return effectiveLocks(for: parent).isEmpty && parent != id && !descendantIDs(of: id).contains(parent)
             && document?.layers.first(where: { $0.id == parent })?.isGroup == true
     }
     @discardableResult

@@ -1,8 +1,8 @@
 # EPS 与 GIF / EPS and GIF
 
-以下是源码中新增的支持范围；已发布的旧安装包不包含这些入口。两版仍分别构建。动画项目使用 `.comp` v16；普通项目和 EPS 不改变原有保存版本。
+macOS 1.4.8（40.24，`v1.4.8-zh.4`）包含以下支持。Windows 源码也已加入这些功能，但已发布的 Windows 0.3.0 安装包不包含这些入口。两版分别构建。动画项目使用 `.comp` v16；普通项目和 EPS 不改变原有保存版本。
 
-These additions are in source and are not included in older published packages. The editions build separately. Animation projects use `.comp` v16; ordinary projects and EPS keep their existing save version.
+The following support is included in macOS 1.4.8 (40.24, `v1.4.8-zh.4`). Windows source also includes these additions, but the published Windows 0.3.0 package does not. The editions build separately. Animation projects use `.comp` v16; ordinary projects and EPS keep their existing save version.
 
 | 格式 / Format | 打开、导入 / Open and import | 导出 / Export |
 | --- | --- | --- |

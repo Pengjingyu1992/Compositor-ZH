@@ -1,5 +1,16 @@
 # 发布审查 / Release review
 
+## 1.4.8 build 40.24 / 2026-10-14
+
+- 发布标签为 `v1.4.8-zh.4`，包含动画 GIF、像素 EPS 和紧凑毛玻璃新建画布界面。发布流程从标签重建应用，并打包相同标签的完整源码与 SHA-256 校验文件。Windows 安装包不随此 macOS 发行更新。
+- 当前受版本管理的源码及已安装的 40.24 应用共扫描 482 个文件，常见凭证、私钥、凭证网址和个人绝对路径规则命中为 0。额外检查未发现本机用户名、个人姓名或邮箱的文本记录；图像压缩数据里的短字符串误报已复核。仓库图像没有文本、EXIF 或时间戳附加块；参考图中的 `cICP` / `iDOT` 是图像格式信息。第三方依赖的公开联系邮箱和原作者许可证保留。
+- 本次上传范围不含个人照片、基准测试素材/输出、恢复副本、日志、偏好设置或本地构建目录。既有提交历史及邮箱不改写，遵循此前已确认的处理方式；本次文档提交使用 GitHub noreply 身份。
+- 本地化检查：1,454 个源码候选键，缺失、未译和未解析均为 0；1,804 项翻译格式检查，0 失败。文档差异和 `git diff --check` 通过。本次不重跑本机完整测试套件。
+- 最新功能源码提交 `cc9e7e6e7e3aeec65ab86bc898e56104d2d15e60` 的 [CLT 构建、本地化及编辑命令检查](https://github.com/Pengjingyu1992/Compositor-ZH/actions/runs/38226289087)通过；Xcode 测试目标仍因 `EditableRecoveryRegressionTests.swift` 六处跨 actor 读取 `directory` 而未能编译，完整单元测试未执行。[Windows CI](https://github.com/Pengjingyu1992/Compositor-ZH/actions/runs/38226289106)构建与项目检查通过，文字保存/重开界面冒烟断言失败；不据此发布新的 Windows 安装包。
+- 应用要求 macOS 26+ 和 Apple Silicon，采用临时签名、未经 Apple 公证。动画项目使用 `.comp` v16；旧版本无法打开。普通 EPS 导入使用用户独立安装并授权的 Ghostscript，不随应用分发。中英文安装说明和两份上游项目致谢随发行说明提供。
+
+The release uses tag `v1.4.8-zh.4`. Source and installed-bundle privacy scans found no matching credential or private-home-path patterns; personal inputs, recovery files, logs and benchmarks are excluded. Existing history is retained and the new documentation commit uses a GitHub noreply identity. Localization and formatting checks passed. CLT app/command checks passed in CI; the existing Xcode test-target compilation failure and Windows text smoke-test failure remain disclosed. The macOS package is rebuilt from the tag; Windows packages are not updated by this release. Checksums, downloaded archive contents and signatures are verified separately after packaging.
+
 ## 1.4.8 build 40.23 / 2026-10-11
 
 ### 隐私与发布材料 / Privacy and release materials

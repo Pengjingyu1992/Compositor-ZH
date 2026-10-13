@@ -24,8 +24,10 @@ The public repository starts with a curated source snapshot. It preserves the up
 - Editable pen paths, text outlines, path/arc text, vector masks and supported editable PSD records.
 - Upstream 1.4.8 RAW/noise/tone and translucent-effect fixes, export previews/PDF, Navigator, command search, canvas-only view, last-filter repeat and standalone Scanlines.
 - WebP import, custom crop ratios, print units/backgrounds, CMYK conversion preview and ICC-tagged CMYK TIFF export. Print settings are session-only; documents remain sRGB.
+- Animated GIF import, frame/timing/loop editing and export; raster EPS import/export with a separately installed Ghostscript interpreter for general EPS input.
+- A compact translucent New Canvas panel with presets, aspect preview, dimension swapping and a single unit dropdown.
 - A new icon, portable CLT build/packaging helpers, a separate bundle identifier, and manual updates from this repository.
 
-The macOS app reads `.comp` versions **1–13** and saves version **13**. Windows-native new documents remain version **11**; the Windows project bridge accepts v12/v13, preserves their metadata and resource bytes, and restricts edits that cannot represent their visual properties. The bundle identifier `com.wonderassembly.compositor.zh-Hans` retains compatibility with the Chinese edition's existing settings and recovery storage. This upstream integration changes the macOS edition; Windows app code and releases are separate.
+The macOS app reads `.comp` versions **1–16**. Ordinary projects save as **v13**, editable filters and saved Liquify as **v14**, channel-screen halftone recipes as **v15**, and animation as **v16**. The published Windows 0.3.0 package creates v11 projects and accepts v12/v13 with preservation and editing restrictions; newer Windows source adds v16 animation support. See the README and each edition's guide for package-specific compatibility. The bundle identifier `com.wonderassembly.compositor.zh-Hans` retains compatibility with the Chinese edition's existing settings and recovery storage. Windows app code, builds and releases remain separate.
 
 Local machine logs, recovery documents, backups, reference photographs, personal paths, and private operational reports are excluded. The original local checkout and its existing Git history are preserved separately.

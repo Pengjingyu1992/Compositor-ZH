@@ -11,6 +11,14 @@
 
 The release uses tag `v1.4.8-zh.4`. Source and installed-bundle privacy scans found no matching credential or private-home-path patterns; personal inputs, recovery files, logs and benchmarks are excluded. Existing history is retained and the new documentation commit uses a GitHub noreply identity. Localization and formatting checks passed. CLT app/command checks passed in CI; the existing Xcode test-target compilation failure and Windows text smoke-test failure remain disclosed. The macOS package is rebuilt from the tag; Windows packages are not updated by this release. Checksums, downloaded archive contents and signatures are verified separately after packaging.
 
+### 正式附件复核 / Published asset verification
+
+- [云端发布流程](https://github.com/Pengjingyu1992/Compositor-ZH/actions/runs/38432078419)全部通过；GitHub 最新稳定版落点已确认为 `v1.4.8-zh.4`。
+- 下载正式三个附件后，全部 SHA-256 与 GitHub 资产摘要一致；两份 ZIP 与随附校验文件一致，归档完整性通过，无系统缓存或不安全路径。源码归档的 470 个文件逐一与标签提交 `b9f848fe68e25091c138469142434aa8a1efc335` 内容一致。
+- 正式应用 ZIP SHA-256：`8e8421363b3d25296fd5abb4c0d446d07ea1a32551ccdf5e49c4917d78db12d1`。
+- 正式源码 ZIP SHA-256：`7f45b873000bd85eea7b5ff8bfebe738ed00a91f85f671e91620b9a2f9bad3a0`。
+- 解压后版本为 1.4.8（40.24），最低 macOS 26，主程序和 CLI 均为 arm64，严格签名验证通过。源码及正式应用共 482 个文件复扫，规则命中为 0。此附件验证不代表完整单元测试通过，上述 CI 限制仍然适用。
+
 ## 1.4.8 build 40.23 / 2026-10-11
 
 ### 隐私与发布材料 / Privacy and release materials

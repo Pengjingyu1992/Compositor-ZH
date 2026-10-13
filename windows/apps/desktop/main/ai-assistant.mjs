@@ -15,31 +15,32 @@ import { requestBody, readResponse, DEFAULT_ENDPOINT, DEFAULT_MODEL, MAX_REQUEST
 // names ("Content Repair" for "Content-Aware Fill"), so the prompt has to read
 // them from the module the editor validates against.
 import { FILTERS } from '../../../packages/comp-bridge/raster-tools.mjs';
+import { canPersistApiKey } from '../../../packages/platform/desktop.mjs';
 
 const TIMEOUT = 60_000;
 
 function encrypt(value) {
   if (!value) return '';
-  if (!safeStorage.isEncryptionAvailable()) return '';
+  if (!canPersistApiKey(safeStorage)) return '';
   return safeStorage.encryptString(value).toString('base64');
 }
 
 function decrypt(value) {
   if (!value) return '';
-  if (!safeStorage.isEncryptionAvailable()) return '';
+  if (!canPersistApiKey(safeStorage)) return '';
   try { return safeStorage.decryptString(Buffer.from(value, 'base64')); }
   catch { return ''; }
 }
 
 async function readSettings(directory) {
   const stored = await getAiSettings(directory);
-  // A key that cannot be decrypted was written by another Windows account or
+  // A key that cannot be decrypted was written by another desktop account or
   // another machine; report it as unset so the panel asks for it again.
   const key = decrypt(stored.key);
   return {
     endpoint: stored.endpoint, model: stored.model,
     hasKey: !!key,
-    encryption: safeStorage.isEncryptionAvailable()
+    encryption: canPersistApiKey(safeStorage)
   };
 }
 

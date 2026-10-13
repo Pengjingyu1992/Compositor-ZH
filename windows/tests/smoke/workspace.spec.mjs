@@ -1,3 +1,4 @@
+import { smokeExecutable, smokeArgs, smokeEnv } from './electron-launch.mjs';
 import {test,expect,_electron} from '@playwright/test';
 import {mkdtemp,rm,writeFile,readFile} from 'node:fs/promises';
 import path from 'node:path';
@@ -20,7 +21,7 @@ test.beforeEach(async()=>{
   }
   await writeFile(path.join(project,'images',IDS[0]+'.png'),PNG.sync.write(base));await writeFile(path.join(project,'images',IDS[1]+'.png'),PNG.sync.write(paint));
   before=await readFile(path.join(project,'manifest.json'));
-  instance=await _electron.launch({timeout:30000,executablePath:path.join(root,'release/win-unpacked/Compositor.exe'),args:['--use-angle=swiftshader','--enable-unsafe-swiftshader'],env:{...process.env,APPDATA:temp}});
+  instance=await _electron.launch({timeout:30000,executablePath:smokeExecutable(),args:smokeArgs(),env:smokeEnv(temp)});
   page=await instance.firstWindow();
   await instance.evaluate(({dialog,BrowserWindow},p)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[p]});BrowserWindow.getAllWindows()[0].setContentSize(1280,800);},project);
   await page.getByTestId('language').selectOption('zh-Hans');await expect(page.getByTestId('language')).toHaveValue('zh-Hans');

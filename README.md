@@ -6,11 +6,13 @@
 
 本项目基于 **[Robbie Tilton](https://github.com/robbietilton)** 的 **[Compositor](https://github.com/robbietilton/Compositor)**，参考和借鉴 **[Terry Jia / jtydhr88](https://github.com/jtydhr88)** 的 **[Pentrado](https://github.com/jtydhr88/pentrado)**。感谢两位作者及各自项目的贡献者开放源码，让中文本地化与后续完善成为可能。
 
-这是社区维护的中文完善版。macOS 版在 Compositor 原生代码上进行本地化和功能完善；Windows 版使用 Pentrado 的合成引擎，重新实现桌面界面、编辑操作及 `.comp` 项目读写。Pentrado 也为对齐/分布、对称绘画和编辑操作设计提供参考。我们希望改进成果也能帮助原项目。
+这是社区维护的中文完善版。macOS 版在 Compositor 原生代码上进行本地化和功能完善；Windows 与 Linux 版共用 Pentrado 合成引擎，重新实现桌面界面、编辑操作及 `.comp` 项目读写。Pentrado 也为对齐/分布、对称绘画和编辑操作设计提供参考。我们希望改进成果也能帮助原项目。
 
 **Chinese localization and ongoing improvements for Compositor.**
 
 The macOS edition localizes and extends **[Compositor](https://github.com/robbietilton/Compositor)** by **[Robbie Tilton](https://github.com/robbietilton)**. The Windows edition uses the compositing engine from **[Pentrado](https://github.com/jtydhr88/pentrado)** by **[Terry Jia / jtydhr88](https://github.com/jtydhr88)**, with a new desktop interface, editing operations and `.comp` project bridge. Pentrado also informs arrangement, symmetry and editing design. Thank you to both authors and their contributors for sharing their work. This community edition focuses on Chinese localization, fixes and practical improvements, with the hope that useful changes can benefit the upstream projects too.
+
+Linux 版已加入，复用 Windows 编辑器内核，提供独立 AppImage、Deb 与便携包。安装、平台边界和开发验证见 [Linux 说明](docs/linux-install.md)。 / The Linux edition shares the Windows editor core with separate AppImage, Deb and portable packages; see the [Linux guide](docs/linux-install.md).
 
 ## macOS 与 Windows 的区别 / macOS and Windows differences
 
@@ -35,6 +37,14 @@ Both editions support painting and image editing with layers, with different UI,
 ## 下载与使用 / Download and use
 
 源码新增 **EPS / GIF 导入与导出**（完整动画 GIF、像素 EPS）；普通 EPS 导入需单独安装 Ghostscript。范围、入口及安装方法见 [EPS/GIF 说明](docs/eps-gif.md)。旧发行安装包尚未包含本次新增。 / Source now includes EPS/GIF import and export (full animated GIF and raster EPS). General EPS import requires a separate Ghostscript installation. See the [format guide](docs/eps-gif.md); older release packages do not include these additions.
+
+### Linux x86_64
+
+- **[Linux 安装与开发说明 / Linux installation and development](docs/linux-install.md)**
+- **[Linux 功能测试与已修复问题 / Linux validation and bug fixes](docs/linux-function-validation.md)**
+- **[Linux 隐私审查 / Linux privacy review](docs/linux-privacy-review.md)**
+- Vue/Electron 图层编辑器，中英文即时切换；支持绘画、文字、形状、蒙版、滤镜、保存、恢复和 PSD/PNG/GIF/EPS。 / Vue/Electron layer editor with painting, text, shapes, masks, filters, saving, recovery and PSD/PNG/GIF/EPS.
+- 源码已加入 Linux 打包，输出 AppImage、Deb 与 tar.gz；尚未发布安装包。Debian 13 云端验证，Ubuntu 24.04 CI；真实桌面验收待完成。 / AppImage, Deb and tar.gz packaging is included in source; release downloads are not published yet. Debian cloud validation and Ubuntu CI do not replace real-desktop acceptance.
 
 ### Windows 10 / 11
 

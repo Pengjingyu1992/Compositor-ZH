@@ -1,0 +1,12 @@
+name: Linux release candidate
+on:
+  workflow_dispatch:
+  push:
+    tags: ['linux-v*']
+permissions:
+  contents: read
+jobs:
+  candidate:
+    uses: ./.github/workflows/linux-verify.yml
+# Builds candidates only. Publication is a separate reviewed prerelease step.
+# Linux candidates must never replace the native macOS /releases/latest target.

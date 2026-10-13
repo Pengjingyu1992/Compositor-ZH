@@ -1,3 +1,4 @@
+import { smokeExecutable, smokeArgs, smokeEnv } from './electron-launch.mjs';
 import { test, expect, _electron } from '@playwright/test';
 import { mkdtemp, rm, readFile, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -14,7 +15,7 @@ test.afterEach(async () => { await rm(temp, { recursive: true, force: true }); }
 async function launch() {
   // Exercise the shipped executable. Avoid the development ESM loader, whose
   // delayed ready event is incompatible with this Electron/Playwright pair.
-  const instance = await _electron.launch({ timeout: 30_000, executablePath: path.join(root, 'release/win-unpacked/Compositor.exe'), args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'], env: { ...process.env, APPDATA: temp } });
+  const instance = await _electron.launch({ timeout: 30_000, executablePath: smokeExecutable(), args: smokeArgs(), env: smokeEnv(temp) });
   const page = await instance.firstWindow();
   await instance.evaluate(({ dialog }, directory) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [directory] }); }, project);
   await page.getByTestId('open-project').click();
@@ -50,7 +51,7 @@ test('unsupported composition without QuickLook never shows a partial render', a
   } finally { await instance.close(); }
 });
 test('packaged executable starts with the isolated read-only interface', async () => {
-  const instance = await _electron.launch({ timeout: 30_000, executablePath: path.join(root, 'release/win-unpacked/Compositor.exe'), args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'], env: { ...process.env, APPDATA: temp } });
+  const instance = await _electron.launch({ timeout: 30_000, executablePath: smokeExecutable(), args: smokeArgs(), env: smokeEnv(temp) });
   try {
     const page = await instance.firstWindow();
     await expect(page.locator('.welcome')).toBeVisible();
@@ -125,7 +126,7 @@ test('reload, anonymous clipboard report, and close preserve the source package'
   } finally { await instance.close(); }
 });
 test('native folder drop opens a project; synthetic File cannot supply a disk path', async () => {
-  const instance = await _electron.launch({ timeout: 30_000, executablePath: path.join(root, 'release/win-unpacked/Compositor.exe'), args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'], env: { ...process.env, APPDATA: temp } });
+  const instance = await _electron.launch({ timeout: 30_000, executablePath: smokeExecutable(), args: smokeArgs(), env: smokeEnv(temp) });
   try {
     const page = await instance.firstWindow(); await expect(page.locator('.welcome')).toBeVisible();
     const cdp = await page.context().newCDPSession(page);

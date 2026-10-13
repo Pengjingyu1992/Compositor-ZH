@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+app_directory="${APPDIR:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)}"
+exec "$app_directory/compositor-linux" "$@"

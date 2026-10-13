@@ -13,14 +13,18 @@ import { safeDirectory, safeRead, readProject, jpegDimensions, pngDimensions, Pr
 import { registerAiAssistant } from './ai-assistant.mjs';
 import { renderEPS } from '../../../packages/platform/eps-import.mjs';
 import { EPS_LIMITS } from '../../../packages/comp-bridge/eps-raster.mjs';
+import { desktopEdition } from '../../../packages/platform/desktop.mjs';
 
 const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 const RENDERER = path.join(ROOT, 'out', 'renderer');
 const HOME = 'compositor://app/index.html';
 protocol.registerSchemesAsPrivileged([{ scheme: 'compositor', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }]);
-app.setName('Compositor Windows');
-app.setAppUserModelId('org.compositorzh.windows');
-app.setPath('userData', path.join(app.getPath('appData'), 'Compositor-Windows'));
+const edition = desktopEdition();
+app.setName(edition.name);
+if (process.platform === 'win32') app.setAppUserModelId(edition.appId);
+if (process.platform === 'linux') app.setDesktopName(`${edition.appId}.desktop`);
+const userData = process.env.COMPOSITOR_USER_DATA_DIRECTORY;
+app.setPath('userData', userData && path.isAbsolute(userData) ? userData : path.join(app.getPath('appData'), edition.directory));
 if (!app.requestSingleInstanceLock()) { app.quit(); process.exit(0); }
 let win, language = 'zh-Hans';
 const codecs = createRequire(import.meta.url)(path.join(ROOT, 'out/codecs/index.cjs'));
@@ -47,7 +51,7 @@ function handler(name, fn) {
 }
 function nativeMenu() {
   const zh = language === 'zh-Hans';
-  win?.setTitle((zh ? '叠绘 · Windows' : 'Compositor · Windows') + (session.isDirty() ? ' *' : ''));
+  win?.setTitle(`${zh ? '叠绘' : 'Compositor'} · ${edition.label}` + (session.isDirty() ? ' *' : ''));
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     { label: zh ? '文件' : 'File', submenu: [
       { id: 'file-new', label: zh ? '新建画布…' : 'New canvas…', accelerator: 'Ctrl+N', click: () => win?.webContents.send('editor:new') },
@@ -160,6 +164,7 @@ protocol.handle('compositor', async request => {
 });
 win = new BrowserWindow({
   width: 1250, height: 820, minWidth: 850, minHeight: 580, backgroundColor: '#18191c',
+  icon: path.join(RENDERER, 'icon.png'),
   webPreferences: { preload: path.join(ROOT, 'apps/desktop/preload/index.cjs'), nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true, spellcheck: false }
 });
 win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
@@ -173,7 +178,7 @@ win.on('close', event => {
 });
 win.on('closed', () => { session.close(); win = null; });
 app.on('window-all-closed', () => app.quit());
-handler('viewer:settings', () => ({ language, version: app.getVersion() }));
+handler('viewer:settings', () => ({ language, version: app.getVersion(), edition: edition.id }));
 handler('viewer:language', async value => {
   if (!['en', 'zh-Hans'].includes(value)) throw new Error('Invalid language');
   preferenceQueue = preferenceQueue.catch(() => {}).then(() => setLanguage(app.getPath('userData'), value));
@@ -347,6 +352,6 @@ nativeMenu();
 await win.loadURL(HOME);
 if (recoveredSaves.includes('manual')) await dialog.showMessageBox(win, { type: 'warning', message: language === 'en' ? 'An interrupted save needs manual attention. The original or its backup has been retained.' : '有一次中断的保存需要人工处理。原项目或完整备份已保留。' });
 }).catch(() => {
-  dialog.showErrorBox('Compositor Windows', '无法启动应用。请完整解压安装包后重试。 / Unable to start. Extract the complete application package and try again.');
+  dialog.showErrorBox(edition.name, '无法启动应用。请完整解压安装包后重试。 / Unable to start. Extract the complete application package and try again.');
   app.quit();
 });

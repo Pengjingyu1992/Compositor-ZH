@@ -1,7 +1,7 @@
 """Cloud-only independent PSD reader check; no private project fixtures."""
 from psd_tools import PSDImage
 
-psd = PSDImage.open("test-results/independent.psd")
+psd = PSDImage.open("playwright-report/codec-fixtures/independent.psd")
 assert psd.size == (64, 48)
 assert len(psd) == 2
 bottom, top = list(psd)

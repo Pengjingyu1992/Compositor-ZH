@@ -44,3 +44,7 @@ windows/**/playwright-report/
 windows/**/*.asar
 windows/assets/app.ico
 windows/apps/desktop/renderer/public/
+
+# Linux installers and extracted application packages
+linux/release/
+linux/test-results/

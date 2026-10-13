@@ -8,6 +8,8 @@ If you've been asked to make or change an image in a `.comp` project, you don't 
 
 ## Working on the app itself
 
+- Linux edition: shared Vue/Electron sources are in `windows/`; packaging is in `linux/`. Read both directories' agent instructions. Build from `windows/` with `npm run package:linux`; see `docs/linux-install.md` for Linux setup and validation. Keep the native macOS app separate.
+
 - Build: open `Compositor.xcodeproj` and run the **Compositor** scheme, or `xcodebuild -project Compositor.xcodeproj -scheme Compositor -destination 'platform=macOS' build`.
 - Tests: the `CompositorTests` target (`xcodebuild ... test -only-testing:CompositorTests`). CI runs these on every push.
 - Match the surrounding code: its naming, its comment style and density.

@@ -70,3 +70,15 @@ test('recovery snapshots preserve old format versions and never mark a session s
   const items=await store.list();assert.equal(items.length,1);const loaded=await store.restore(items[0].key);assert.deepEqual(loaded.manifest,data.manifest);assert.equal(s.view().project.dirty,true);
   await store.clear(data.manifest.documentID);assert.equal((await store.list()).length,0);s.close();
 });
+test('recovery lists, restores and prunes current animation snapshots',async t=>{
+  const {directory}=await sample(t),store=new RecoveryStore(path.join(directory,'recovery'));
+  let data=codecs.importGIF(codecs.exportGIF({frames:[{png:png(8,6,[255,0,0,255]),durationMS:80},{png:png(8,6,[0,255,0,255]),durationMS:120}],loopCount:2}));
+  assert.equal(data.manifest.version,16);
+  for(let i=0;i<3;i++){
+    data=editProject(data,{kind:'rename',id:data.manifest.activeLayerID,name:`Recovered ${i}`},codecs);
+    await store.write(data,crypto.randomUUID());
+  }
+  const items=await store.list();assert.equal(items.length,2);
+  const loaded=await store.restore(items[0].key);assert.deepEqual(loaded.manifest,data.manifest);assert.deepEqual(resourceDigests(loaded),resourceDigests(data));
+  await store.clear(data.manifest.documentID);assert.equal((await store.list()).length,0);
+});

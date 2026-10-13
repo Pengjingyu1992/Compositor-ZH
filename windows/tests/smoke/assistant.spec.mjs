@@ -1,3 +1,4 @@
+import { smokeExecutable, smokeArgs, smokeEnv } from './electron-launch.mjs';
 import {test,expect,_electron} from '@playwright/test';
 import {mkdtemp,rm,readFile,mkdir,writeFile} from 'node:fs/promises';
 import {createServer} from 'node:http';
@@ -27,7 +28,7 @@ async function startStub(){
 // the settings are pointed at a temporary folder explicitly. Otherwise these
 // checks would overwrite the real API key of the machine running them.
 function cleanEnv(){
-  const env={...process.env,APPDATA:temp,COMPOSITOR_AI_DIRECTORY:settingsDirectory};
+  const env={...smokeEnv(temp),COMPOSITOR_AI_DIRECTORY:settingsDirectory};
   delete env.ELECTRON_RUN_AS_NODE;delete env.NODE_OPTIONS;
   return env;
 }
@@ -39,7 +40,7 @@ test.beforeEach(async()=>{
   answer={reply:'好的',ops:[]};
   answerDelay=undefined;releaseAnswer=undefined;saves=0;
   const started=await startStub();stub=started.server;
-  instance=await _electron.launch({timeout:30000,executablePath:path.join(root,'release/win-unpacked/Compositor.exe'),args:['--use-angle=swiftshader','--enable-unsafe-swiftshader'],env:cleanEnv()});
+  instance=await _electron.launch({timeout:30000,executablePath:smokeExecutable(),args:smokeArgs(),env:cleanEnv()});
   page=await instance.firstWindow();
   await instance.evaluate(({dialog,BrowserWindow},p)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[p]});BrowserWindow.getAllWindows()[0].setContentSize(1280,800);},project);
   await page.getByTestId('language').selectOption('zh-Hans');
@@ -56,6 +57,7 @@ async function configure(){
   await dialog.getByLabel('API 密钥').fill('test-key');
   await dialog.getByTestId('ai-save-settings').click();
   await expect(dialog).toBeHidden();
+  await expect(page.locator('.assistant-head')).toContainText('已配置密钥');
 }
 async function send(ops){
   answer={reply:'好的',ops};

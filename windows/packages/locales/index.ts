@@ -72,3 +72,18 @@ export const messages = {
     }
   }
 } as const;
+
+export function localizedMessages(language: keyof typeof messages, edition: 'linux' | 'windows') {
+  const base = messages[language];
+  if (edition !== 'linux') return base;
+  return {
+    ...base,
+    subtitle: base.subtitle.replace('Windows', 'Linux'),
+    welcome: base.welcome.replace('Windows', 'Linux'),
+    readonly: base.readonly.replace('Windows', 'Linux'),
+    editor: { ...base.editor, renderNote: base.editor.renderNote.replace('Windows', 'Linux') },
+    errors: { ...base.errors, epsInterpreter: language === 'zh-Hans'
+      ? '请安装发行版提供的 Ghostscript 10，再重新导入 EPS。叠绘自身导出的像素 EPS 无需此组件。'
+      : "Install your distribution's Ghostscript 10 package, then import EPS again. Compositor's own raster EPS files open without it." }
+  };
+}

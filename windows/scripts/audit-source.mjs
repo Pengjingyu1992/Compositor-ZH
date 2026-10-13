@@ -3,17 +3,18 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('../../', import.meta.url));
-const files = execFileSync('git', ['ls-files', '-z'], { cwd: root }).toString().split('\0').filter(Boolean);
+const files = [...new Set(execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z'], { cwd: root }).toString().split('\0').filter(Boolean))];
 const findings = [];
+const homePath = /(?:\/(?:Users|home)\/[^/\\\s]+(?:\/|$)|\/root(?:\/|$)|[A-Z]:\\Users\\[^\\\s]+(?:\\|$))/i;
+const credential = /(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,}|sk-(?:proj-)?[A-Za-z0-9_-]{30,}|xox[baprs]-[A-Za-z0-9-]{20,}|AIza[0-9A-Za-z_-]{35}|AKIA[0-9A-Z]{16})/;
 export const sensitive = [
-  /\/Users\/[A-Za-z0-9_-]+\//,
-  /[A-Z]:\\Users\\[^\\\s]+\\(Desktop|Documents|Pictures|AppData)/i,
-  /(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,}|sk-(?:proj-)?[A-Za-z0-9_-]{30,})/,
-  /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,
+  homePath,
+  credential,
+  /-----BEGIN (?:RSA |EC |OPENSSH |DSA |ENCRYPTED )?PRIVATE KEY-----/,
   /(?:api[_-]?key|access[_-]?token|password)\s*[:=]\s*["'][A-Za-z0-9_\-]{20,}["']/i
 ];
 for (const file of files) {
-  if (!/\.(?:mjs|cjs|ts|vue|md|yml|json|txt|py)$/.test(file) || !(file.startsWith('windows/') || file.startsWith('docs/windows-') || file.includes('/windows-'))) continue;
+  if (!/\.(?:mjs|cjs|ts|vue|md|yml|json|txt|py)$/.test(file) || !(file.startsWith('windows/') || file.startsWith('linux/') || /^docs\/(windows|linux)-/.test(file) || /\/(windows|linux)-/.test(file) || /^\.github\/workflows\/linux-/.test(file))) continue;
   const text = await readFile(path.join(root, file), 'utf8');
   if (sensitive.some(pattern => pattern.test(text))) findings.push(file);
 }
@@ -26,4 +27,4 @@ const en = [...keys(messages.en),...keys(fullEditor.en,'full.')].sort(), zh = [.
 if (JSON.stringify(en) !== JSON.stringify(zh)) findings.push('localization-key-mismatch');
 if (!source.includes('sourceNote')) findings.push('missing-credits');
 if (findings.length) { console.error('Review failures:', findings); process.exitCode = 1; }
-else console.log(`Source review: ${files.filter(f => f.startsWith('windows/')).length} Windows files; ${en.length} bilingual keys; no matching private paths or credential patterns.`);
+else console.log(`Source review: ${files.filter(f => /^(windows|linux)\//.test(f)).length} desktop files; ${en.length} bilingual keys; no matching private paths or credential patterns.`);

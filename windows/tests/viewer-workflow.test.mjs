@@ -69,6 +69,16 @@ test('report validates display state and cannot claim absent saved previews', ()
   assert.throws(() => compatibilityReport(project, 'v', { source: 'engine', issues: ['private-marker'] }));
   assert.throws(() => compatibilityReport(project, 'v', { source: 'invalid', issues: [] }));
 });
+test('compatibility reports identify Linux and Windows without inventing platform acceptance', () => {
+  const project = data();
+  const linux = compatibilityReport(project, 'test', { source: 'engine', issues: [] }, 'linux');
+  const windows = compatibilityReport(project, 'test', { source: 'engine', issues: [] }, 'win32');
+  assert.equal(linux.application.name, 'Compositor Linux');
+  assert.equal(linux.acceptance.realLinuxDesktop, 'pending');
+  assert.equal(windows.application.name, 'Compositor Windows');
+  assert.equal(windows.acceptance.realWindows10And11, 'pending');
+  assert.deepEqual(linux.project, windows.project);
+});
 function grouped() {
   const m = manifest();
   m.layers.unshift({ id: IDS[2], name: 'Collection', isGroup: true, isVisible: true, transform: m.layers[0].transform });

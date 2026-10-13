@@ -1,7 +1,7 @@
 import { mkdir, open, rename, lstat, rm, readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
-import { readProject, safeDirectory, ProjectError, resourceDigests } from '../comp-bridge/project.mjs';
+import { readProject, safeDirectory, ProjectError, resourceDigests, CURRENT_FORMAT_VERSION } from '../comp-bridge/project.mjs';
 
 export function fingerprint(data) {
   return createHash('sha256').update(data.sourceBytes).update(JSON.stringify(Object.entries(resourceDigests(data)).sort(([a], [b]) => a.localeCompare(b)))).digest('hex');
@@ -139,7 +139,7 @@ export class RecoveryStore {
         const p = path.join(this.directory, name), s = await lstat(p);
         if (!s.isFile() || s.isSymbolicLink() || s.size > 16384) continue;
         const value = JSON.parse(await readFile(p, 'utf8'));
-        if (value.schema === 1 && value.formatVersion >= 1 && value.formatVersion <= 11 && typeof value.name === 'string') items.push({ ...value, key: name.slice(0, -5) });
+        if (value.schema === 1 && Number.isInteger(value.formatVersion) && value.formatVersion >= 1 && value.formatVersion <= CURRENT_FORMAT_VERSION && typeof value.name === 'string') items.push({ ...value, key: name.slice(0, -5) });
       } catch { /* Incomplete recovery metadata is not offered as a valid snapshot. */ }
     }
     return items.sort((a, b) => b.created - a.created);

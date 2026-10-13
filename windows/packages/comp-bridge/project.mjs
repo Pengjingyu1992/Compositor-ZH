@@ -4,6 +4,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { supportsAdjustment, supportsEffects } from './capabilities.mjs';
 
+export const CURRENT_FORMAT_VERSION = 16;
 export const LIMITS = Object.freeze({ manifest: 4 * 1024 ** 2, asset: 64 * 1024 ** 2, encoded: 256 * 1024 ** 2, pixels: 100_000_000, layers: 10_000, side: 30_000 });
 export const BLEND_MODES = Object.freeze(['Normal', 'Darken', 'Multiply', 'Color Burn', 'Linear Burn', 'Lighten', 'Screen', 'Color Dodge', 'Linear Dodge (Add)', 'Overlay', 'Soft Light', 'Hard Light', 'Vivid Light', 'Linear Light', 'Pin Light', 'Hard Mix', 'Difference', 'Exclusion', 'Subtract', 'Divide', 'Hue', 'Saturation', 'Color', 'Luminosity']);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -35,7 +36,7 @@ export function parseManifest(bytes) {
   let m;
   try { m = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)); } catch { throw new ProjectError('invalid'); }
   requireValue(record(m) && m.format === 'com.compositor.project');
-  requireValue(Number.isInteger(m.version) && m.version >= 1 && m.version <= 16, 'version');
+  requireValue(Number.isInteger(m.version) && m.version >= 1 && m.version <= CURRENT_FORMAT_VERSION, 'version');
   requireValue(m.colorSpace === 'sRGB', 'colorSpace');
   requireValue(UUID.test(m.documentID) && optionalID(m.activeLayerID));
   requireValue([m.width, m.height].every(n => Number.isInteger(n) && n >= 1 && n <= LIMITS.side));

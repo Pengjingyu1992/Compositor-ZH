@@ -1,3 +1,4 @@
+import { smokeExecutable, smokeArgs, smokeEnv } from './electron-launch.mjs';
 import {test,expect,_electron} from '@playwright/test';
 import {mkdtemp,rm,readFile} from 'node:fs/promises';
 import path from 'node:path';
@@ -6,16 +7,17 @@ import {fileURLToPath} from 'node:url';
 import {fixture} from '../fixtures.mjs';
 import {BLEND_MODES} from '../../packages/comp-bridge/project.mjs';
 const root=fileURLToPath(new URL('../../',import.meta.url));
+test.describe.configure({timeout:process.platform==='linux'?120000:60000});
 let temp,source,instance,page;
 test.beforeEach(async()=>{
   temp=await mkdtemp(path.join(os.tmpdir(),'comp-edit-smoke-'));source=path.join(temp,'source.comp');await fixture(source);
-  instance=await _electron.launch({timeout:30000,executablePath:path.join(root,'release/win-unpacked/Compositor.exe'),args:['--use-angle=swiftshader','--enable-unsafe-swiftshader'],env:{...process.env,APPDATA:temp}});page=await instance.firstWindow();page.on('console',m=>{if(['error','warning'].includes(m.type()))console.error('Renderer:',m.text());});page.on('pageerror',e=>console.error('Renderer error:',e.message));
+  instance=await _electron.launch({timeout:30000,executablePath:smokeExecutable(),args:smokeArgs(),env:smokeEnv(temp)});page=await instance.firstWindow();page.on('console',m=>{if(['error','warning'].includes(m.type()))console.error('Renderer:',m.text());});page.on('pageerror',e=>console.error('Renderer error:',e.message));
   await instance.evaluate(({dialog},source)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[source]});dialog.showMessageBox=async()=>({response:1});},source);
   await page.getByTestId('open-project').click();await expect(page.getByTestId('rendered-canvas')).toBeVisible();
 });
 test.afterEach(async()=>{await instance?.close();await rm(temp,{recursive:true,force:true});});
-async function menu(id){await instance.evaluate(({Menu},id)=>{const item=Menu.getApplicationMenu().getMenuItemById(id);if(!item||!item.enabled)throw new Error('Menu unavailable');item.click();},id);}
-async function selectMint(){await page.locator('.layer-select').filter({hasText:'Mint / 薄荷'}).click();await expect(page.getByTestId('layer-opacity')).toBeEnabled();}
+async function menu(id){await expect(page.getByTestId('layer-opacity')).toBeEnabled();await instance.evaluate(({Menu},id)=>{const item=Menu.getApplicationMenu().getMenuItemById(id);if(!item||!item.enabled)throw new Error('Menu unavailable');item.click();},id);}
+async function selectMint(){await expect(page.getByTestId('open-project')).toBeEnabled();await page.locator('.layer-select').filter({hasText:'Mint / 薄荷'}).click();await expect(page.getByTestId('layer-opacity')).toBeEnabled();}
 test('edit undo redo save-as and overwrite protect the opened source',async()=>{
   const before=await readFile(path.join(source,'manifest.json'));await selectMint();
   await page.getByTestId('layer-opacity').fill('80');await page.getByTestId('layer-opacity').press('Tab');await expect(page.getByTestId('undo')).toBeEnabled();

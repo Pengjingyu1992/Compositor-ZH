@@ -5,18 +5,23 @@ import path from 'node:path';
 import { ProjectError, safeRead } from '../comp-bridge/project.mjs';
 import { EPS_LIMITS, postScriptSection, epsBounds } from '../comp-bridge/eps-raster.mjs';
 
-async function interpreter() {
+export async function ghostscriptCandidates(env = process.env, platform = process.platform) {
   const candidates = [];
-  const override = process.env.COMPOSITOR_GHOSTSCRIPT;
+  const override = env.COMPOSITOR_GHOSTSCRIPT;
   if (override && path.isAbsolute(override)) candidates.push(override);
+  if (platform === 'linux') return [...new Set([...candidates, '/usr/bin/gs', '/usr/local/bin/gs'])];
   // Do not search the current working directory or an untrusted PATH entry.
-  for (const root of [process.env.ProgramFiles, process.env['ProgramFiles(x86)']].filter(Boolean)) {
+  for (const root of [env.ProgramFiles, env['ProgramFiles(x86)']].filter(Boolean)) {
     const directory = path.join(root, 'gs');
     let versions = []; try { versions = await readdir(directory, { withFileTypes: true }); } catch { /* Not installed here. */ }
     for (const version of versions.filter(v => v.isDirectory() && /^gs\d+(?:\.\d+){1,2}$/.test(v.name)).sort((a, b) => b.name.localeCompare(a.name, 'en', { numeric: true }))) {
       candidates.push(path.join(directory, version.name, 'bin/gswin64c.exe'));
     }
   }
+  return candidates;
+}
+async function interpreter() {
+  const candidates = await ghostscriptCandidates();
   for (const executable of candidates) {
     try {
       const version = await run(executable, ['--version'], undefined, 3000, true);

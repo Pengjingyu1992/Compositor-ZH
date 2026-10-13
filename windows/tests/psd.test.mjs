@@ -11,7 +11,7 @@ const payload=()=>({composite:new Uint8Array(png(64,48,[210,175,153,255])),layer
 test('PSD export retains order, offsets, opacity, blend, mask channels and straight pixels',async()=>{
   const a=data(),m=structuredClone(a.manifest);m.layers[1].blendMode='Multiply';const p=projectData(m,a.resources),bytes=exportPSD(p,payload());
   const read=readPsd(bytes,{useImageData:true,skipThumbnail:true});assert.equal(read.children.length,2);assert.equal(read.children[1].name,'Mint / 薄荷');assert.equal(read.children[1].blendMode,'multiply');assert.equal(read.children[1].left,5);assert.ok(Math.abs(read.children[1].opacity-.5)<.005);assert.equal(read.children[1].mask.imageData.data[0],128);
-  await mkdir('test-results',{recursive:true});await writeFile('test-results/independent.psd',bytes);
+  await mkdir('playwright-report/codec-fixtures',{recursive:true});await writeFile('playwright-report/codec-fixtures/independent.psd',bytes);
   const round=importPSD(new Uint8Array(bytes));assert.equal(round.data.manifest.layers.length,2);assert.equal(round.data.manifest.layers[1].blendMode,'Multiply');assert.deepEqual(round.data.manifest.layers[1].transform.origin,[5,3]);
 });
 test('PSD export preserves groups; text is explicitly rasterized and complex effects require flattened export',()=>{

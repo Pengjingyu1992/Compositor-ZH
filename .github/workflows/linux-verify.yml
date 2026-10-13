@@ -1,0 +1,103 @@
+name: Linux verify and package
+
+on:
+  workflow_dispatch:
+  workflow_call:
+  push:
+    branches: ['**']
+    paths: ['linux/**', 'windows/**', 'docs/linux-*.md', 'docs/project-format.md', 'LICENSE', '.github/workflows/linux-*.yml']
+  pull_request:
+    paths: ['linux/**', 'windows/**', 'docs/linux-*.md', 'docs/project-format.md', 'LICENSE', '.github/workflows/linux-*.yml']
+
+concurrency:
+  group: linux-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    name: Linux x64 packages and desktop checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: windows
+        shell: bash
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: windows/package-lock.json
+      - name: Install desktop test prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libgtk-3-0t64 libnss3 libasound2t64 libgbm1 libsecret-1-0 gnome-keyring ghostscript fonts-noto-cjk desktop-file-utils
+      - run: npm ci --no-audit --no-fund
+      - name: Source review and type check
+        run: |
+          node scripts/audit-source.mjs
+          npm run typecheck
+      - name: Project, rendering, save and platform tests
+        run: npm test
+      - name: Independent PSD, GIF and EPS readers
+        run: |
+          python3 -m venv /tmp/compositor-psd
+          /tmp/compositor-psd/bin/pip install psd-tools==1.23.0
+          /tmp/compositor-psd/bin/python tests/independent-psd.py
+          /tmp/compositor-psd/bin/python tests/independent-image-codecs.py
+      - name: Build Deb, portable archive and AppImage
+        run: npm run package:linux
+      - name: Packaged Electron checks with a temporary desktop keyring
+        env:
+          COMPOSITOR_SMOKE_NO_SANDBOX: '1'
+          COMPOSITOR_SMOKE_PASSWORD_STORE: 'gnome-libsecret'
+        run: |
+          export XDG_DATA_HOME="$(mktemp -d /tmp/compositor-keyring.XXXXXX)"
+          export XDG_CONFIG_HOME="$XDG_DATA_HOME/config"
+          export XDG_CACHE_HOME="$XDG_DATA_HOME/cache"
+          mkdir -p "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME"
+          dbus-run-session -- bash -euc 'printf smoke-keyring | gnome-keyring-daemon --unlock --components=secrets; xvfb-run -a -s "-screen 0 1440x1000x24 -nolisten tcp" npm run smoke'
+      - name: Extracted AppImage launcher regression
+        env:
+          COMPOSITOR_SMOKE_NO_SANDBOX: '1'
+        run: |
+          appimages=(../linux/release/Compositor-Linux-*.AppImage)
+          test "${#appimages[@]}" -eq 1
+          appimage_file="$(realpath "${appimages[0]}")"
+          appimage_directory="$(mktemp -d /tmp/compositor-appimage.XXXXXX)"
+          trap 'rm -rf -- "$appimage_directory"' EXIT
+          (cd "$appimage_directory" && "$appimage_file" --appimage-extract > /dev/null)
+          COMPOSITOR_SMOKE_EXECUTABLE="$appimage_directory/squashfs-root/AppRun" xvfb-run -a -s '-screen 0 1440x1000x24 -nolisten tcp' npx playwright test tests/smoke/editor.spec.mjs tests/smoke/linux.spec.mjs tests/smoke/extended-workflows.spec.mjs --grep 'edit undo redo|Linux branding|basic_text|system Ghostscript|pausing animation|Space activates|native recovery|Escape and exporting' --reporter=list --output ../linux/test-results/appimage-smoke | tee ../linux/test-results/appimage-gui.log
+      - name: Inspect all package formats and licenses
+        run: npm run audit:linux
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: compositor-linux-x64
+          path: |
+            linux/release/*.AppImage
+            linux/release/*.deb
+            linux/release/*.tar.gz
+            linux/release/SHA256SUMS.txt
+            linux/release/PACKAGE-REVIEW.json
+            windows/test-results/*-preview.png
+            windows/playwright-report/smoke-results.json
+            windows/playwright-report/smoke-recheck-results.json
+            linux/test-results/appimage-gui.log
+          retention-days: 14
+          if-no-files-found: error
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: failure()
+        with:
+          name: linux-check-diagnostics
+          path: |
+            windows/test-results/
+            windows/playwright-report/smoke-results.json
+            windows/playwright-report/smoke-recheck-results.json
+            linux/test-results/appimage-smoke/
+            linux/test-results/appimage-gui.log
+          retention-days: 7
+          if-no-files-found: ignore

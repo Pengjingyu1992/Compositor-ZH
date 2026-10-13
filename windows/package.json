@@ -16,7 +16,11 @@
     "test": "node --test tests/*.test.mjs",
     "smoke": "playwright test",
     "start": "electron .",
-    "package:win": "npm run build && electron-builder --win nsis zip --x64 --publish never"
+    "package:win": "npm run build && electron-builder --win nsis zip --x64 --publish never",
+    "postinstall": "node node_modules/electron/install.js",
+    "package:linux": "npm run build && electron-builder --config ../linux/electron-builder.cjs --linux --x64 --publish never && node ../linux/package-appimage.mjs",
+    "package:linux:dir": "npm run build && electron-builder --config ../linux/electron-builder.cjs --linux dir --x64 --publish never",
+    "audit:linux": "node scripts/audit-package.mjs --linux"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",
@@ -85,5 +89,10 @@
       "shortcutName": "Compositor Windows",
       "uninstallDisplayName": "Compositor Windows"
     }
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Pengjingyu1992/Compositor-ZH.git"
+  },
+  "homepage": "https://github.com/Pengjingyu1992/Compositor-ZH"
 }

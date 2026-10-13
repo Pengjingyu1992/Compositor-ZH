@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=Compositor Linux
+Name[zh_CN]=叠绘 Linux
+Comment=Paint, composite layers and edit .comp projects offline
+Comment[zh_CN]=离线图层绘画、图像合成与 .comp 项目编辑
+Exec=AppRun %U
+Icon=compositor-linux
+Terminal=false
+Type=Application
+Categories=Graphics;
+Keywords=image;painting;layers;graphics;
+StartupWMClass=org.compositorzh.linux

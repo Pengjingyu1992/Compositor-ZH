@@ -35,7 +35,7 @@ export interface AiAnswer { reply?: string; operations?: Record<string, unknown>
 declare global {
   interface Window {
     viewer: {
-      settings(): Promise<{ language: Language; version: string }>;
+      settings(): Promise<{ language: Language; version: string; edition: 'linux' | 'windows' }>;
       language(value: Language): Promise<{ language: Language }>;
       open(): Promise<OpenResult>;
       drop(file: File): Promise<OpenResult>;

@@ -2,7 +2,7 @@
 import AnimationTimeline from './AnimationTimeline.vue';
 import { frameForLayer, projectForFrame } from '../../../packages/editor-adapter/animation';
 import { computed, ref, reactive, onMounted, onUnmounted, nextTick, watch } from 'vue';
-import { messages } from '../../../packages/locales';
+import { localizedMessages } from '../../../packages/locales';
 import { createPreviewRenderer, pngBytes, exportPlaced, makeCanvas } from '../../../packages/editor-adapter/render';
 import { BLEND_MODES, ADJUSTMENT_KINDS as ADJUSTMENTS, EFFECT_KINDS as EFFECTS } from '../../../packages/comp-bridge/capabilities.mjs';
 import AdjustmentEditor from './AdjustmentEditor.vue';
@@ -17,6 +17,7 @@ import { visibleLayers } from '../../../packages/editor-adapter/layer-list';
 import type { Language, ViewerProject, OpenResult, LayerRow } from './types';
 
 const language = ref<Language>('zh-Hans'), version = ref(''), project = ref<ViewerProject>();
+const edition = ref<'linux' | 'windows'>('windows');
 const activeFrameID = ref<string>(), animationPlaying = ref(false), frameRendering = ref(false);
 let playbackEpoch = 0;
 const iconURL = 'compositor://app/icon.png';
@@ -46,7 +47,7 @@ function tabKey(event: KeyboardEvent) {
   nextTick(() => document.getElementById('tab-'+inspectorTab.value)?.focus());
 }
 const editable=computed(()=>!!project.value&&!busy.value&&!painting.value&&!animationPlaying.value&&!frameRendering.value&&source.value==='engine'&&!issues.value.length);
-const t = computed(() => messages[language.value]);
+const t = computed(() => localizedMessages(language.value, edition.value));
 const issues = computed(() => [...(project.value?.analysis.issues ?? []), ...extraIssues.value]);
 const rows = computed(() => visibleLayers(project.value?.analysis.rows ?? [], query.value, collapsed.value));
 const previewURL = computed(() => project.value?.urls['QuickLook/Preview.jpg']);
@@ -56,7 +57,7 @@ const formattedProperties = computed(() => {
   return JSON.stringify(original, null, 2);
 });
 let rendererOwner = '';
-let renderer: ReturnType<typeof createPreviewRenderer> | undefined, epoch = 0, operation = 0, requests = 0, dragDepth = 0;
+let renderer: ReturnType<typeof createPreviewRenderer> | undefined, frameRenderTask: Promise<void> | undefined, epoch = 0, operation = 0, requests = 0, dragDepth = 0;
 const subscriptions: (() => void)[] = [];
 function fit() {
   if (project.value && stage.value) zoom.value = Math.min(8, Math.max(.01, Math.min((stage.value.clientWidth - 80) / project.value.manifest.width, (stage.value.clientHeight - 80) / project.value.manifest.height)));
@@ -136,7 +137,10 @@ function transformPair(field:'origin'|'size',index:number,e:Event){if(!selected.
 async function create(){newDialog.value=false;await request(()=>window.editor.create(newWidth.value,newHeight.value));}
 async function exportImage(type:string,flatten=false){
   stopPlayback();
-  const p=project.value,c=canvas.value;if(!p||!c||source.value!=='engine'||frameRendering.value||painting.value)return;psdDialog.value=false;
+  const p=project.value,c=canvas.value;if(!p||!c||source.value!=='engine'||painting.value)return;
+  if(frameRendering.value)await frameRenderTask;
+  if(project.value?.id!==p.id||project.value?.revision!==p.revision||source.value!=='engine'||frameRendering.value||painting.value)return;
+  psdDialog.value=false;
   try { await request(async()=>{
     const composite=await pngBytes(c),layers:{id:string;image:Uint8Array;left:number;top:number}[]=[],masks:{id:string;image:Uint8Array;left:number;top:number}[]=[],frames:{png:Uint8Array}[]=[];
     if(type==='gif'){
@@ -166,8 +170,9 @@ async function exportImage(type:string,flatten=false){
     return await window.editor.export(p.id,p.revision,type,{composite,layers,masks,flatten,frames,frameID:activeFrameID.value});
   }); } finally { if(type==='gif'&&p.manifest.animation&&project.value?.id===p.id&&project.value?.revision===p.revision)await renderAnimationFrame(); }
 }
-function stopPlayback(){ animationPlaying.value=false;playbackEpoch++; }
-async function renderAnimationFrame(){
+function stopPlayback(){const wasPlaying=animationPlaying.value;animationPlaying.value=false;playbackEpoch++;if(wasPlaying)selectAnimationFrame(activeFrameID.value);}
+function renderAnimationFrame(){return frameRenderTask=drawAnimationFrame();}
+async function drawAnimationFrame(){
   const p=project.value,c=canvas.value;if(!p||!c||source.value!=='engine')return;
   const own=++epoch;frameRendering.value=true;
   const key=p.id+':'+p.revision;
@@ -179,9 +184,14 @@ async function renderAnimationFrame(){
 async function seekFrame(id:string){
   if(!editable.value||!project.value?.manifest.animation?.frames.some(f=>f.groupID===id))return;
   activeFrameID.value=id;
-  const row=project.value.analysis.rows.find(l=>l.parentID===id&&!l.isGroup)??project.value.analysis.rows.find(l=>l.id===id);
-  if(row)full.select(row);
+  selectAnimationFrame(id);
   await renderAnimationFrame();
+}
+function selectAnimationFrame(id?:string){
+  const p=project.value;if(!p||!id)return;
+  const frame=id.toUpperCase(),belongs=(row:LayerRow)=>frameForLayer(p,row.id)?.toUpperCase()===frame;
+  const row=p.analysis.rows.find(l=>!!l.imageFile&&belongs(l))??p.analysis.rows.find(l=>!l.isGroup&&belongs(l))??p.analysis.rows.find(l=>l.id.toUpperCase()===frame);
+  if(row)full.select(row);
 }
 async function playAnimation(){
   if(animationPlaying.value){stopPlayback();return;}
@@ -192,7 +202,7 @@ async function playAnimation(){
     const deadline=performance.now()+f.durationMS;activeFrameID.value=f.groupID;await renderAnimationFrame();
     if(own!==playbackEpoch)return;await new Promise(resolve=>setTimeout(resolve,Math.max(0,deadline-performance.now())));
   }cycle++;}while(track.loopCount===0||track.loopCount>0&&cycle<=track.loopCount);}
-  finally{if(own===playbackEpoch){stopPlayback();const row=p.analysis.rows.find(l=>l.parentID===activeFrameID.value&&!l.isGroup);if(row)full.select(row);}}
+  finally{if(own===playbackEpoch)stopPlayback();}
 }
 const layeredPSD=computed(()=>project.value&&!project.value.manifest.layers.some(l=>l.adjustment||l.effects&&Object.values(l.effects).some(e=>e.enabled!==false)));
 function dragEnter(event: DragEvent) {
@@ -228,11 +238,16 @@ async function changeLanguage(event: Event) {
   catch { settingError.value = true; }
 }
 function onKey(event: KeyboardEvent) {
+  if(event.isComposing)return;
   if (event.key==='Tab' && (newDialog.value || psdDialog.value || detailsDialog.value || full.modal)) {
     const modal=[...document.querySelectorAll<HTMLElement>('.modal-shade')].at(-1);
     const fields=[...(modal?.querySelectorAll<HTMLElement>('button:not([disabled]),input:not([disabled]),select:not([disabled]),summary') ?? [])].filter(e=>e.getClientRects().length);
     const first=fields[0],last=fields.at(-1);
     if(first && ((!event.shiftKey && (document.activeElement===last || !modal?.contains(document.activeElement))) || (event.shiftKey && (document.activeElement===first || !modal?.contains(document.activeElement))))) { event.preventDefault(); (event.shiftKey?last:first)?.focus(); }
+  }
+  if(newDialog.value || psdDialog.value || detailsDialog.value || full.modal){
+    if(event.key==='Escape'){full.key(event);stopPlayback();cancelStroke();newDialog.value=false;psdDialog.value=false;detailsDialog.value=false;}
+    return;
   }
   if(event.key===' '&&!event.repeat&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&!((event.target as HTMLElement)?.closest('input,textarea,select,[contenteditable]'))&&project.value?.manifest.animation){event.preventDefault();void playAnimation();return;}
   full.key(event);
@@ -259,7 +274,7 @@ function panStart(event:PointerEvent){if(full.start(event))return;if(!stage.valu
 function panMove(event:PointerEvent){if(full.move(event))return;if(!stage.value||!drag)return;stage.value.scrollLeft=drag.left+drag.x-event.clientX;stage.value.scrollTop=drag.top+drag.y-event.clientY;}
 async function panEnd(event:PointerEvent){drag=undefined;await full.end(event);}
 onMounted(async () => {
-  const settings = await window.viewer.settings(); language.value = settings.language; version.value = settings.version;
+  const settings = await window.viewer.settings(); language.value = settings.language; version.value = settings.version; edition.value = settings.edition;
   document.documentElement.lang = language.value;
   subscriptions.push(window.viewer.onOpen(open), window.viewer.onReload(reload), window.viewer.onClose(closeProject), window.viewer.onFit(fit), window.viewer.onActual(() => zoom.value = 1));
   const commands: Record<string, () => unknown> = {...full.commands,new:()=>{newDialog.value=true;},image:importImage,importPSD,save:()=>save(),saveAs:()=>save(true),png:()=>exportImage('png'),gif:()=>exportImage('gif'),eps:()=>exportImage('eps'),exportPSD:()=>{psdDialog.value=true;},recover,undo:()=>history('undo'),redo:()=>history('redo'),addPixels:()=>add('pixels'),addGroup:()=>add('group'),addMask:()=>{if(selected.value)edit({kind:'mask',action:'add'});},details:showDetails,properties:()=>{inspectorTab.value='properties';},effects:showEffects};

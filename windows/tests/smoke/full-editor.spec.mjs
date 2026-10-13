@@ -1,3 +1,4 @@
+import { smokeExecutable, smokeArgs, smokeEnv } from './electron-launch.mjs';
 import {test,expect,_electron} from '@playwright/test';
 import {mkdtemp,rm,readFile} from 'node:fs/promises';
 import path from 'node:path';
@@ -5,9 +6,10 @@ import os from 'node:os';
 import {fileURLToPath} from 'node:url';
 import {PNG} from 'pngjs';
 const root=fileURLToPath(new URL('../../',import.meta.url));let instance,page,temp;
+test.describe.configure({timeout:process.platform==='linux'?120000:60000});
 test.beforeEach(async()=>{
  temp=await mkdtemp(path.join(os.tmpdir(),'comp-full-editor-'));
- instance=await _electron.launch({timeout:30000,executablePath:path.join(root,'release/win-unpacked/Compositor.exe'),args:['--use-angle=swiftshader','--enable-unsafe-swiftshader'],env:{...process.env,APPDATA:temp}});page=await instance.firstWindow();await instance.evaluate(({dialog})=>{dialog.showMessageBox=async()=>({response:1});});
+ instance=await _electron.launch({timeout:30000,executablePath:smokeExecutable(),args:smokeArgs(),env:smokeEnv(temp)});page=await instance.firstWindow();await instance.evaluate(({dialog})=>{dialog.showMessageBox=async()=>({response:1});});
  page.on('pageerror',error=>console.error('Full editor:',error.message));
  await page.getByTestId('language').selectOption('zh-Hans');await page.getByTestId('new-canvas').click();const dialog=page.getByRole('dialog');await dialog.locator('.new-dimensions input').nth(0).fill('320');await dialog.locator('.new-dimensions input').nth(1).fill('240');await dialog.getByRole('button',{name:'创建',exact:true}).click();await expect(page.getByTestId('rendered-canvas')).toBeVisible();await page.getByTestId('add-pixels').click();await ready();
 });
@@ -15,7 +17,7 @@ test.afterEach(async()=>{await instance?.close();await rm(temp,{recursive:true,f
 async function ready(){await expect(page.getByTestId('layer-opacity')).toBeEnabled();await expect(page.locator('[role=alert]')).toHaveCount(0);}
 async function command(name){await instance.evaluate(({BrowserWindow},name)=>BrowserWindow.getAllWindows()[0].webContents.send('editor:'+name),name);}
 async function draw(tool,from=[.2,.2],to=[.65,.6],alt=false){await page.locator('.toolrail').getByRole('button',{name:tool,exact:true}).click();const b=await page.locator('.artboard').boundingBox();if(alt)await page.keyboard.down('Alt');await page.mouse.move(b.x+b.width*from[0],b.y+b.height*from[1]);await page.mouse.down();await page.mouse.move(b.x+b.width*to[0],b.y+b.height*to[1],{steps:8});await page.mouse.up();if(alt)await page.keyboard.up('Alt');await ready();}
-async function save(name='saved.comp'){const file=path.join(temp,name);await instance.evaluate(({dialog},file)=>{dialog.showSaveDialog=async()=>({canceled:false,filePath:file});},file);await page.getByTestId('save-project').click();await expect(page.locator('.badge')).toContainText('已保存');return file;}
+async function save(name='saved.comp'){const file=path.join(temp,name);await instance.evaluate(({dialog},file)=>{dialog.showSaveDialog=async()=>({canceled:false,filePath:file});},file);await page.getByTestId('save-project').click();await expect(page.locator('.badge')).toContainText('已保存');await ready();return file;}
 test('all 17 tools and native selection/image/filter menus are reachable',async()=>{
  const labels=['移动','选框','套索','魔棒','裁剪','画笔','橡皮擦','污点修复','仿制图章','涂抹','渐变','油漆桶','形状','文字','取色','抓手','缩放'];for(const label of labels){const button=page.getByRole('button',{name:label,exact:true});await button.click();await expect(button).toHaveAttribute('aria-pressed','true');}
  const menus=await instance.evaluate(({Menu})=>Menu.getApplicationMenu().items.map(i=>i.label));expect(menus).toEqual(['文件','编辑','显示','选择','图像','图层','滤镜','帮助']);await page.screenshot({path:path.join(root,'test-results/full-tools-preview.png')});
@@ -30,7 +32,7 @@ test('crop cancel/apply and canvas/image resizing persist dimensions',async()=>{
 });
 test('Chinese text and parametric shape remain editable after save and reopen',async()=>{
  await draw('形状');await command('text');await expect(page.getByTestId('text-content')).toBeVisible();await page.getByTestId('text-content').fill('叠绘 中文😀\nCompositor');await page.getByTestId('update-preview').click();await expect(page.getByTestId('apply-editor')).toBeEnabled();await page.getByTestId('apply-editor').click();await ready();const file=await save();let m=JSON.parse(await readFile(path.join(file,'manifest.json')));expect(m.layers.some(l=>l.shape?.kind==='Rectangle')).toBe(true);expect(m.layers.some(l=>l.text?.content.includes('中文😀'))).toBe(true);
- await instance.evaluate(({dialog},file)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[file]});},file);await page.getByTestId('open-project').click();await expect(page.locator('.layer-row')).toHaveCount(3);await page.locator('.layer-select').filter({hasText:'叠绘 中文😀'}).click();await command('text');await expect(page.getByTestId('text-content')).toHaveValue(/中文😀/);await page.keyboard.press('Escape');
+ await instance.evaluate(({dialog},file)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[file]});},file);await page.getByTestId('open-project').click();await expect(page.getByTestId('open-project')).toBeEnabled();await expect(page.getByTestId('rendered-canvas')).toBeVisible();await expect(page.locator('.layer-row')).toHaveCount(3);await page.locator('.layer-select').filter({hasText:'叠绘 中文😀'}).click();await ready();await expect(page.getByTestId('layer-name')).toHaveValue(/中文😀/);await command('text');await expect(page.getByTestId('text-content')).toHaveValue(/中文😀/);await page.keyboard.press('Escape');
  await page.screenshot({path:path.join(root,'test-results/text-shape-preview.png')});
 });
 test('gradient, symmetric painting, clone, healing, smear and filter cancel/apply',async()=>{

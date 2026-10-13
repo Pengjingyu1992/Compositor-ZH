@@ -1,4 +1,4 @@
-name: Linux release candidate
+name: Linux prerelease
 on:
   workflow_dispatch:
   push:
@@ -8,5 +8,63 @@ permissions:
 jobs:
   candidate:
     uses: ./.github/workflows/linux-verify.yml
-# Builds candidates only. Publication is a separate reviewed prerelease step.
-# Linux candidates must never replace the native macOS /releases/latest target.
+  publish:
+    name: Publish verified Linux prerelease
+    needs: candidate
+    if: startsWith(github.ref, 'refs/tags/linux-v')
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - name: Download verified Linux packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name compositor-linux-x64 --dir "$RUNNER_TEMP/linux-artifact"
+      - name: Verify release assets and prepare notes
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#linux-v}"
+          if [[ ! "$RELEASE_TAG" =~ ^linux-v[0-9]+\.[0-9]+\.[0-9]+-[0-9A-Za-z.-]+$ ]]; then
+            echo "Unexpected Linux release tag: $RELEASE_TAG" >&2
+            exit 1
+          fi
+          artifact_root="$RUNNER_TEMP/linux-artifact"
+          assets="$RUNNER_TEMP/linux-release-assets"
+          mkdir -p "$assets"
+          mapfile -t appimages < <(find "$artifact_root" -type f -name 'Compositor-Linux-*.AppImage' -print)
+          mapfile -t debs < <(find "$artifact_root" -type f -name 'Compositor-Linux-*.deb' -print)
+          mapfile -t archives < <(find "$artifact_root" -type f -name 'Compositor-Linux-*.tar.gz' -print)
+          mapfile -t checksums < <(find "$artifact_root" -type f -name 'SHA256SUMS.txt' -print)
+          test "${#appimages[@]}" -eq 1
+          test "${#debs[@]}" -eq 1
+          test "${#archives[@]}" -eq 1
+          test "${#checksums[@]}" -eq 1
+          for file in "${appimages[0]}" "${debs[0]}" "${archives[0]}"; do
+            [[ "$(basename "$file")" == *"$version"* ]]
+          done
+          cp -- "${appimages[0]}" "${debs[0]}" "${archives[0]}" "${checksums[0]}" "$assets/"
+          (cd "$assets" && sha256sum --check SHA256SUMS.txt)
+          cat > "$RUNNER_TEMP/linux-release-notes.md" <<EOF
+          Compositor Linux x86_64 ${version} prerelease.
+
+          Includes AppImage, Debian amd64, and portable tar.gz packages. Package checksums are in SHA256SUMS.txt.
+
+          The optional AI assistant sends your prompt and layer descriptions to the endpoint you configure. It does not send image pixels or the project file. Linux API keys require Secret Service or KWallet.
+
+          This remains a prerelease pending acceptance on real Linux desktops. See the Linux installation and privacy review guides in the repository source.
+          EOF
+          printf 'Verified four release assets for %s.\n' "$RELEASE_TAG"
+      - name: Publish as a Linux prerelease, never GitHub Latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$RELEASE_TAG" "$RUNNER_TEMP/linux-release-assets"/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Compositor Linux ${RELEASE_TAG#linux-v}" \
+            --notes-file "$RUNNER_TEMP/linux-release-notes.md" \
+            --prerelease --latest=false --verify-tag

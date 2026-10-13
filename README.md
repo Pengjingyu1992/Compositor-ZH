@@ -44,7 +44,7 @@ Both editions support painting and image editing with layers, with different UI,
 - **[Linux 功能测试与已修复问题 / Linux validation and bug fixes](docs/linux-function-validation.md)**
 - **[Linux 隐私审查 / Linux privacy review](docs/linux-privacy-review.md)**
 - Vue/Electron 图层编辑器，中英文即时切换；支持绘画、文字、形状、蒙版、滤镜、保存、恢复和 PSD/PNG/GIF/EPS。 / Vue/Electron layer editor with painting, text, shapes, masks, filters, saving, recovery and PSD/PNG/GIF/EPS.
-- 源码已加入 Linux 打包，输出 AppImage、Deb 与 tar.gz；尚未发布安装包。Debian 13 云端验证，Ubuntu 24.04 CI；真实桌面验收待完成。 / AppImage, Deb and tar.gz packaging is included in source; release downloads are not published yet. Debian cloud validation and Ubuntu CI do not replace real-desktop acceptance.
+- **[Linux 0.4.0-alpha.1 预发布下载 / Linux prerelease](https://github.com/Pengjingyu1992/Compositor-ZH/releases/tag/linux-v0.4.0-alpha.1)**：AppImage、Deb 与 tar.gz。Debian 13 云端验证，Ubuntu 24.04 CI；真实桌面验收待完成。 / AppImage, Deb and tar.gz prerelease downloads; Debian 13 cloud validation and Ubuntu 24.04 CI. Real-desktop acceptance remains pending.
 
 ### Windows 10 / 11
 

@@ -71,6 +71,7 @@ jobs:
           appimage_directory="$(mktemp -d /tmp/compositor-appimage.XXXXXX)"
           trap 'rm -rf -- "$appimage_directory"' EXIT
           (cd "$appimage_directory" && "$appimage_file" --appimage-extract > /dev/null)
+          mkdir -p ../linux/test-results
           COMPOSITOR_SMOKE_EXECUTABLE="$appimage_directory/squashfs-root/AppRun" xvfb-run -a -s '-screen 0 1440x1000x24 -nolisten tcp' npx playwright test tests/smoke/editor.spec.mjs tests/smoke/linux.spec.mjs tests/smoke/extended-workflows.spec.mjs --grep 'edit undo redo|Linux branding|basic_text|system Ghostscript|pausing animation|Space activates|native recovery|Escape and exporting' --reporter=list --output ../linux/test-results/appimage-smoke | tee ../linux/test-results/appimage-gui.log
       - name: Inspect all package formats and licenses
         run: npm run audit:linux

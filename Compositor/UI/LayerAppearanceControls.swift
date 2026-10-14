@@ -24,7 +24,7 @@ struct LayerAppearanceControls: View {
                        onEditingChanged: { if $0 { session.beginOpacityEdit() } else { session.finishOpacityEdit() } })
                 HStack(spacing: 2) {
                     TextField("Opacity percent", text: $percentage)
-                        .textFieldStyle(.roundedBorder).frame(width: 44).focused($focused)
+                        .textFieldStyle(ToolNumberFieldStyle()).frame(width: 44).focused($focused)
                         .onSubmit { releaseFocus() }
                         .onExitCommand { releaseFocus() }
                         .onChange(of: focused) { _, isFocused in if !isFocused { applyPercentage() } }

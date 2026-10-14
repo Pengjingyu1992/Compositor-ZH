@@ -603,6 +603,8 @@ extension EditorSession {
         edit.previewError = nil
         edit.previewTask = Task { @MainActor [weak self, weak edit] in
             let result = await Task.detached(priority: .userInitiated) { () -> (CGImage?, CameraRawScope?, String?) in
+                let started = PerformanceRecorder.shared.begin()
+                defer { PerformanceRecorder.shared.end(.filterPreview, since: started) }
                 do {
                     if job.kind == .cameraRaw {
                         let made = try CameraRawScope.preview(job)

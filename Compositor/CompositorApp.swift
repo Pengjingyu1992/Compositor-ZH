@@ -293,6 +293,9 @@ struct CompositorApp: App {
                         .disabled(!session.canModifySelection)
                 }
                 CommandMenu("Image") {
+                    Button("Create Animation") { session.startAnimation() }
+                        .disabled(!session.canEditLayers || session.history.hasPendingEdit || session.document?.animation != nil)
+                    Divider()
                     Button("Convert to Grayscale Copy…") { Task { await applicationDelegate.projects.grayscaleCopy() } }
                         .disabled(session.document == nil || !applicationDelegate.projects.canStart)
                     Button("Curves…") { session.beginFilter(.curves) }

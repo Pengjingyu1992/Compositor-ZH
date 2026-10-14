@@ -29,6 +29,7 @@ nonisolated enum GIFCodec {
     /// ImageIO quantizes and compresses one frame. Give it a local palette and
     /// explicit disposal 2 so transparent pixels never expose the preceding frame.
     static func encodedFrame(_ data: Data, width: Int, height: Int, duration: Int) throws -> Data {
+        try Task.checkCancellation()
         let bytes = [UInt8](data)
         guard bytes.count > 13 else { throw ExportError.encode }
         let tableSize = bytes[10] & 0x80 == 0 ? 0 : 3 * (1 << (Int(bytes[10] & 7) + 1))
@@ -44,6 +45,7 @@ nonisolated enum GIFCodec {
                     transparency = bytes[p + 1] & 1; transparentIndex = bytes[p + 4]
                 }
                 while p < bytes.count {
+                    try Task.checkCancellation()
                     let count = Int(bytes[p]); p += 1
                     if count == 0 { break }
                     guard p + count < bytes.count else { throw ExportError.encode }; p += count
@@ -64,6 +66,7 @@ nonisolated enum GIFCodec {
                 }
                 let start = p; p += 1
                 while p < bytes.count {
+                    try Task.checkCancellation()
                     let count = Int(bytes[p]); p += 1
                     if count == 0 { break }
                     guard p + count < bytes.count else { throw ExportError.encode }; p += count
@@ -78,10 +81,11 @@ nonisolated enum GIFCodec {
 
     private struct Patch {
         let x: Int, y: Int, width: Int, height: Int
-        let data: Data
+        let range: Range<Int>
+        let control: [UInt8]
         let duration: Int, disposal: Int, transparent: Bool
     }
-    private static func validateLZW(_ bytes: [UInt8], start: Int, end: Int, pixels: Int, palette: Int) throws {
+    private static func validateLZW(_ bytes: UnsafeBufferPointer<UInt8>, start: Int, end: Int, pixels: Int, palette: Int) throws {
         func invalid() throws -> Never { throw ImageImportError.unreadable }
         let minimum = Int(bytes[start])
         guard (2...8).contains(minimum) else { try invalid() }
@@ -103,7 +107,9 @@ nonisolated enum GIFCodec {
         }
         let clear = 1 << minimum, stop = clear + 1
         var lengths = [Int](repeating: 0, count: 4096), next = stop + 1, width = minimum + 1, previous = 0, count = 0
+        var iterations = 0
         while true {
+            if iterations % 1024 == 0 { try Task.checkCancellation() }; iterations += 1
             let c = try code(width)
             if c == clear { next = stop + 1; width = minimum + 1; previous = 0; continue }
             if c == stop { guard count == pixels else { try invalid() }; return }
@@ -123,7 +129,14 @@ nonisolated enum GIFCodec {
     }
     static func decode(_ data: Data, name: String, remainingPixels: Int) throws -> GIFImport {
         guard data.count >= 14, data.count <= 64 * 1024 * 1024 else { throw ImageImportError.gifTooLarge }
-        let bytes = [UInt8](data)
+        try Task.checkCancellation()
+        let started = PerformanceRecorder.shared.begin()
+        defer { PerformanceRecorder.shared.end(.gifDecode, since: started) }
+        return try data.withUnsafeBytes { raw in
+            try decodeBytes(raw.bindMemory(to: UInt8.self), name: name, remainingPixels: remainingPixels)
+        }
+    }
+    private static func decodeBytes(_ bytes: UnsafeBufferPointer<UInt8>, name: String, remainingPixels: Int) throws -> GIFImport {
         guard ["GIF87a", "GIF89a"].contains(String(decoding: bytes.prefix(6), as: UTF8.self)) else { throw ImageImportError.unreadable }
         func word(_ p: Int) -> Int { Int(bytes[p]) | Int(bytes[p + 1]) << 8 }
         let width = word(6), height = word(8), pixels = width * height
@@ -134,24 +147,28 @@ nonisolated enum GIFCodec {
         guard p + tableSize <= bytes.count else { throw ImageImportError.unreadable }
         let table = Array(bytes[p..<p + tableSize]); p += tableSize
         var patches: [Patch] = [], control: [UInt8] = [], duration = 100, disposal = 0, transparent = false, loopCount = -1
-        func blocks() throws -> [UInt8] {
+        func blocks(captureLimit: Int = 0) throws -> [UInt8] {
             var result: [UInt8] = []
             while p < bytes.count {
+                try Task.checkCancellation()
                 let count = Int(bytes[p]); p += 1
                 if count == 0 { return result }
                 guard p + count <= bytes.count else { throw ImageImportError.unreadable }
-                result += bytes[p..<p + count]; p += count
+                let kept = min(count, max(0, captureLimit - result.count))
+                if kept > 0 { result += bytes[p..<p + kept] }
+                p += count
             }
             throw ImageImportError.unreadable
         }
         var complete = false
         while p < bytes.count {
+            try Task.checkCancellation()
             let marker = bytes[p]; p += 1
             if marker == 0x3b { complete = true; break }
             if marker == 0x21 {
                 guard p < bytes.count else { throw ImageImportError.unreadable }
                 let kind = bytes[p]; p += 1
-                let start = p, content = try blocks()
+                let start = p, content = try blocks(captureLimit: 32)
                 if kind == 0xf9 {
                     guard content.count == 4, bytes[start] == 4 else { throw ImageImportError.unreadable }
                     disposal = Int((content[0] >> 2) & 7)
@@ -184,31 +201,40 @@ nonisolated enum GIFCodec {
             let paletteCount = (localSize > 0 ? localSize : tableSize) / 3
             guard !transparent || control.count == 8 && Int(control[6]) < paletteCount else { throw ImageImportError.unreadable }
             try validateLZW(bytes, start: streamStart, end: p, pixels: w * h, palette: paletteCount)
-            var isolated = Array(bytes.prefix(13))
-            isolated[6] = UInt8(w & 255); isolated[7] = UInt8(w >> 8)
-            isolated[8] = UInt8(h & 255); isolated[9] = UInt8(h >> 8)
-            isolated += table; isolated += control; isolated += [0x2c, 0, 0, 0, 0]
-            isolated += bytes[descriptor + 4..<p]; isolated += [0x3b]
-            patches.append(Patch(x: x, y: y, width: w, height: h, data: Data(isolated), duration: duration, disposal: disposal, transparent: transparent))
+            patches.append(Patch(x: x, y: y, width: w, height: h, range: descriptor + 4..<p, control: control,
+                duration: duration, disposal: disposal, transparent: transparent))
             control = []; duration = 100; disposal = 0; transparent = false
         }
         guard complete, p == bytes.count, !patches.isEmpty else { throw ImageImportError.unreadable }
         var canvas = [UInt8](repeating: 0, count: pixels * 4), frames: [ImportedImage] = []
         let backgroundIndex = Int(bytes[11]), hasBackground = tableSize > 0 && backgroundIndex * 3 + 2 < table.count
         let background: [UInt8] = hasBackground ? Array(table[backgroundIndex * 3..<backgroundIndex * 3 + 3]) + [255] : [0, 0, 0, 0]
-        if !patches[0].transparent { for at in stride(from: 0, to: canvas.count, by: 4) { canvas.replaceSubrange(at..<at + 4, with: background) } }
+        if !patches[0].transparent {
+            for y in 0..<height {
+                if y % 64 == 0 { try Task.checkCancellation() }
+                for x in 0..<width { for c in 0..<4 { canvas[(y * width + x) * 4 + c] = background[c] } }
+            }
+        }
         for patch in patches {
             try Task.checkCancellation()
             let previous = patch.disposal == 3 ? canvas : []
             let image: CGImage = try autoreleasepool {
-                guard let source = CGImageSourceCreateWithData(patch.data as CFData, nil),
+                // Keep ranges into the immutable input; construct only the patch currently being decoded.
+                var isolated = Data(bytes.prefix(13))
+                isolated[6] = UInt8(patch.width & 255); isolated[7] = UInt8(patch.width >> 8)
+                isolated[8] = UInt8(patch.height & 255); isolated[9] = UInt8(patch.height >> 8)
+                isolated.append(contentsOf: table); isolated.append(contentsOf: patch.control)
+                isolated.append(contentsOf: [0x2c, 0, 0, 0, 0]); isolated.append(contentsOf: bytes[patch.range]); isolated.append(0x3b)
+                guard let source = CGImageSourceCreateWithData(isolated as CFData, nil),
                       CGImageSourceGetStatusAtIndex(source, 0) == .statusComplete,
                       let image = CGImageSourceCreateImageAtIndex(source, 0, nil), image.width == patch.width, image.height == patch.height,
                       let context = CGContext(data: nil, width: patch.width, height: patch.height, bitsPerComponent: 8, bytesPerRow: patch.width * 4,
                         space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGBitmapInfo.byteOrder32Big.rawValue | CGImageAlphaInfo.premultipliedLast.rawValue),
                       let raw = context.data?.assumingMemoryBound(to: UInt8.self) else { throw ImageImportError.unreadable }
                 context.draw(image, in: CGRect(x: 0, y: 0, width: patch.width, height: patch.height))
-                for y in 0..<patch.height { for x in 0..<patch.width {
+                for y in 0..<patch.height {
+                    if y % 64 == 0 { try Task.checkCancellation() }
+                    for x in 0..<patch.width {
                     let sourceAt = (y * patch.width + x) * 4, targetAt = ((y + patch.y) * width + x + patch.x) * 4
                     if raw[sourceAt + 3] != 0 { for c in 0..<4 { canvas[targetAt + c] = raw[sourceAt + c] } }
                 } }
@@ -222,9 +248,12 @@ nonisolated enum GIFCodec {
             frames.append(ImportedImage(image: image, thumbnail: try PixelAdjust.thumbnail(of: image), name: name))
             if patch.disposal == 2 {
                 let fill = patch.transparent ? [UInt8](repeating: 0, count: 4) : background
-                for y in patch.y..<patch.y + patch.height { for x in patch.x..<patch.x + patch.width {
-                    let at = (y * width + x) * 4; canvas.replaceSubrange(at..<at + 4, with: fill)
-                } }
+                for y in patch.y..<patch.y + patch.height {
+                    if y % 64 == 0 { try Task.checkCancellation() }
+                    for x in patch.x..<patch.x + patch.width {
+                        let at = (y * width + x) * 4; for c in 0..<4 { canvas[at + c] = fill[c] }
+                    }
+                }
             } else if patch.disposal == 3 { canvas = previous }
         }
         return GIFImport(width: width, height: height, frames: frames, durations: patches.map(\.duration), loopCount: loopCount)
@@ -235,7 +264,13 @@ extension ImageImporter {
     func decodeGIF(_ url: URL, remainingPixels: Int) throws -> GIFImport {
         let file = try FileHandle(forReadingFrom: url)
         defer { try? file.close() }
-        guard let data = try file.read(upToCount: 64 * 1024 * 1024 + 1), data.count <= 64 * 1024 * 1024 else { throw ImageImportError.gifTooLarge }
+        try Task.checkCancellation()
+        var data = Data()
+        while let chunk = try file.read(upToCount: 256 * 1024), !chunk.isEmpty {
+            try Task.checkCancellation()
+            guard data.count + chunk.count <= 64 * 1024 * 1024 else { throw ImageImportError.gifTooLarge }
+            data.append(chunk)
+        }
         return try GIFCodec.decode(data, name: url.deletingPathExtension().lastPathComponent, remainingPixels: remainingPixels)
     }
 }

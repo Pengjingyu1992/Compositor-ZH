@@ -47,7 +47,8 @@ final class EffectsPreviewCache {
     private var entries: [UUID: Entry] = [:]
     /// A few recent finished previews per layer, newest last. Undo and redo put a layer's earlier pixels back, and
     /// the effects for them are taken from here instead of blinking off while they're rendered again.
-    private var recent: [UUID: [Entry]] = [:]
+    private var recent: [UUID: [RenderCache.Key]] = [:]
+    private let cacheID = UUID()
     private static let recentPerLayer = 3
     /// A result handed in from elsewhere — the effects warped with a distortion as it is applied — shown until the
     /// worker has rendered the layer's new pixels, so the effects don't blink off for a frame.
@@ -72,7 +73,9 @@ final class EffectsPreviewCache {
         let ids = Set(layers.filter { $0.effects?.visible.isEmpty == false }.map(\.id))
         for id in Array(entries.keys) where !ids.contains(id) { entries.removeValue(forKey: id)?.request.cancel() }
         for id in Array(seeds.keys) where !ids.contains(id) { seeds.removeValue(forKey: id) }
-        for id in Array(recent.keys) where !ids.contains(id) { recent.removeValue(forKey: id) }
+        for id in Array(recent.keys) where !ids.contains(id) {
+            for key in recent.removeValue(forKey: id) ?? [] { RenderCache.shared.remove(key) }
+        }
         // Share a ~64 MiB output budget across all effect layers. Do not evict visible layers in a
         // redraw cycle: that would repeatedly rebuild evicted previews when more layers are visible.
         sideLimit = min(1536, max(32, Int(sqrt(Double(16_777_216) / Double(max(1, ids.count))))))
@@ -91,7 +94,8 @@ final class EffectsPreviewCache {
         }
         let old = entries[layer.id]
         old?.request.cancel()
-        if let known = recent[layer.id]?.last(where: { $0.request.matches(request) }), let result = known.result {
+        if let known = recent[layer.id]?.compactMap({ RenderCache.shared.value(for: $0, as: Entry.self) })
+            .last(where: { $0.request.matches(request) }), let result = known.result {
             entries[layer.id] = known
             seeds.removeValue(forKey: layer.id)
             return (result.image, result.inset, result.placement)
@@ -117,8 +121,17 @@ final class EffectsPreviewCache {
                 self.entries[layerID]?.result = result
                 if let result {
                     self.seeds.removeValue(forKey: layerID)
-                    var kept = (self.recent[layerID] ?? []).filter { !$0.request.matches(request) }
-                    kept.append(Entry(request: request, result: result))
+                    var kept = (self.recent[layerID] ?? []).filter { key in
+                        guard let entry = RenderCache.shared.value(for: key, as: Entry.self) else { return false }
+                        if entry.request.matches(request) { RenderCache.shared.remove(key); return false }
+                        return true
+                    }
+                    let key = RenderCache.Key(.effectsRecent, [self.cacheID, layerID, request.id])
+                    let resources = [request.image, request.mask, request.maskSource].compactMap { $0 }.map(RenderResource.image)
+                        + [RenderResource.image(result.image)]
+                    RenderCache.shared.insert(Entry(request: request, result: result), for: key, resources: resources)
+                    kept.append(key)
+                    for key in kept.dropLast(Self.recentPerLayer) { RenderCache.shared.remove(key) }
                     self.recent[layerID] = Array(kept.suffix(Self.recentPerLayer))
                 }
                 completion()

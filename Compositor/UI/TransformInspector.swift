@@ -45,7 +45,7 @@ struct TransformInspector: View {
             // Numbers describe an ordinary transform; while distorted, the handles are the controls.
             }.disabled((!session.canTransform && session.transformEdit == nil) || session.transformEdit?.corners != nil)
                 .padding(.horizontal, 18)
-          }.scrollIndicators(.hidden)
+          }.scrollIndicators(.automatic)
           LayerArrangeMenu(session: session, compact: true)
           // Only an edit that waits for them — typed values, ⌘T, a distortion — has anything to cancel or apply. A
           // handle drag applies itself on release, and ghosted buttons after it read as the pixels being resampled,
@@ -120,7 +120,7 @@ private struct TransformValueField: View {
                     text = Self.formatted(Double(newValue))
                 }), range: range, step: 1, onEnd: finish)
             TextField(L10n.text(label), text: $text)
-                .textFieldStyle(.roundedBorder).focused($focused)
+                .textFieldStyle(ToolNumberFieldStyle()).focused($focused)
                 .accessibilityIdentifier("transform\(label)")
                 .onAppear { sync() }
                 .onChange(of: value) { if !focused { sync() } }

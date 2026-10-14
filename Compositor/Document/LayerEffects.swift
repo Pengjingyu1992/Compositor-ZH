@@ -448,25 +448,22 @@ extension EditorSession {
 nonisolated enum LayerEffectsRenderer {
     /// The last few layers drawn with effects, so the canvas doesn't rebuild them on every redraw.
     private final class Cache: @unchecked Sendable {
-        private let lock = NSLock()
-        private var entries: [(image: CGImage, mask: CGImage?, effects: LayerEffects, result: CGImage, inset: CGFloat)] = []
+        private struct Key: Hashable { let image: ObjectIdentifier; let mask: ObjectIdentifier? }
+        private struct Entry {
+            let source: WeakRenderSource
+            let mask: WeakRenderSource?
+            let effects: LayerEffects
+            let image: CGImage
+            let inset: CGFloat
+        }
         func result(image: CGImage, mask: CGImage?, effects: LayerEffects,
                     make: () throws -> (image: CGImage, inset: CGFloat)) throws -> (image: CGImage, inset: CGFloat) {
-            lock.lock()
-            let hit = entries.first { $0.image === image && $0.mask === mask && $0.effects == effects }
-            lock.unlock()
-            if let hit { return (hit.result, hit.inset) }
+            let key = RenderCache.Key(.effects, Key(image: ObjectIdentifier(image), mask: mask.map(ObjectIdentifier.init)))
+            if let entry = RenderCache.shared.value(for: key, as: Entry.self), entry.source.object === image,
+               entry.mask?.object === mask, entry.effects == effects { return (entry.image, entry.inset) }
             let made = try make()
-            lock.lock()
-            let budget = 64 * 1024 * 1024
-            let cost = made.image.bytesPerRow * made.image.height + image.bytesPerRow * image.height + (mask.map { $0.bytesPerRow * $0.height } ?? 0)
-            if cost <= budget {
-                entries.append((image, mask, effects, made.image, made.inset))
-                while entries.count > 8 || entries.reduce(0, { $0 + $1.result.bytesPerRow * $1.result.height + $1.image.bytesPerRow * $1.image.height + ($1.mask.map { $0.bytesPerRow * $0.height } ?? 0) }) > budget {
-                    entries.removeFirst()
-                }
-            }
-            lock.unlock()
+            RenderCache.shared.insert(Entry(source: WeakRenderSource(image), mask: mask.map(WeakRenderSource.init),
+                effects: effects, image: made.image, inset: made.inset), for: key, resources: [.image(made.image)])
             return made
         }
     }

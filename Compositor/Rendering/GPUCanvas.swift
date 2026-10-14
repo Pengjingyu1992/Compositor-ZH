@@ -21,16 +21,34 @@ import QuartzCore
     private struct Key: Hashable {
         let id: ObjectIdentifier
         let level: Int
+        var mask = false
     }
     private struct Entry {
-        /// Held so the identifier can't be reused by another object while the texture is kept.
-        let source: AnyObject
+        /// Reject a dead source before reusing an identity key, without retaining document pixels.
+        let source: WeakRenderSource
         let image: CIImage
+        let texture: MTLTexture
         var used: Int
         /// Frames it's kept after its last use.
         var keep: Int
     }
-    private var textures: [Key: Entry] = [:]
+    private let cache = RenderCache.shared
+    private struct Surface {
+        let texture: MTLTexture
+        let image: CIImage
+    }
+    private func store(_ surface: Surface, source: AnyObject, key: Key, keep: Int) {
+        cache.insert(Entry(source: WeakRenderSource(source), image: surface.image, texture: surface.texture, used: frame, keep: keep),
+            for: RenderCache.Key(.texture, key), resources: [RenderResource(id: .object(ObjectIdentifier(surface.texture)),
+                bytes: surface.texture.allocatedSize)])
+    }
+    private func touch(_ key: Key, keep: Int) -> Entry? {
+        let cacheKey = RenderCache.Key(.texture, key)
+        guard var entry = cache.value(for: cacheKey, as: Entry.self), let source = entry.source.object else { return nil }
+        entry.used = frame; entry.keep = max(entry.keep, keep)
+        store(Surface(texture: entry.texture, image: entry.image), source: source, key: key, keep: entry.keep)
+        return entry
+    }
     private var frame = 0
     /// Textures not used for this many frames are let go.
     private let keepFrames = 90
@@ -40,13 +58,22 @@ import QuartzCore
     private final class StrokeTexture {
         let texture: MTLTexture
         let image: CIImage
-        var written: [CGPoint: ObjectIdentifier] = [:]
+        // Retain the uploaded version: an identifier alone can be recycled after a final brush flush.
+        var written: [CGPoint: CGImage] = [:]
         init(texture: MTLTexture, image: CIImage) {
             self.texture = texture
             self.image = image
         }
     }
-    private var strokes: [ObjectIdentifier: (stroke: BrushStroke, texture: StrokeTexture, used: Int)] = [:]
+    private struct StrokeEntry {
+        let texture: StrokeTexture
+        let width: Int
+        let height: Int
+        let mask: Bool
+        var used: Int
+    }
+    private(set) var adoptedStrokes = 0
+    private(set) var uploadedTileBytes = 0
 
     private init?() {
         guard let device = MTLCreateSystemDefaultDevice(), let queue = device.makeCommandQueue() else { return nil }
@@ -61,25 +88,21 @@ import QuartzCore
                 self.lastIdleFrame = self.frame
             }
         }
-        // Short of memory, the system says so: what the last frame didn't use goes, and everything when it's critical —
-        // the next frame uploads what it needs again.
-        pressure.setEventHandler { [weak self] in
-            MainActor.assumeIsolated {
-                guard let self else { return }
-                self.release(keepingLastFrame: !self.pressure.data.contains(.critical))
-            }
-        }
-        pressure.resume()
     }
     private var idle: Timer?
     private var lastIdleFrame = -1
-    private let pressure = DispatchSource.makeMemoryPressureSource(eventMask: [.warning, .critical], queue: .main)
 
     /// Lets go of textures: all but the ones the last frame drew from, or all of them.
     private func release(keepingLastFrame: Bool) {
         let last = frame - 1
-        textures = keepingLastFrame ? textures.filter { $0.value.used >= last } : [:]
-        strokes = keepingLastFrame ? strokes.filter { $0.value.used >= last } : [:]
+        cache.remove(kind: .texture) { value in
+            guard let entry = value as? Entry else { return false }
+            return !keepingLastFrame || entry.used < last
+        }
+        cache.remove(kind: .stroke) { value in
+            guard let entry = value as? StrokeEntry else { return false }
+            return !keepingLastFrame || entry.used < last
+        }
     }
 
     /// `image` as a texture, `level` halvings smaller (sharp reductions for zooming out, as `DownsampleCache` makes on
@@ -93,16 +116,13 @@ import QuartzCore
     /// `DownsampleCache` makes them); one used only to make a smaller one — the full size, zoomed out — goes at the end of
     /// the frame, as nothing draws from it. On a large document seen whole, that full size was most of the memory.
     private func texture(_ image: CGImage, level: Int, mask: Bool, transient: Bool, drawing: Bool) -> CIImage? {
-        let key = Key(id: ObjectIdentifier(image), level: transient ? 0 : level)
+        let key = Key(id: ObjectIdentifier(image), level: transient ? 0 : level, mask: mask)
         let keep = transient ? 1 : drawing || level > 0 ? keepFrames : 0
         let found: CIImage?
-        if var entry = textures[key] {
-            entry.used = frame
-            entry.keep = max(entry.keep, keep)
-            textures[key] = entry
+        if let entry = touch(key, keep: keep) {
             found = entry.image
         } else {
-            let made: CIImage?
+            let made: Surface?
             if level == 0 || transient {
                 made = upload(image, mask: mask)
             } else if let larger = texture(image, level: level - 1, mask: mask, transient: false, drawing: false) {
@@ -110,8 +130,8 @@ import QuartzCore
                               to: Self.size(image.width, image.height, level: level), mask: mask)
             } else { made = nil }
             guard let made else { return nil }
-            textures[key] = Entry(source: image, image: made, used: frame, keep: keep)
-            found = made
+            store(made, source: image, key: key, keep: keep)
+            found = made.image
         }
         guard transient, level > 0, let found else { return found }
         return Self.reduced(found, width: image.width, height: image.height, level: level)
@@ -119,7 +139,9 @@ import QuartzCore
 
     /// The levels of `image` held as textures, for checking what the cache keeps.
     func cachedLevels(of image: CGImage) -> [Int] {
-        textures.keys.filter { $0.id == ObjectIdentifier(image) }.map(\.level).sorted()
+        (0...DownsampleCache.maxLevel).filter {
+            cache.value(for: RenderCache.Key(.texture, Key(id: ObjectIdentifier(image), level: $0)), as: Entry.self) != nil
+        }
     }
 
     /// A grid `level` halvings smaller, each rounded up as `DownsampleCache` rounds them.
@@ -130,9 +152,9 @@ import QuartzCore
     /// `stroke`'s grid as it stands: the layer's old pixels, or for a mask stroke its old mask (revealing past it), with
     /// every tile the stroke has changed written over them.
     func image(_ stroke: BrushStroke, base: CIImage?) -> CIImage? {
-        let id = ObjectIdentifier(stroke)
+        let key = RenderCache.Key(.stroke, stroke.cacheID)
         let entry: StrokeTexture
-        if let known = strokes[id] {
+        if let known = cache.value(for: key, as: StrokeEntry.self) {
             entry = known.texture
         } else {
             guard let texture = texture(width: stroke.width, height: stroke.height, mask: stroke.isMask),
@@ -150,17 +172,22 @@ import QuartzCore
             }
             context.render(start, to: texture, commandBuffer: buffer, bounds: grid, colorSpace: space)
             buffer.commit()
+            let started = PerformanceRecorder.shared.begin()
             buffer.waitUntilCompleted()
+            PerformanceRecorder.shared.end(.gpuWait, since: started)
             entry = StrokeTexture(texture: texture, image: image)
         }
-        strokes[id] = (stroke, entry, frame)
         let writes = TileWrites(renderer: self, into: entry.texture, mask: stroke.isMask)
         for patch in stroke.patches {
-            let key = patch.rect.origin, identity = ObjectIdentifier(patch.image)
-            guard entry.written[key] != identity else { continue }
-            if writes.place(patch.image, at: patch.rect) { entry.written[key] = identity }
+            let key = patch.rect.origin
+            guard entry.written[key] !== patch.image else { continue }
+            if writes.place(patch.image, at: patch.rect) { entry.written[key] = patch.image }
         }
         writes.commit()
+        let resources = [RenderResource(id: .object(ObjectIdentifier(entry.texture)), bytes: entry.texture.allocatedSize)]
+            + entry.written.values.map(RenderResource.image)
+        cache.insert(StrokeEntry(texture: entry, width: stroke.width, height: stroke.height, mask: stroke.isMask, used: frame),
+                     for: key, resources: resources)
         return entry.image
     }
 
@@ -192,12 +219,14 @@ import QuartzCore
             guard let staging = renderer.device.makeTexture(descriptor: descriptor) else { return false }
             let bytes = mask ? 1 : 4
             let offset = Int(bounds.minY - rect.minY.rounded()) * pixels.bytesPerRow + Int(bounds.minX - rect.minX.rounded()) * bytes
+            renderer.uploadedTileBytes += w * h * bytes
             staging.replace(region: MTLRegionMake2D(0, 0, w, h), mipmapLevel: 0, withBytes: data + offset, bytesPerRow: pixels.bytesPerRow)
             if blit == nil {
                 buffer = renderer.queue.makeCommandBuffer()
                 blit = buffer?.makeBlitCommandEncoder()
             }
-            blit?.copy(from: staging, sourceSlice: 0, sourceLevel: 0, sourceOrigin: MTLOrigin(x: 0, y: 0, z: 0),
+            guard let blit else { return false }
+            blit.copy(from: staging, sourceSlice: 0, sourceLevel: 0, sourceOrigin: MTLOrigin(x: 0, y: 0, z: 0),
                        sourceSize: MTLSize(width: w, height: h, depth: 1), to: texture, destinationSlice: 0, destinationLevel: 0,
                        destinationOrigin: MTLOrigin(x: Int(bounds.minX), y: Int(bounds.minY), z: 0))
             return true
@@ -213,31 +242,56 @@ import QuartzCore
     func image(_ raster: RasterSnapshot, level: Int = 0) -> CIImage? { texture(raster, level: level, drawing: true) }
 
     private func texture(_ raster: RasterSnapshot, level: Int, drawing: Bool) -> CIImage? {
-        let key = Key(id: ObjectIdentifier(raster), level: level)
+        let key = Key(id: ObjectIdentifier(raster), level: level, mask: raster.isMask)
         let keep = drawing || level > 0 ? keepFrames : 0
-        if var entry = textures[key] {
-            entry.used = frame
-            entry.keep = max(entry.keep, keep)
-            textures[key] = entry
-            return entry.image
-        }
-        let made: CIImage?
+        if let entry = touch(key, keep: keep) { return entry.image }
+        let made: Surface?
         if level == 0 {
-            made = assemble(raster)
+            made = adopt(raster) ?? assemble(raster)
         } else if let larger = texture(raster, level: level - 1, drawing: false) {
             made = reduce(larger, from: Self.size(raster.width, raster.height, level: level - 1),
                           to: Self.size(raster.width, raster.height, level: level), mask: raster.isMask)
         } else { made = nil }
         guard let made else { return nil }
-        textures[key] = Entry(source: raster, image: made, used: frame, keep: keep)
-        return made
+        store(made, source: raster, key: key, keep: keep)
+        return made.image
+    }
+
+    /// Remove the mutable stroke entry before handing its surface to an immutable snapshot. A later stroke,
+    /// even one made from the same layer, allocates another surface. Crops are views into the retained allocation.
+    private func adopt(_ raster: RasterSnapshot) -> Surface? {
+        guard let id = raster.strokeID, let crop = raster.strokeCrop,
+              let entry = cache.value(for: RenderCache.Key(.stroke, id), as: StrokeEntry.self), entry.mask == raster.isMask,
+              crop.width == CGFloat(raster.width), crop.height == CGFloat(raster.height),
+              CGRect(x: 0, y: 0, width: entry.width, height: entry.height).contains(crop) else { return nil }
+        // A final flush may have changed tiles since the last display frame.
+        let writes = TileWrites(renderer: self, into: entry.texture.texture, mask: raster.isMask)
+        defer { writes.commit() }
+        for patch in raster.patches {
+            let rect = patch.rect.offsetBy(dx: crop.minX, dy: crop.minY)
+            guard entry.texture.written[rect.origin] !== patch.image else { continue }
+            // Unchanged older tiles are already in the stroke's base; uploading them is unnecessary.
+            guard raster.strokePatchIDs.contains(ObjectIdentifier(patch.storage)) else { continue }
+            guard writes.place(patch.image, at: rect) else { return nil }
+        }
+        cache.remove(RenderCache.Key(.stroke, id))
+        adoptedStrokes += 1
+        let image = entry.texture.image.cropped(to: crop)
+            .transformed(by: CGAffineTransform(translationX: -crop.minX, y: -crop.minY))
+        return Surface(texture: entry.texture.texture, image: image)
     }
 
     /// Lets go of textures no frame has used for a while.
     func endFrame() {
         frame += 1
-        textures = textures.filter { $0.value.used >= frame - $0.value.keep }
-        strokes = strokes.filter { $0.value.used >= frame - keepFrames }
+        cache.remove(kind: .texture) { value in
+            guard let entry = value as? Entry else { return false }
+            return entry.used < frame - entry.keep
+        }
+        cache.remove(kind: .stroke) { value in
+            guard let entry = value as? StrokeEntry else { return false }
+            return entry.used < frame - keepFrames
+        }
     }
 
     private func texture(width: Int, height: Int, mask: Bool) -> MTLTexture? {
@@ -254,12 +308,13 @@ import QuartzCore
     }
 
     /// The image's own bytes, copied straight in: sRGB, premultiplied, top row first — or for a mask, its gray values.
-    private func upload(_ image: CGImage, mask: Bool) -> CIImage? {
+    private func upload(_ image: CGImage, mask: Bool) -> Surface? {
         guard let texture = texture(width: image.width, height: image.height, mask: mask),
               let pixels = try? (mask ? Self.grayCopy(image) : BrushRaster.copy(image)), let data = pixels.data else { return nil }
         texture.replace(region: MTLRegionMake2D(0, 0, image.width, image.height), mipmapLevel: 0,
                         withBytes: data, bytesPerRow: pixels.bytesPerRow)
-        return wrap(texture, mask: mask)
+        guard let image = wrap(texture, mask: mask) else { return nil }
+        return Surface(texture: texture, image: image)
     }
 
     static func grayCopy(_ image: CGImage) throws -> CGContext {
@@ -270,7 +325,7 @@ import QuartzCore
         return context
     }
 
-    private func assemble(_ raster: RasterSnapshot) -> CIImage? {
+    private func assemble(_ raster: RasterSnapshot) -> Surface? {
         guard let texture = texture(width: raster.width, height: raster.height, mask: raster.isMask) else { return nil }
         // Transparent (or a mask's fill) everywhere first, then the base and every tile in its place: tiles replace
         // what's under them, transparent pixels included.
@@ -283,7 +338,8 @@ import QuartzCore
         if let base = raster.base { writes.place(base, at: raster.baseRect) }
         for patch in raster.patches { writes.place(patch.image, at: patch.rect) }
         writes.commit()
-        return wrap(texture, mask: raster.isMask)
+        guard let image = wrap(texture, mask: raster.isMask) else { return nil }
+        return Surface(texture: texture, image: image)
     }
 
     /// `full` (`width` × `height`) `level` halvings smaller, sharply, rounded up like `DownsampleCache`'s — computed as
@@ -297,7 +353,7 @@ import QuartzCore
     }
 
     /// `larger` (`from` in size) sharply reduced to `to`, kept as a texture of its own.
-    private func reduce(_ larger: CIImage, from: CGSize, to: CGSize, mask: Bool) -> CIImage? {
+    private func reduce(_ larger: CIImage, from: CGSize, to: CGSize, mask: Bool) -> Surface? {
         let w = Int(to.width), h = Int(to.height)
         let sx = to.width / from.width, sy = to.height / from.height
         let reduced = larger.clampedToExtent()
@@ -308,8 +364,11 @@ import QuartzCore
         context.render(reduced, to: texture, commandBuffer: buffer, bounds: CGRect(x: 0, y: 0, width: w, height: h),
                        colorSpace: space)
         buffer.commit()
+        let started = PerformanceRecorder.shared.begin()
         buffer.waitUntilCompleted()
-        return wrap(texture, mask: mask)
+        PerformanceRecorder.shared.end(.gpuWait, since: started)
+        guard let image = wrap(texture, mask: mask) else { return nil }
+        return Surface(texture: texture, image: image)
     }
 
     /// Draws `image` into `layer`'s next drawable, in step with the Core Animation transaction it's drawn in, so it
@@ -548,12 +607,13 @@ nonisolated enum GPUAdjustment {
     /// Points per axis of the lookups for adjustments that change each color on its own, as Hue/Saturation's.
     static let dimension = 33
     private static let lock = NSLock()
-    nonisolated(unsafe) private static var cubes: [(adjustment: LayerAdjustment, data: Data)] = []
+    nonisolated(unsafe) private static var cubes: [(adjustment: LayerAdjustment, id: UUID)] = []
 
     /// A lookup for an adjustment that changes each color on its own, made by running the adjustment itself over every
     /// point of the lattice — so the GPU canvas shows what export makes, with nothing worked out twice.
     static func cube(for adjustment: LayerAdjustment) -> Data? {
-        if let known = lock.withLock({ cubes.first { $0.adjustment == adjustment }?.data }) { return known }
+        if let id = lock.withLock({ cubes.first { $0.adjustment == adjustment }?.id }),
+           let known = RenderCache.shared.value(for: .init(.adjustmentCube, id), as: Data.self) { return known }
         let n = dimension, width = n * n
         guard let lattice = try? BrushRaster.context(width: width, height: n, mask: false), let pixels = lattice.data else { return nil }
         let bytes = pixels.assumingMemoryBound(to: UInt8.self)
@@ -572,11 +632,13 @@ nonisolated enum GPUAdjustment {
             floats[o] = Float(values[i]) / 255; floats[o + 1] = Float(values[i + 1]) / 255; floats[o + 2] = Float(values[i + 2]) / 255
         } } }
         let data = floats.withUnsafeBufferPointer { Data(buffer: $0) }
+        let id = UUID()
         lock.withLock {
             cubes.removeAll { $0.adjustment == adjustment }
-            cubes.insert((adjustment, data), at: 0)
+            cubes.insert((adjustment, id), at: 0)
             if cubes.count > 16 { cubes.removeLast() }
         }
+        RenderCache.shared.insert(data, for: .init(.adjustmentCube, id), resources: [RenderResource(id: .field(id), bytes: data.count)])
         return data
     }
 }

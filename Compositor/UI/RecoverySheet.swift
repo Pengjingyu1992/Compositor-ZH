@@ -19,7 +19,9 @@ struct RecoverySheet: View {
             List(entries) { entry in
                 VStack(alignment: .leading, spacing: 6) {
                     Text(entry.title).font(.headline)
-                    if let record = entry.record { Text(record.date, style: .date).foregroundStyle(.secondary) }
+                    if let record = entry.record {
+                        Text(record.date, format: .dateTime.year().month().day().hour().minute().second()).foregroundStyle(.secondary)
+                    }
                     if let message = entry.error { Text(message).foregroundStyle(.orange) }
                     HStack {
                         Button("Recover") {

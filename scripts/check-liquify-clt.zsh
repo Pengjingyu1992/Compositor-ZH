@@ -24,6 +24,9 @@ import AppKit
         print("Liquify: \(result.checks) checks, \(result.failures.count) failures")
         for failure in result.failures { print("FAIL: \(failure)") }
         for measurement in result.measurements { print(measurement) }
+        for metric in PerformanceRecorder.shared.summaries() {
+            print("PERF \(metric.operation.rawValue): \(metric.count) samples; median \(String(format: "%.2f", metric.medianMS)) ms; p95 \(String(format: "%.2f", metric.p95MS)) ms; max \(String(format: "%.2f", metric.maximumMS)) ms")
+        }
         if !result.failures.isEmpty { exit(1) }
         if CommandLine.arguments.contains("--shortcuts") {
             let baseline = try await FirstBatchRegressionChecks.run()

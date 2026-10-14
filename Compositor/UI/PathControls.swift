@@ -23,7 +23,7 @@ struct PathControls: View {
                             }))
                             TextField("Width", value: Binding<Double>(get: { Double(session.pathEditing?.style.strokeWidth ?? 2) }, set: {
                                 if $0.isFinite { session.pathEditing?.style.strokeWidth = CGFloat(min(5000, max(0, $0))) }
-                            }), format: .number).frame(width: 52).textFieldStyle(.roundedBorder)
+                            }), format: .number).frame(width: 52).textFieldStyle(ToolNumberFieldStyle())
                         }
                         Toggle("Even-Odd", isOn: Binding(get: { session.pathEditing?.style.evenOdd ?? false },
                             set: { session.pathEditing?.style.evenOdd = $0 }))
@@ -38,7 +38,7 @@ struct PathControls: View {
                         Button("Apply") { session.finishPathEditing() }
                     } else { Spacer(minLength: 0) }
                 }
-            }.scrollIndicators(.hidden)
+            }.scrollIndicators(.automatic)
         }.toggleStyle(.checkbox).padding(.horizontal, 18).toolHeaderBar().releasesFocusOnCommit(session)
     }
 }

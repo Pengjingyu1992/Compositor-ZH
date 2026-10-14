@@ -62,6 +62,8 @@ nonisolated enum NewCanvasBackground: String, CaseIterable, Sendable {
 }
 
 struct NewCanvasSheet: View {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorSchemeContrast) private var contrast
     let session: EditorSession
     var onCreate: ((Int, Int, Double, CGColor?) -> Void)? = nil
     var onOpen: (() -> Void)? = nil
@@ -146,10 +148,11 @@ struct NewCanvasSheet: View {
             actions(compact: compact)
         }
         .padding(padding)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(reduceTransparency ? AnyShapeStyle(.background) : AnyShapeStyle(.ultraThinMaterial),
+                    in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(.white.opacity(0.14), lineWidth: 1)
+                .strokeBorder(.primary.opacity(contrast == .increased ? 0.5 : 0.14), lineWidth: 1)
                 .allowsHitTesting(false)
         }
         .shadow(color: .black.opacity(0.20), radius: 14, y: 6)

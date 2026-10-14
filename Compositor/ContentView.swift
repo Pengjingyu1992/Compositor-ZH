@@ -16,6 +16,7 @@ struct ContentView: View {
     @State private var filterPanel = FloatingPanelController(name: "filterPanel")
     @State private var effectsPanel = FloatingPanelController(name: "effectsPanel")
     @State private var isDropTargeted = false
+    @State private var showsToolHelp = false
     /// The window's width, so the tab strip can use the toolbar's free space.
     @State private var windowWidth: CGFloat = 1180
     /// A layer dragged from this canvas's own tab has nowhere to go, so the canvas doesn't light up for it.
@@ -87,7 +88,15 @@ struct ContentView: View {
 
     @ViewBuilder private var editorStack: some View {
         VStack(spacing: 0) {
-            if !session.canvasOnly { toolHeaders }
+            if !session.canvasOnly {
+                if session.document == nil {
+                    HStack {
+                        Text("Create a canvas or import an image.").foregroundStyle(.secondary)
+                        Spacer()
+                    }.padding(.horizontal, 18).toolHeaderBar()
+                    Divider()
+                } else { toolHeaders }
+            }
             HStack(spacing: 0) {
                 if !session.canvasOnly {
                     toolRail
@@ -382,27 +391,41 @@ struct ContentView: View {
                 Text(session.viewport.zoom, format: .percent.precision(.fractionLength(0...1)))
                     .frame(width: 62, alignment: .leading).accessibilityIdentifier("zoomStatus")
                 Text("\(document.width) × \(document.height) px").accessibilityIdentifier("canvasDimensions")
-                Text("sRGB · Transparent")
+                Text("sRGB · 8-bit RGBA").fixedSize()
             } else { Text("Ready when you are") }
             if session.history.droppedLatestUndo {
                 Text("Undo unavailable: this edit exceeded the history memory budget.")
                     .foregroundStyle(.orange).accessibilityIdentifier("historyBudgetWarning")
             }
+            if session.recovery != nil, session.document != nil { RecoveryProtectionView(session: session) }
             Spacer()
             if session.showsBusy {
                 ProgressView().controlSize(.mini)
                 Text("Working…")
             } else if session.isImporting {
                 ProgressView().controlSize(.mini)
-                Text("Importing images…")
-            } else {
-                Text(toolHelp)
+                Text(L10n.text(session.importCancelRequested ? "Canceling import…" : "Importing images…"))
+                Button("Cancel Import") { session.cancelImport() }
+                    .buttonStyle(.plain).disabled(session.importCancelRequested)
+                    .help("Keep completed imports; cancel the unfinished file and queued images.")
+            } else if session.document != nil {
+                Text(verbatim: shortToolHelp)
+                    .lineLimit(1).truncationMode(.tail).layoutPriority(-1)
+                Button { showsToolHelp.toggle() } label: { Image(systemName: "questionmark.circle") }
+                    .buttonStyle(.plain).help("Tool Help").accessibilityLabel("Tool Help")
+                    .accessibilityIdentifier("toolHelp")
+                    .popover(isPresented: $showsToolHelp) {
+                        Text(toolHelp).font(.system(size: 12)).fixedSize(horizontal: false, vertical: true)
+                            .padding(16).frame(width: 320)
+                    }
             }
         }
         .font(.system(size: 11).monospacedDigit()).foregroundStyle(.secondary)
         .padding(.horizontal, 18).frame(height: 30)
         .accessibilityElement(children: .contain)
     }
+
+    private var shortToolHelp: String { toolHelp.components(separatedBy: " · ").first ?? toolHelp }
 
     private var toolHelp: String {
         let keys = ShortcutSettings.shared

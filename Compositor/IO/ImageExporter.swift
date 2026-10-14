@@ -18,6 +18,7 @@ actor ImageExporter {
     static let shared = ImageExporter()
 
     func render(_ input: ProjectSnapshot) throws -> ExportRaster {
+        try Task.checkCancellation()
         let snapshot = input.presentingAnimationFrame(input.displayedAnimationFrameID)
         let width = snapshot.manifest.width, height = snapshot.manifest.height
         guard (1...DocumentLimits.maxSide).contains(width), (1...DocumentLimits.maxSide).contains(height),
@@ -34,6 +35,7 @@ actor ImageExporter {
             context.scaleBy(x: 1, y: -1)
             let records = Dictionary(uniqueKeysWithValues: snapshot.manifest.layers.map { ($0.id, $0) })
             for layer in snapshot.manifest.layers {
+                try Task.checkCancellation()
                 guard layer.imageFile == nil || snapshot.images[layer.id] != nil,
                       layer.maskFile == nil || snapshot.masks[layer.id] != nil else { throw ProjectError.missingImage }
             }
@@ -71,6 +73,7 @@ actor ImageExporter {
                 let clip = FolderMaskClip(image: image, transform: folder.transform)
                 return { clip.apply(center: folder.transform.center, in: $0) }
             }, in: context) { live.drawComposite($0, in: context) }
+            try Task.checkCancellation()
             guard let image = context.makeImage() else { throw ExportError.render }
             return ExportRaster(image: image, resolution: snapshot.manifest.resolution ?? 72)
         }
@@ -112,36 +115,83 @@ actor ImageExporter {
         ] as CFDictionary)
     }
 
-    func animationGIF(_ snapshot: ProjectSnapshot?, fallback: ExportRaster, width: Int, height: Int,
-                      background: CGColor, keepTransparency: Bool) throws -> JPEGResult {
-        let track = snapshot?.manifest.animation
-        let count = track?.frames.count ?? 1
-        guard width * height <= AnimationTrack.maxFramePixels, width * height * count <= AnimationTrack.maxPixels else { throw ImageImportError.gifTooLarge }
-        var output = GIFCodec.header(width: width, height: height, loops: track?.loopCount ?? -1)
-        for index in 0..<count {
+    /// One representative frame, with the same resizing, alpha threshold and ImageIO palette as final output.
+    func gifPreview(_ raster: ExportRaster, options: GIFExportOptions, frameID: UUID? = nil,
+                    duration: Int = 100) throws -> GIFPreparedFrame {
+        try Task.checkCancellation()
+        let started = PerformanceRecorder.shared.begin()
+        defer { PerformanceRecorder.shared.end(.gifPreview, since: started) }
+        guard options.width > 0, options.height > 0,
+              options.width <= DocumentLimits.maxSide, options.height <= DocumentLimits.maxSide,
+              options.width * options.height <= AnimationTrack.maxFramePixels else { throw ImageImportError.gifTooLarge }
+        let block = try gifBlock(raster, options: options, duration: duration)
+        var data = GIFCodec.header(width: options.width, height: options.height, loops: -1)
+        data.append(block); data.append(0x3b)
+        try Task.checkCancellation()
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let preview = CGImageSourceCreateImageAtIndex(source, 0, nil) else { throw ExportError.encode }
+        return GIFPreparedFrame(options: options, frameID: frameID, duration: duration, block: block, preview: preview)
+    }
+
+    private func gifBlock(_ raster: ExportRaster, options: GIFExportOptions, duration: Int) throws -> Data {
+        try autoreleasepool {
             try Task.checkCancellation()
-            let rendered: ExportRaster
-            if let snapshot, let track { rendered = try render(snapshot.presentingAnimationFrame(track.frames[index].groupID)) }
-            else { rendered = fallback }
-            let sized = try resized(rendered, width: width, height: height)
+            let width = options.width, height = options.height
+            let sized = try resized(raster, width: width, height: height)
             let image: CGImage
-            if keepTransparency {
+            if options.keepTransparency {
                 guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
                     space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGBitmapInfo.byteOrder32Big.rawValue | CGImageAlphaInfo.premultipliedLast.rawValue),
                       let pixels = context.data?.assumingMemoryBound(to: UInt8.self) else { throw ExportError.render }
                 context.draw(sized.image, in: CGRect(x: 0, y: 0, width: width, height: height))
-                for at in stride(from: 0, to: width * height * 4, by: 4) {
-                    let alpha = Int(pixels[at + 3])
-                    for c in 0..<3 { pixels[at + c] = alpha < 128 ? 0 : UInt8(min(255, (Int(pixels[at + c]) * 255 + alpha / 2) / alpha)) }
-                    pixels[at + 3] = alpha < 128 ? 0 : 255
+                for y in 0..<height {
+                    if y % 64 == 0 { try Task.checkCancellation() }
+                    for x in 0..<width {
+                        let at = (y * width + x) * 4, alpha = Int(pixels[at + 3])
+                        for c in 0..<3 { pixels[at + c] = alpha < 128 ? 0 : UInt8(min(255, (Int(pixels[at + c]) * 255 + alpha / 2) / alpha)) }
+                        pixels[at + 3] = alpha < 128 ? 0 : 255
+                    }
                 }
                 guard let binary = context.makeImage() else { throw ExportError.render }; image = binary
-            } else { image = try flattened(sized, over: background) }
-            let frame = try GIFCodec.encodedFrame(encode(image, type: .gif), width: width, height: height, duration: track?.frames[index].durationMS ?? 100)
+            } else { image = try flattened(sized, over: options.background) }
+            try Task.checkCancellation()
+            let frame = try GIFCodec.encodedFrame(encode(image, type: .gif), width: width, height: height, duration: duration)
+            try Task.checkCancellation()
+            return frame
+        }
+    }
+
+    func animationGIF(_ snapshot: ProjectSnapshot?, fallback: ExportRaster, width: Int, height: Int,
+                      background: CGColor, keepTransparency: Bool, prepared: GIFPreparedFrame? = nil,
+                      progress: (@Sendable (Int) -> Void)? = nil) throws -> JPEGResult {
+        try Task.checkCancellation()
+        let started = PerformanceRecorder.shared.begin()
+        defer { PerformanceRecorder.shared.end(.gifEncode, since: started) }
+        let track = snapshot?.manifest.animation
+        let count = track?.frames.count ?? 1
+        guard (1...AnimationTrack.maxFrames).contains(count), (-1...65535).contains(track?.loopCount ?? -1),
+              width > 0, height > 0, width <= DocumentLimits.maxSide, height <= DocumentLimits.maxSide,
+              width * height <= AnimationTrack.maxFramePixels, width * height * count <= AnimationTrack.maxPixels else { throw ImageImportError.gifTooLarge }
+        let components = background.converted(to: CGColorSpace(name: CGColorSpace.sRGB)!, intent: .defaultIntent, options: nil)?.components ?? [1, 1, 1, 1]
+        let options = GIFExportOptions(width: width, height: height, red: components[0], green: components[1], blue: components[2], keepTransparency: keepTransparency)
+        var output = GIFCodec.header(width: width, height: height, loops: track?.loopCount ?? -1)
+        for index in 0..<count {
+            try Task.checkCancellation()
+            let frameID = track?.frames[index].groupID, duration = track?.frames[index].durationMS ?? 100
+            let frame: Data
+            if let prepared, prepared.options == options, prepared.frameID == frameID, prepared.duration == duration {
+                frame = prepared.block
+            } else {
+                let rendered: ExportRaster
+                if let snapshot, let track { rendered = try render(snapshot.presentingAnimationFrame(track.frames[index].groupID)) }
+                else { rendered = fallback }
+                frame = try gifBlock(rendered, options: options, duration: duration)
+            }
             guard output.count + frame.count + 1 <= 64 * 1024 * 1024 else { throw ImageImportError.gifTooLarge }
-            output.append(frame)
+            output.append(frame); progress?(index + 1)
         }
         output.append(0x3b)
+        try Task.checkCancellation()
         guard let source = CGImageSourceCreateWithData(output as CFData, nil), let preview = CGImageSourceCreateImageAtIndex(source, 0, nil) else { throw ExportError.encode }
         return JPEGResult(data: output, preview: preview)
     }

@@ -21,6 +21,37 @@ final class DocumentHistory {
         let name: String
         let before: Snapshot
         let after: Snapshot
+        let resources: Resources
+    }
+    /// Static allocations are captured once when an entry is made; lazy raster materialization is refreshed
+    /// when enforcing the budget, since export can allocate those bytes after a history entry was recorded.
+    private struct Resources {
+        var fixed: [RenderResource.ID: Int] = [:]
+        var rasters: [ObjectIdentifier: RasterSnapshot] = [:]
+        init(_ documents: [CanvasDocument?]) {
+            for document in documents { for layer in document?.layers ?? [] {
+                for asset in [layer.asset, layer.mask?.asset, layer.filterStack?.source].compactMap({ $0 }) {
+                    for resource in RenderResource.asset(asset) {
+                        fixed[resource.id] = max(fixed[resource.id] ?? 0, resource.bytes)
+                    }
+                    if let raster = asset.raster {
+                        let id = ObjectIdentifier(raster)
+                        // The materialized allocation can appear or grow after this entry is made.
+                        fixed.removeValue(forKey: .object(id)); rasters[id] = raster
+                    }
+                }
+                for node in layer.filterStack?.nodes ?? [] { for resource in node.resources {
+                    fixed[resource.id] = max(fixed[resource.id] ?? 0, resource.bytes)
+                } }
+            } }
+        }
+        var allocations: [RenderResource.ID: Int] {
+            var result = fixed
+            for (id, raster) in rasters {
+                if let bytes = raster.materializedBytes { result[.object(id)] = bytes }
+            }
+            return result
+        }
     }
     private var past: [Entry] = []
     private var future: [Entry] = []
@@ -115,7 +146,8 @@ final class DocumentHistory {
         guard before.document != document else { return }
         revision = UUID()
         past.append(Entry(name: pendingName, before: before,
-            after: Snapshot(document: document, activeLayerID: selection, revision: revision)))
+            after: Snapshot(document: document, activeLayerID: selection, revision: revision),
+            resources: Resources([before.document, document])))
         future.removeAll()
         trim(current: document)
         droppedLatestUndo = past.last?.after.revision != revision
@@ -139,37 +171,54 @@ final class DocumentHistory {
         return entry.after
     }
 
-    /// Bytes retained only by history, excluding images in the live document.
-    func retainedBytes(current: CanvasDocument?) -> Int {
-        var seen = Set<ObjectIdentifier>()
-        for layer in current?.layers ?? [] {
-            for asset in [layer.asset, layer.mask?.asset, layer.filterStack?.source].compactMap({ $0 }) {
-                seen.insert(ObjectIdentifier(asset.image))
-                seen.insert(ObjectIdentifier(asset.thumbnail))
-            }
-        }
+    /// Bytes retained only by history, excluding the physical allocations in the live document.
+    func retainedBytes(current: CanvasDocument?) -> Int { ledger(current: current).bytes }
+
+    private struct Ledger {
+        var counts: [RenderResource.ID: (references: Int, bytes: Int)] = [:]
+        let live: Set<RenderResource.ID>
         var bytes = 0
-        for entry in past + future {
-            for snapshot in [entry.before, entry.after] {
-                for layer in snapshot.document?.layers ?? [] {
-                    // Saved fields and LUTs count conservatively for each retained document snapshot.
-                    bytes += layer.filterStack?.retainedBytes ?? 0
-                    for asset in [layer.asset, layer.mask?.asset, layer.filterStack?.source].compactMap({ $0 }) {
-                        for image in [asset.image, asset.thumbnail] where seen.insert(ObjectIdentifier(image)).inserted {
-                            bytes += image.bytesPerRow * image.height
-                        }
-                    }
+        mutating func add(_ resources: [RenderResource.ID: Int]) {
+            for (id, cost) in resources {
+                if var value = counts[id] {
+                    if !live.contains(id) { bytes += max(cost, value.bytes) - value.bytes }
+                    value.references += 1; value.bytes = max(cost, value.bytes); counts[id] = value
+                } else {
+                    counts[id] = (1, cost)
+                    if !live.contains(id) { bytes += cost }
                 }
             }
         }
-        return bytes
-    }
-
-    private func trim(current: CanvasDocument?) {
-        while past.count + future.count > entryLimit || retainedBytes(current: current) > retainedByteLimit {
-            if !past.isEmpty { past.removeFirst(); wasTrimmed = true }
-            else if !future.isEmpty { future.removeFirst() }
-            else { break }
+        mutating func remove(_ resources: [RenderResource.ID: Int]) {
+            for id in resources.keys {
+                guard var value = counts[id] else { continue }
+                value.references -= 1
+                if value.references == 0 {
+                    if !live.contains(id) { bytes -= value.bytes }
+                    counts.removeValue(forKey: id)
+                } else { counts[id] = value }
+            }
         }
+    }
+    private func ledger(current: CanvasDocument?) -> Ledger {
+        var ledger = Ledger(live: Set(Resources([current]).allocations.keys))
+        for entry in past + future { ledger.add(entry.resources.allocations) }
+        return ledger
+    }
+    private func trim(current: CanvasDocument?) {
+        // Build once; each eviction decrements its resources rather than rescanning every surviving document.
+        let resources = (past + future).map { $0.resources.allocations }
+        var ledger = Ledger(live: Set(Resources([current]).allocations.keys))
+        for allocation in resources { ledger.add(allocation) }
+        var removedPast = 0, removedFuture = 0
+        while past.count + future.count - removedPast - removedFuture > entryLimit || ledger.bytes > retainedByteLimit {
+            if removedPast < past.count {
+                ledger.remove(resources[removedPast]); removedPast += 1; wasTrimmed = true
+            } else if removedFuture < future.count {
+                ledger.remove(resources[past.count + removedFuture]); removedFuture += 1
+            } else { break }
+        }
+        if removedPast > 0 { past.removeFirst(removedPast) }
+        if removedFuture > 0 { future.removeFirst(removedFuture) }
     }
 }

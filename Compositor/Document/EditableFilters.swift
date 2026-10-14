@@ -64,10 +64,17 @@ nonisolated struct EditableFilterNode: Codable, Equatable, Identifiable, Sendabl
     var gaussian = false
     var monochromatic = false
     var halftone = ColorHalftoneSettings()
-    var lut = ColorLUTSettings()
-    var liquify: SavedLiquify?
+    var lut = ColorLUTSettings() { didSet { resourceID = UUID() } }
+    var liquify: SavedLiquify? { didSet { resourceID = UUID() } }
     /// Optional grayscale coverage in source-pixel coordinates, captured when the step is added.
-    var coverage: Data?
+    var coverage: Data? { didSet { resourceID = UUID() } }
+    // Runtime allocation identity survives value copies; editing payloads starts another resource group.
+    private(set) var resourceID = UUID()
+    private enum CodingKeys: String, CodingKey {
+        case id, version, kind, enabled, opacity, seed, radius, angle, distance, amount, gaussian, monochromatic
+        case halftone, lut, liquify, coverage
+    }
+    var resources: [RenderResource] { [RenderResource(id: .field(resourceID), bytes: retainedBytes)] }
     var isValid: Bool {
         version == 1 && opacity.isFinite && (0...1).contains(opacity)
         && radius.isFinite && (0.1...250).contains(radius)
@@ -76,6 +83,13 @@ nonisolated struct EditableFilterNode: Codable, Equatable, Identifiable, Sendabl
         && amount.isFinite && (0.1...400).contains(amount) && halftone.isValid && lut.isValid
         && (kind != .colorLUT || !enabled || lut.table != nil)
         && (kind == .liquify ? liquify?.isValid == true : liquify == nil)
+    }
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.id == rhs.id && lhs.version == rhs.version && lhs.kind == rhs.kind
+            && lhs.enabled == rhs.enabled && lhs.opacity == rhs.opacity && lhs.seed == rhs.seed
+            && lhs.radius == rhs.radius && lhs.angle == rhs.angle && lhs.distance == rhs.distance
+            && lhs.amount == rhs.amount && lhs.gaussian == rhs.gaussian && lhs.monochromatic == rhs.monochromatic
+            && lhs.halftone == rhs.halftone && lhs.lut == rhs.lut && lhs.liquify == rhs.liquify && lhs.coverage == rhs.coverage
     }
     var settings: FilterSettings {
         var value = FilterSettings()
@@ -108,25 +122,38 @@ nonisolated struct LayerFilterStack: Equatable, @unchecked Sendable {
             && nodes.allSatisfy { $0.isValid && ($0.coverage == nil || $0.coverage?.count == w * h)
                 && ($0.liquify == nil || ($0.liquify?.width == w && $0.liquify?.height == h)) }
     }
-    func render(through count: Int? = nil) throws -> CGImage {
+    func render(through count: Int? = nil, cache: FilterPrefixCache? = .shared) throws -> CGImage {
         guard isValid, count.map({ (0...nodes.count).contains($0) }) ?? true else { throw ProjectError.invalid }
         let pixels = source.image.width * source.image.height
         guard pixels <= DocumentLimits.maxSurfacePixels,
               pixels * 20 + retainedBytes <= min(1536 * 1024 * 1024, Int(ProcessInfo.processInfo.physicalMemory / 4)) else { throw EditableFilterError.budget }
-        // PNG stores straight alpha; imported images may use premultiplied alpha. Normalize before Core Image
-        // sees either representation so reopening the source cannot change rounding inside a filter chain.
-        guard let normalized = try BrushRaster.copy(source.image).makeImage() else { throw ExportError.render }
-        var image = normalized
-        for node in nodes.prefix(count ?? nodes.count) where node.enabled && node.opacity > 0 {
+        try Task.checkCancellation()
+        let requested = Array(nodes.prefix(count ?? nodes.count))
+        let known = cache?.longestPrefix(source: source, nodes: requested)
+        let start: Int
+        var image: CGImage
+        if let known { image = known.image; start = known.count }
+        else {
+            // Normalize premultiplication identically for uncached and cached paths, including reopened PNGs.
+            guard let normalized = try BrushRaster.copy(source.image).makeImage() else { throw ExportError.render }
+            image = normalized; start = 0
+            cache?.store(image, source: source, nodes: [])
+        }
+        for index in start..<requested.count {
             try Task.checkCancellation()
-            let before = image
-            if let warp = node.liquify { image = try warp.render(image) }
-            else if let kind = node.kind.pixelKind {
-                if kind == .colorLUT && node.lut.table == nil { throw ProjectError.invalid }
-                image = try PixelFilter.run(FilterJob(kind: kind, image: image, settings: node.settings,
-                    scale: 1, selection: nil, mapping: .identity, seed: node.seed))
-            } else { throw ProjectError.invalid }
-            if node.coverage != nil || node.opacity != 1 { image = try Self.mix(image, over: before, coverage: node.coverage, opacity: node.opacity) }
+            let node = requested[index]
+            if node.enabled && node.opacity > 0 {
+                let before = image
+                if let warp = node.liquify { image = try warp.render(image) }
+                else if let kind = node.kind.pixelKind {
+                    if kind == .colorLUT && node.lut.table == nil { throw ProjectError.invalid }
+                    image = try PixelFilter.run(FilterJob(kind: kind, image: image, settings: node.settings,
+                        scale: 1, selection: nil, mapping: .identity, seed: node.seed))
+                } else { throw ProjectError.invalid }
+                if node.coverage != nil || node.opacity != 1 { image = try Self.mix(image, over: before, coverage: node.coverage, opacity: node.opacity) }
+            }
+            try Task.checkCancellation()
+            cache?.store(image, source: source, nodes: Array(requested.prefix(index + 1)))
         }
         return image
     }

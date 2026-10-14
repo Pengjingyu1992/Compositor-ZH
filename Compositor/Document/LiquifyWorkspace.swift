@@ -129,6 +129,8 @@ final class LiquifyWorkspace {
     var revision = 0
     var preview: CGImage?
     var frozenOverlay: CGImage?
+    private(set) var previewRevision = 0
+    var previewError: String?
     var isRendering = false
     var isApplying = false
     var error: String?
@@ -150,6 +152,10 @@ final class LiquifyWorkspace {
     @ObservationIgnored private var captured: [Int: Data] = [:]
     @ObservationIgnored private var last: CGPoint?
     @ObservationIgnored private var previewTask: Task<Void, Never>?
+    @ObservationIgnored private var previewBranch = 0
+    @ObservationIgnored private var previewJobID = 0
+    @ObservationIgnored private var previewsEnabled = true
+    @ObservationIgnored private(set) var previewFrameCount = 0
     @ObservationIgnored var applyTask: Task<CGImage, Error>?
     private(set) var isStroking = false
     var canUndo: Bool {
@@ -379,6 +385,7 @@ final class LiquifyWorkspace {
     }
     func undo() {
         guard canUndo, let step = past.popLast() else { return }
+        previewBranch += 1
         for p in step.patches { put(p.before, tile: p.tile) }
         future.append(step)
         revision += 1
@@ -386,6 +393,7 @@ final class LiquifyWorkspace {
     }
     func redo() {
         guard canRedo, let step = future.popLast() else { return }
+        previewBranch += 1
         for p in step.patches { put(p.after, tile: p.tile) }
         past.append(step)
         revision += 1
@@ -393,6 +401,7 @@ final class LiquifyWorkspace {
     }
     func reset(onlyFreeze: Bool = false) {
         guard !isApplying else { return }
+        previewBranch += 1
         endStroke()
         beginStroke(.zero)
         for tile in 0..<(tilesAcross * ((pixels.gridHeight + 31) / 32)) { captured[tile] = tileData(tile) }
@@ -420,25 +429,52 @@ final class LiquifyWorkspace {
         }
     }
     func requestPreview() {
-        guard !isRendering, !isApplying else { return }
+        guard previewsEnabled, !isRendering, !isApplying else { return }
         isRendering = true
         let generation = revision
+        let branch = previewBranch
+        previewJobID += 1
+        let jobID = previewJobID
         let pixels = pixels
         let field = nodes
         previewTask = Task { [weak self] in
-            let result = await Task.detached(priority: .userInitiated) { () -> (CGImage?, CGImage?) in
-                guard let image = try? pixels.render(nodes: field, longSide: 1280) else { return (nil, nil) }
-                return (image, try? pixels.overlay(nodes: field, width: image.width, height: image.height))
+            let result = await Task.detached(priority: .userInitiated) { () -> (CGImage?, CGImage?, String?) in
+                let started = PerformanceRecorder.shared.begin()
+                defer { PerformanceRecorder.shared.end(.liquifyPreview, since: started) }
+                do {
+                    let image = try pixels.render(nodes: field, longSide: 1280)
+                    return (image, try pixels.overlay(nodes: field, width: image.width, height: image.height), nil)
+                } catch { return (nil, nil, error.localizedDescription) }
             }.value
-            guard let self else { return }
+            guard let self, self.previewsEnabled, self.previewJobID == jobID, !Task.isCancelled else { return }
             self.isRendering = false
-            if self.revision == generation {
-                self.preview = result.0
-                self.frozenOverlay = result.1
-            } else {
+            self.previewTask = nil
+            // Ongoing input may be newer: show this completed frame, then catch up. Undo/reset
+            // starts another branch, whose earlier results must never replace the current view.
+            if self.previewBranch == branch {
+                self.previewError = result.2
+                if let image = result.0 {
+                    self.preview = image
+                    self.frozenOverlay = result.1
+                    self.previewRevision = generation
+                    self.previewFrameCount += 1
+                }
+            }
+            if self.revision != generation || self.previewBranch != branch {
                 self.requestPreview()
             }
         }
+    }
+    func stopPreview() {
+        previewsEnabled = false
+        previewJobID += 1
+        previewTask?.cancel()
+        previewTask = nil
+        isRendering = false
+    }
+    func resumePreview() {
+        previewsEnabled = true
+        requestPreview()
     }
     func rendered() async throws -> CGImage {
         let pixels = pixels
@@ -504,9 +540,10 @@ extension EditorSession {
     }
     func cancelLiquify() {
         guard let edit = liquify else { return }
+        edit.stopPreview()
         edit.applyTask?.cancel()
-        liquify = nil
         releaseEdit(edit.owner)
+        liquify = nil
     }
     @discardableResult func applyLiquify() async -> Bool {
         guard let edit = liquify, !edit.isApplying else { return false }
@@ -522,6 +559,7 @@ extension EditorSession {
               !effectiveLocks(for: edit.layer.id).contains(.transparency) || saved.keepsAlpha else {
             edit.error = EditRefusal.locked.localizedDescription; return false
         }
+        edit.stopPreview()
         edit.isApplying = true; isProjectBusy = true
         do {
             var stack = edit.layer.filterStack ?? LayerFilterStack(source: edit.layer.asset!, nodes: [])
@@ -562,7 +600,7 @@ extension EditorSession {
             endEdit()
             let changed = document != before
             basicLiquifyTip = edit.basicBrushTip
-            liquify = nil; releaseEdit(edit.owner)
+            releaseEdit(edit.owner); liquify = nil
             return changed
         } catch {
             edit.isApplying = false
@@ -570,6 +608,7 @@ extension EditorSession {
             releaseEdit(edit.owner)
             if liquify === edit, document?.id == edit.owner.documentID, history.currentRevision == edit.owner.revision {
                 activeEditOwner = edit.owner
+                edit.resumePreview()
             }
             return false
         }

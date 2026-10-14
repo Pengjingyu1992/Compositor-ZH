@@ -30,13 +30,15 @@ extension EditorSession {
     /// Shared document/busy/modal permission. Target rules belong to each operation family.
     func editingRefusal(owner: EditOwner? = nil) -> EditRefusal? {
         _ = showsBusy
+        // Observe the modal even when the unobserved owner makes the early busy check fail.
+        let hasLiquify = liquify != nil
         guard document != nil else { return .noDocument }
         if let owner, !ownsEdit(owner) { return .stale }
         if ((isProjectBusy || activeEditOwner != nil) && owner == nil) || isImporting { return .busy }
         if showsPrintSetup || selectionAmountOperation != nil || colorRange != nil || textDraft != nil || brushStroke != nil
             || warpStroke != nil || showsNewDocument || showsImporter || renamingLayerID != nil
             || transformEdit != nil || cropRect != nil || gradientEdit != nil || pixelMove != nil
-            || hueSaturation != nil || levels != nil || filterEdit != nil || adjustmentEditingID != nil || liquify != nil || pathEditing != nil || filterStackEdit != nil {
+            || hueSaturation != nil || levels != nil || filterEdit != nil || adjustmentEditingID != nil || hasLiquify || pathEditing != nil || filterStackEdit != nil {
             return .modal
         }
         return nil

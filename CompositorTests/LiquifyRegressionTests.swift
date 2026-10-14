@@ -1,5 +1,6 @@
 import AppKit
 import Metal
+import Observation
 
 #if !LIQUIFY_CLT_CHECKS
     import Testing
@@ -410,6 +411,59 @@ struct LiquifyRegressionChecks {
         check("menu entry reads the parked basic brush", linked.liquify?.diameter == 56 && linked.liquify?.strength == 0.8)
         linked.cancelLiquify()
         check("advanced entry leaves other brush families unchanged", linked.brushSettings.diameter == otherTip.diameter && linked.brushSettings.opacity == otherTip.opacity)
+        func settlePreview(_ edit: LiquifyWorkspace) async -> Bool {
+            let deadline = Date().addingTimeInterval(5)
+            while edit.isRendering && Date() < deadline { try? await Task.sleep(for: .milliseconds(2)) }
+            return !edit.isRendering
+        }
+        let advancing = try create(layer)
+        advancing.requestPreview()
+        // New input arrives before the first task can publish. Both frames must be visible,
+        // rather than discarding every frame until the pointer stops.
+        advancing.revision += 1
+        check("preview catches up after newer input", await settlePreview(advancing))
+        check("completed frame is published during newer input", advancing.previewFrameCount == 2)
+        check("preview converges to newest revision", advancing.previewRevision == advancing.revision)
+        let rewound = try create(layer)
+        stroke(rewound, .push)
+        rewound.undo()
+        check("undo preview settles", await settlePreview(rewound))
+        check("undo rejects frame from discarded branch", rewound.previewFrameCount == 1 && rewound.previewRevision == rewound.revision)
+        check("undo preview matches restored field", try bytes(rewound.preview!) == bytes(rewound.pixels.render(nodes: rewound.nodes)))
+        let resetPreview = try create(layer)
+        stroke(resetPreview, .push)
+        resetPreview.reset()
+        check("reset preview settles", await settlePreview(resetPreview))
+        check("reset rejects previous branch", resetPreview.previewFrameCount == 1 && !resetPreview.hasWarp)
+        let cancelledPreview = try create(layer)
+        let initialPreview = cancelledPreview.preview
+        cancelledPreview.requestPreview()
+        cancelledPreview.stopPreview()
+        try await Task.sleep(for: .milliseconds(20))
+        check("cancelled preview cannot publish", cancelledPreview.previewFrameCount == 0 && cancelledPreview.preview === initialPreview)
+        cancelledPreview.resumePreview()
+        check("preview can resume after failed apply", await settlePreview(cancelledPreview) && cancelledPreview.previewFrameCount == 1)
+        let disabledTiming = PerformanceRecorder(enabled: false)
+        disabledTiming.record(.brushUpdate, milliseconds: 1)
+        check("performance recording defaults can stay disabled", disabledTiming.begin() == 0 && disabledTiming.summaries().isEmpty)
+        let timing = PerformanceRecorder(enabled: true)
+        DispatchQueue.concurrentPerform(iterations: 1000) { _ in timing.record(.brushUpdate, milliseconds: 2) }
+        timing.record(.brushUpdate, milliseconds: .infinity)
+        timing.record(.brushUpdate, milliseconds: -1)
+        let stats = timing.summaries().first
+        check("concurrent timing keeps valid samples only", stats?.count == 1000 && stats?.medianMS == 2 && stats?.p95MS == 2)
+        let permissions = EditorSession()
+        permissions.document = CanvasDocument(width: layer.asset!.image.width, height: layer.asset!.image.height, layers: [layer])
+        permissions.activeLayerID = layer.id
+        permissions.beginLiquify()
+        check("liquify holds layer-edit permission", permissions.liquify != nil && !permissions.canEditLayers)
+        var permissionInvalidated = false
+        withObservationTracking { _ = permissions.canEditLayers } onChange: {
+            Task { @MainActor in permissionInvalidated = true }
+        }
+        permissions.cancelLiquify()
+        try await Task.sleep(for: .milliseconds(2))
+        check("cancel invalidates observed layer permission", permissionInvalidated && permissions.canEditLayers)
         let history = try create(layer)
         for _ in 0..<120 { stroke(history, .push) }
         check(

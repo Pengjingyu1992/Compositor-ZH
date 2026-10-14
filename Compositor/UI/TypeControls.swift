@@ -14,6 +14,7 @@ private extension TextAlignment {
 
 struct TypeControls: View {
     @Bindable var session: EditorSession
+    @State private var showsTypography = false
     private func value<T>(_ key: WritableKeyPath<LayerTextStyle, T>) -> Binding<T> {
         Binding(get: { session.currentTextStyle[keyPath: key] }, set: { value in
             session.changeTextStyle { $0[keyPath: key] = value }
@@ -68,48 +69,22 @@ struct TypeControls: View {
                             } label: {
                                 Image(systemName: alignment == .left ? "text.alignleft" : alignment == .center ? "text.aligncenter" : alignment == .justified ? "text.justify" : "text.alignright")
                                     .frame(width: 30, height: 26)
-                                    .background(selected ? Color.white.opacity(0.14) : .clear,
-                                                in: RoundedRectangle(cornerRadius: 4))
-                                    // Without this the glyph's own strokes are the only thing a click lands on.
-                                    .contentShape(RoundedRectangle(cornerRadius: 4))
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(ToolChoiceStyle(selected: selected))
                             .help(alignment.localizedLabel)
                             .accessibilityLabel(alignment.localizedLabel)
                             .accessibilityAddTraits(selected ? .isSelected : [])
                         }
                     }
-                    Toggle("Vertical Text", isOn: Binding(get: { session.currentTextStyle.isVertical }, set: { value in session.changeTextStyle { $0.vertical = value } })).disabled(session.currentTextStyle.pathLayout != nil)
-                    if session.currentTextStyle.pathLayout != nil {
-                        TextField("Path Offset", value: Binding<Double>(get: { Double(session.currentTextStyle.pathLayout?.offset ?? 0) }, set: { v in
-                            if v.isFinite { session.changeTextStyle { $0.pathLayout?.offset = CGFloat(min(30_000, max(-30_000, v))) } }
-                        }), format: .number).frame(width: 60)
-                        Toggle("Reverse Path", isOn: Binding(get: { session.currentTextStyle.pathLayout?.reversed ?? false }, set: { v in session.changeTextStyle { $0.pathLayout?.reversed = v } }))
-                    } else {
-                        Text("Arc Bend")
-                        TextField("Arc Bend", value: Binding<Double>(get: { Double(session.currentTextStyle.warp?.bend ?? 0) * 100 }, set: { v in
-                            if v.isFinite { session.changeTextStyle { $0.warp = v == 0 ? nil : TextWarp(bend: CGFloat(min(1, max(-1, v/100)))) } }
-                        }), format: .number).frame(width: 52)
+                    Button { showsTypography.toggle() } label: {
+                        Label("Typography", systemImage: "slider.horizontal.3")
                     }
-                    Text("Tracking").scrubbable(sensitivity: 1, value: value(\.tracking), range: -100...1000, step: 1)
-                    TextField("Tracking", value: number(\.tracking), format: .number).frame(width: 45)
-                        .arrowSteps(value: { Double(session.currentTextStyle.tracking) },
-                                    change: { stepped in session.changeTextStyle { $0.tracking = CGFloat(stepped) } })
-                    Text("Leading").scrubbable(sensitivity: 1, value: value(\.leading), range: 0...5000, step: 1)
-                    // 0 means Auto: the field is left empty so its "Auto" placeholder shows through.
-                    TextField("Leading", text: Binding(get: {
-                        let leading = session.currentTextStyle.leading
-                        return leading > 0 ? String(Int(leading.rounded())) : ""
-                    }, set: { typed in
-                        let value = Double(typed.trimmingCharacters(in: .whitespaces)) ?? 0
-                        session.changeTextStyle { $0.leading = CGFloat(max(0, min(5000, value))) }
-                    }), prompt: Text("Auto"))
-                        .frame(width: 52)
-                        .arrowSteps(value: { Double(session.currentTextStyle.lineHeight) },
-                                    change: { stepped in session.changeTextStyle { $0.leading = CGFloat(max(0, stepped)) } })
-                        .help("Line height, baseline to baseline. Empty or 0 is Auto: 120% of the font size.")
+                    .accessibilityIdentifier("advancedTypography")
+                    .popover(isPresented: $showsTypography) {
+                        advancedTypography.padding(16).frame(width: 300)
+                    }
                 }
-            }.scrollIndicators(.hidden)
+            }.scrollIndicators(.automatic)
             let missingFonts = session.currentTextStyle.unavailableFontNames
             let missingFontList = missingFonts.joined(separator: ", ")
             if !missingFonts.isEmpty {
@@ -123,10 +98,63 @@ struct TypeControls: View {
                 Button("Edit Text") { session.editActiveText() }.disabled(session.activeLayer?.liveText == nil)
             }
         }
-        .textFieldStyle(.roundedBorder).padding(.horizontal, 18).toolHeaderBar()
+        .textFieldStyle(ToolNumberFieldStyle()).padding(.horizontal, 18).toolHeaderBar()
         .disabled(session.document == nil || session.showsBusy)
         .onChange(of: session.colorPicker?.color) { _, _ in session.previewTextColor() }
     }
+    private var advancedTypography: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Typography").font(.headline)
+            Toggle("Vertical Text", isOn: Binding(get: { session.currentTextStyle.isVertical },
+                set: { v in session.changeTextStyle { $0.vertical = v } }))
+                .disabled(session.currentTextStyle.pathLayout != nil)
+            if session.currentTextStyle.pathLayout != nil {
+                HStack {
+                    Text("Path Offset")
+                    Spacer()
+                    TextField("Path Offset", value: Binding<Double>(get: { Double(session.currentTextStyle.pathLayout?.offset ?? 0) }, set: { v in
+                        if v.isFinite { session.changeTextStyle { $0.pathLayout?.offset = CGFloat(min(30_000, max(-30_000, v))) } }
+                    }), format: .number).frame(width: 72)
+                }
+                Toggle("Reverse Path", isOn: Binding(get: { session.currentTextStyle.pathLayout?.reversed ?? false },
+                    set: { v in session.changeTextStyle { $0.pathLayout?.reversed = v } }))
+            } else {
+                HStack {
+                    Text("Arc Bend")
+                    Spacer()
+                    TextField("Arc Bend", value: Binding<Double>(get: { Double(session.currentTextStyle.warp?.bend ?? 0) * 100 }, set: { v in
+                        if v.isFinite { session.changeTextStyle { $0.warp = v == 0 ? nil : TextWarp(bend: CGFloat(min(1, max(-1, v/100)))) } }
+                    }), format: .number).frame(width: 72).unitSuffix("%")
+                }
+            }
+            Divider()
+            HStack {
+                Text("Tracking").scrubbable(sensitivity: 1, value: value(\.tracking), range: -100...1000, step: 1)
+                Spacer()
+                TextField("Tracking", value: number(\.tracking), format: .number).frame(width: 72)
+                    .arrowSteps(value: { Double(session.currentTextStyle.tracking) },
+                        change: { stepped in session.changeTextStyle { $0.tracking = CGFloat(stepped) } })
+            }
+            HStack {
+                Text("Leading").scrubbable(sensitivity: 1, value: value(\.leading), range: 0...5000, step: 1)
+                Spacer()
+                TextField("Leading", text: Binding(get: {
+                    let leading = session.currentTextStyle.leading
+                    return leading > 0 ? String(Int(leading.rounded())) : ""
+                }, set: { typed in
+                    let amount = Double(typed.trimmingCharacters(in: .whitespaces)) ?? 0
+                    session.changeTextStyle { $0.leading = CGFloat(max(0, min(5000, amount))) }
+                }), prompt: Text("Auto"))
+                    .frame(width: 72)
+                    .arrowSteps(value: { Double(session.currentTextStyle.lineHeight) },
+                        change: { stepped in session.changeTextStyle { $0.leading = CGFloat(max(0, stepped)) } })
+                    .help("Line height, baseline to baseline. Empty or 0 is Auto: 120% of the font size.")
+            }
+        }
+        .textFieldStyle(ToolNumberFieldStyle())
+        .font(ToolHeaderStyle.controlFont)
+    }
+
 }
 
 /// Keep the installed-font catalog out of SwiftUI's per-keystroke view updates.

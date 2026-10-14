@@ -127,41 +127,23 @@ nonisolated struct LayerMask: Equatable, @unchecked Sendable {
 }
 
 /// Masks resampled into their layers' grids (`LayerMask.clipImage`), so redraws reuse them; the least recently used
-/// go beyond a few entries or a pixel budget.
+/// shares the rendering byte budget.
 nonisolated final class MaskPlacementCache: @unchecked Sendable {
     static let shared = MaskPlacementCache()
+    private struct Key: Hashable { let mask: ObjectIdentifier; let width: Int; let height: Int }
     private struct Entry {
-        let mask: CGImage
+        let mask: WeakRenderSource
         let placement: LayerTransform
         let layer: LayerTransform
-        let width: Int
-        let height: Int
         let image: CGImage
-        var lastUse: UInt64
     }
-    private var entries: [Entry] = []
-    private var clock: UInt64 = 0
-    private let lock = NSLock()
-
     func image(mask: CGImage, placement: LayerTransform, layer: LayerTransform, width: Int, height: Int, build: () -> CGImage?) -> CGImage? {
-        lock.lock()
-        clock += 1
-        if let index = entries.firstIndex(where: { $0.mask === mask && $0.placement == placement && $0.layer == layer && $0.width == width && $0.height == height }) {
-            entries[index].lastUse = clock
-            let image = entries[index].image
-            lock.unlock()
-            return image
-        }
-        lock.unlock()
+        let key = RenderCache.Key(.maskPlacement, Key(mask: ObjectIdentifier(mask), width: width, height: height))
+        if let entry = RenderCache.shared.value(for: key, as: Entry.self), entry.mask.object === mask,
+           entry.placement == placement, entry.layer == layer { return entry.image }
         guard let image = build() else { return nil }
-        guard width * height <= 64_000_000 else { return image }
-        lock.lock()
-        entries.append(Entry(mask: mask, placement: placement, layer: layer, width: width, height: height, image: image, lastUse: clock))
-        while entries.count > 8 || entries.reduce(0, { $0 + $1.width * $1.height }) > 64_000_000,
-              let oldest = entries.indices.min(by: { entries[$0].lastUse < entries[$1].lastUse }) {
-            entries.remove(at: oldest)
-        }
-        lock.unlock()
+        RenderCache.shared.insert(Entry(mask: WeakRenderSource(mask), placement: placement, layer: layer, image: image),
+            for: key, resources: [.image(image)])
         return image
     }
 }

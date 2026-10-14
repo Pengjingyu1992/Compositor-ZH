@@ -23,7 +23,7 @@ struct ShapeControls: View {
                     TextField("Width", value: Binding(get: { session.shapeLineWidth },
                                                       set: { session.shapeLineWidth = $0.isFinite ? min(5000, max(1, $0)) : 4 }),
                               format: .number.precision(.fractionLength(0)))
-                        .frame(width: 48).textFieldStyle(.roundedBorder).multilineTextAlignment(.trailing)
+                        .frame(width: 48).textFieldStyle(ToolNumberFieldStyle()).multilineTextAlignment(.trailing)
                         .arrowSteps(value: { session.shapeLineWidth },
                                     change: { session.shapeLineWidth = min(5000, max(1, $0)) })
                         .unitSuffix("px")
@@ -38,7 +38,7 @@ struct ShapeControls: View {
                     TextField("Radius", value: Binding(get: { session.shapeCornerRadius },
                                                        set: { session.shapeCornerRadius = $0.isFinite ? min(5000, max(0, $0)) : 0 }),
                               format: .number.precision(.fractionLength(0)))
-                        .frame(width: 48).textFieldStyle(.roundedBorder).multilineTextAlignment(.trailing)
+                        .frame(width: 48).textFieldStyle(ToolNumberFieldStyle()).multilineTextAlignment(.trailing)
                         .arrowSteps(value: { Double(session.shapeCornerRadius) },
                                     change: { session.shapeCornerRadius = min(5000, max(0, CGFloat($0))) })
                         .unitSuffix("px")

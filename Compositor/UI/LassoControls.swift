@@ -70,7 +70,7 @@ struct LassoControls: View {
                         TextField("Feather", value: Binding(get: { Double(session.selectionFeatherAmount) },
                                                             set: { session.selectionFeatherAmount = $0.isFinite ? Int(min(250, max(1, $0))) : 2 }),
                                   format: .number.precision(.fractionLength(0)))
-                            .frame(width: 48).textFieldStyle(.roundedBorder).multilineTextAlignment(.trailing)
+                            .frame(width: 48).textFieldStyle(ToolNumberFieldStyle()).multilineTextAlignment(.trailing)
                             .arrowSteps(value: { Double(session.selectionFeatherAmount) },
                                         change: { session.selectionFeatherAmount = Int(min(250, max(1, $0))) })
                             .unitSuffix("px", scrubValue: $session.selectionFeatherAmount,
@@ -82,7 +82,7 @@ struct LassoControls: View {
                         Button("Deselect") { session.deselect() }.disabled(!session.canEditSelection)
                     }
                 }
-            }.scrollIndicators(.hidden)
+            }.scrollIndicators(.automatic)
         }
         .padding(.horizontal, 18).toolHeaderBar().releasesFocusOnCommit(session)
         .disabled(session.showsBusy || session.document == nil)
@@ -96,7 +96,7 @@ struct LassoControls: View {
                 TextField("Tolerance", value: Binding(get: { session.wandSettings.tolerance },
                                                       set: { session.wandSettings.tolerance = min(255, max(0, $0)) }),
                           format: .number)
-                    .frame(width: 44).textFieldStyle(.roundedBorder)
+                    .frame(width: 44).textFieldStyle(ToolNumberFieldStyle())
                     .multilineTextAlignment(.trailing)
                     .arrowSteps(value: { Double(session.wandSettings.tolerance) },
                                 change: { session.wandSettings.tolerance = Int(min(255, max(0, $0.rounded()))) })
@@ -131,7 +131,7 @@ struct LassoControls: View {
                 TextField("Edge", value: Binding(get: { session.objectSelectionSettings.edgeOffset },
                                                  set: { session.objectSelectionSettings.edgeOffset = min(10, max(-10, $0)) }),
                           format: .number)
-                    .frame(width: 40).textFieldStyle(.roundedBorder)
+                    .frame(width: 40).textFieldStyle(ToolNumberFieldStyle())
                     .multilineTextAlignment(.trailing)
                     .arrowSteps(value: { Double(session.objectSelectionSettings.edgeOffset) },
                                 change: { session.objectSelectionSettings.edgeOffset = Int(min(10, max(-10, $0.rounded()))) })
@@ -151,7 +151,7 @@ struct LassoControls: View {
             TextField(L10n.text(title), value: Binding(get: { amount.wrappedValue },
                                             set: { amount.wrappedValue = min(500, max(1, $0)) }),
                       format: .number)
-                .frame(width: 40).textFieldStyle(.roundedBorder)
+                .frame(width: 40).textFieldStyle(ToolNumberFieldStyle())
                 .multilineTextAlignment(.trailing)
                 .arrowSteps(value: { Double(amount.wrappedValue) },
                             change: { amount.wrappedValue = Int(min(500, max(1, $0.rounded()))) })
@@ -222,7 +222,7 @@ struct SelectionAmountSheet: View {
                                       set: { input = String(Int($0.rounded())) }),
                        in: 1...Double(maximum), step: 1)
                 TextField("Amount", text: $input)
-                    .frame(width: 56).textFieldStyle(.roundedBorder)
+                    .frame(width: 56).textFieldStyle(ToolNumberFieldStyle())
                     .multilineTextAlignment(.trailing).focused($focused)
                     .unitSuffix("px")
             }

@@ -48,7 +48,7 @@ struct BrushControls: View {
                     TextField("Size", value: Binding<Double>(get: { Double(session.brushSettings.diameter) },
                         set: { session.brushSettings.diameter = $0.isFinite ? CGFloat(min(2000, max(1, $0))) : 40 }),
                         format: .number.precision(.fractionLength(0)))
-                        .frame(width: 48).textFieldStyle(.roundedBorder)
+                        .frame(width: 48).textFieldStyle(ToolNumberFieldStyle())
                         .arrowSteps(value: { Double(session.brushSettings.diameter) },
                                     change: { session.brushSettings.diameter = CGFloat(min(2000, max(1, $0))) })
                         .onChange(of: session.brushSettings.diameter) { _, value in
@@ -60,7 +60,7 @@ struct BrushControls: View {
                     TextField("Hardness", value: Binding<Double>(get: { Double(session.brushSettings.hardness * 100) },
                         set: { session.brushSettings.hardness = $0.isFinite ? CGFloat(min(1, max(0, $0 / 100))) : 1 }),
                         format: .number.precision(.fractionLength(0)))
-                        .frame(width: 42).textFieldStyle(.roundedBorder)
+                        .frame(width: 42).textFieldStyle(ToolNumberFieldStyle())
                         .arrowSteps(value: { Double(session.brushSettings.hardness * 100) },
                                     change: { session.brushSettings.hardness = CGFloat(min(1, max(0, $0 / 100))) })
                         .unitSuffix("%")
@@ -70,7 +70,7 @@ struct BrushControls: View {
                     TextField("Opacity", value: Binding<Double>(get: { Double(session.brushSettings.opacity * 100) },
                         set: { session.brushSettings.opacity = $0.isFinite ? CGFloat(min(100, max(1, $0)) / 100) : 1 }),
                         format: .number.precision(.fractionLength(0)))
-                        .frame(width: 42).textFieldStyle(.roundedBorder)
+                        .frame(width: 42).textFieldStyle(ToolNumberFieldStyle())
                         .arrowSteps(value: { Double(session.brushSettings.opacity * 100) },
                                     change: { session.brushSettings.opacity = CGFloat(min(100, max(1, $0)) / 100) })
                         .help(ShortcutSettings.shared.opacityHelp)
@@ -84,7 +84,7 @@ struct BrushControls: View {
                         TextField("Radius", value: Binding<Double>(get: { Double(session.brushSettings.blurRadius) },
                             set: { session.brushSettings.blurRadius = $0.isFinite ? CGFloat(min(50, max(0.5, $0))) : 5 }),
                             format: .number.precision(.fractionLength(0...1)))
-                            .frame(width: 42).textFieldStyle(.roundedBorder)
+                            .frame(width: 42).textFieldStyle(ToolNumberFieldStyle())
                             .arrowSteps(value: { Double(session.brushSettings.blurRadius) },
                                         change: { session.brushSettings.blurRadius = CGFloat(min(50, max(0.5, $0))) })
                             .help("How far the blur softens, in pixels")
@@ -98,7 +98,7 @@ struct BrushControls: View {
                         TextField("Smoothing", value: Binding<Double>(get: { Double(session.brushSettings.smoothing) },
                             set: { session.brushSettings.smoothing = $0.isFinite ? CGFloat(min(100, max(0, $0))) : 0 }),
                             format: .number.precision(.fractionLength(0)))
-                            .frame(width: 42).textFieldStyle(.roundedBorder)
+                            .frame(width: 42).textFieldStyle(ToolNumberFieldStyle())
                             .arrowSteps(value: { Double(session.brushSettings.smoothing) },
                                         change: { session.brushSettings.smoothing = CGFloat(min(100, max(0, $0))) })
                             .help("The brush trails the pointer on a string this long, so a shaky hand still draws a smooth line")
@@ -132,7 +132,7 @@ struct BrushControls: View {
                     }
                     if session.isMaskSelected { Text("Mask").foregroundStyle(.secondary) }
                 }
-            }.scrollIndicators(.hidden)
+            }.scrollIndicators(.automatic)
         }
         .padding(.horizontal, 18).toolHeaderBar().releasesFocusOnCommit(session)
         .disabled(session.showsBusy)

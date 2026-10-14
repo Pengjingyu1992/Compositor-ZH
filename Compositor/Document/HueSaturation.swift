@@ -280,17 +280,20 @@ nonisolated enum HueSaturationFilter {
     /// The last few tables built: a Hue/Saturation layer redraws with the same settings on every canvas frame,
     /// and building one takes longer than applying it.
     private static let cubeLock = NSLock()
-    nonisolated(unsafe) private static var cubes: [(settings: HueSaturationSettings, data: Data)] = []
+    nonisolated(unsafe) private static var cubes: [(settings: HueSaturationSettings, id: UUID)] = []
 
     /// The lookup table: every cube corner converted to HSL, adjusted, and back.
     static func cube(_ settings: HueSaturationSettings) -> Data {
-        if let cached = cubeLock.withLock({ cubes.first { $0.settings == settings }?.data }) { return cached }
+        if let id = cubeLock.withLock({ cubes.first { $0.settings == settings }?.id }),
+           let cached = RenderCache.shared.value(for: .init(.hueCube, id), as: Data.self) { return cached }
         let data = buildCube(settings)
+        let id = UUID()
         cubeLock.withLock {
             cubes.removeAll { $0.settings == settings }
-            cubes.insert((settings, data), at: 0)
+            cubes.insert((settings, id), at: 0)
             if cubes.count > 8 { cubes.removeLast() }
         }
+        RenderCache.shared.insert(data, for: .init(.hueCube, id), resources: [RenderResource(id: .field(id), bytes: data.count)])
         return data
     }
 

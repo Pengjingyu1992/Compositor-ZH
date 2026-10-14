@@ -18,6 +18,24 @@ nonisolated final class RasterSnapshot: @unchecked Sendable {
     private var bytesPerPixel: Int { isMask ? 1 : 4 }
     private let lock = NSLock()
     private var materialized: CGContext?
+    /// One-use handoff from a live GPU stroke; it never retains the mutable stroke or an older snapshot.
+    var strokeID: UUID?
+    var strokeCrop: CGRect?
+    var strokePatchIDs: Set<ObjectIdentifier> = []
+
+    var materializedBytes: Int? { lock.withLock { materialized.map { $0.bytesPerRow * $0.height } } }
+    var resources: [RenderResource] {
+        var result = base.map { [RenderResource.image($0)] } ?? []
+        result += patches.flatMap { patch in
+            // Account for both the retained root and a possible copied crop, conservatively.
+            patch.storage === patch.image ? [RenderResource.image(patch.storage)]
+                : [RenderResource.image(patch.storage), RenderResource.image(patch.image)]
+        }
+        if let bytes = materializedBytes {
+            result.append(RenderResource(id: .object(ObjectIdentifier(self)), bytes: bytes))
+        }
+        return result
+    }
 
     init(width: Int, height: Int, base: CGImage?, baseRect: CGRect, patches: [BrushPatch], isMask: Bool = false, alignment: CGPoint? = nil) {
         self.width = width
@@ -36,9 +54,9 @@ nonisolated final class RasterSnapshot: @unchecked Sendable {
         let old = source?.raster
         let dx = sourceRect.minX - crop.minX, dy = sourceRect.minY - crop.minY
         var patches = (old?.patches ?? []).map {
-            BrushPatch(rect: $0.rect.offsetBy(dx: dx, dy: dy), image: $0.image)
+            BrushPatch(rect: $0.rect.offsetBy(dx: dx, dy: dy), image: $0.image, storage: $0.storage)
         }
-        let additions = new.map { BrushPatch(rect: $0.rect.offsetBy(dx: -crop.minX, dy: -crop.minY), image: $0.image) }
+        let additions = new.map { BrushPatch(rect: $0.rect.offsetBy(dx: -crop.minX, dy: -crop.minY), image: $0.image, storage: $0.storage) }
         // Spatial indexing keeps the handoff proportional to touched tiles, rather
         // than comparing every old tile with every new tile on a large document.
         func cells(_ rect: CGRect) -> [SIMD2<Int>] {
@@ -69,7 +87,7 @@ nonisolated final class RasterSnapshot: @unchecked Sendable {
                     return rects.compactMap { rect in
                         guard rect.width > 0, rect.height > 0,
                               let image = piece.image.cropping(to: rect.offsetBy(dx: -r.minX, dy: -r.minY)) else { return nil }
-                        return BrushPatch(rect: rect, image: image)
+                        return BrushPatch(rect: rect, image: image, storage: piece.storage)
                     }
                 }
             }
@@ -82,7 +100,7 @@ nonisolated final class RasterSnapshot: @unchecked Sendable {
             guard !rect.isNull, !rect.isEmpty else { return nil }
             if rect == patch.rect { return patch }
             guard let image = patch.image.cropping(to: rect.offsetBy(dx: -patch.rect.minX, dy: -patch.rect.minY)) else { return nil }
-            return BrushPatch(rect: rect, image: image)
+            return BrushPatch(rect: rect, image: image, storage: patch.storage)
         }
         let result = RasterSnapshot(width: Int(crop.width), height: Int(crop.height), base: old?.base ?? (old == nil ? source?.image : nil),
             baseRect: old?.baseRect.offsetBy(dx: dx, dy: dy) ?? sourceRect.offsetBy(dx: -crop.minX, dy: -crop.minY), patches: patches, isMask: isMask,

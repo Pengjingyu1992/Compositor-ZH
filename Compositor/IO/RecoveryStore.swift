@@ -41,10 +41,11 @@ actor RecoveryStore {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("com.wonderassembly.compositor.zh-Hans/Recovery", isDirectory: true)
     }
-    let directory: URL
-    let byteLimit: Int
-    let recordLimit: Int
+    nonisolated let directory: URL
+    nonisolated let byteLimit: Int
+    nonisolated let recordLimit: Int
     private var writing: Task<Void, Error>?
+    private var inventories: [String: RecoveryFileInventory] = [:]
     private let resources = RecoveryResources()
     private(set) var lastWriteStatistics = RecoveryWriteStatistics()
     init(directory: URL = RecoveryStore.defaultDirectory, byteLimit: Int = 4 * 1024 * 1024 * 1024, recordLimit: Int = 32) {
@@ -56,7 +57,7 @@ actor RecoveryStore {
             includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey]).filter {
                 let values = try? $0.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
                 return $0.pathExtension == "comp" && values?.isDirectory == true && values?.isSymbolicLink != true
-            }
+            }.map { URL(fileURLWithPath: $0.path, isDirectory: true) }
     }
     private func validateLocation(_ url: URL) throws {
         guard url.deletingLastPathComponent().standardizedFileURL.path == directory.standardizedFileURL.path,
@@ -82,27 +83,19 @@ actor RecoveryStore {
             } catch { return RecoveryEntry(url: url, record: nil, error: RecoveryError.invalid.localizedDescription) }
         }.sorted { ($0.record?.date ?? .distantPast) > ($1.record?.date ?? .distantPast) }
     }
-    private func bytes(in url: URL) -> Int {
-        guard let files = FileManager.default.enumerator(at: url, includingPropertiesForKeys: [.fileSizeKey, .isRegularFileKey]) else { return 0 }
-        var total = 0
-        for case let file as URL in files {
-            if let values = try? file.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey]), values.isRegularFile == true {
-                total += values.fileSize ?? 0
-            }
-        }
-        return total
-    }
     func write(_ snapshot: ProjectSnapshot, record: RecoveryRecord) async throws {
         let previous = writing
         let task = Task {
             if let previous { _ = try? await previous.value }
+            try Task.checkCancellation()
             try await self.performWrite(snapshot, record: record)
         }
         writing = task
         defer { if writing == task { writing = nil } }
-        try await task.value
+        try await withTaskCancellationHandler { try await task.value } onCancel: { task.cancel() }
     }
     private func performWrite(_ snapshot: ProjectSnapshot, record: RecoveryRecord) async throws {
+        let started = DispatchTime.now().uptimeNanoseconds
         guard record.version == RecoveryRecord.current, record.documentID == snapshot.manifest.documentID,
               record.projectVersion == snapshot.manifest.version else { throw RecoveryError.invalid }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -110,23 +103,43 @@ actor RecoveryStore {
         try validateLocation(url)
         let existing = try packages()
         guard existing.contains(where: { $0.lastPathComponent == url.lastPathComponent }) || existing.count < recordLimit else { throw RecoveryError.recordLimit(recordLimit) }
+        var validation = RecoveryWriteStatistics()
         if existing.contains(where: { $0.lastPathComponent == url.lastPathComponent }) {
             // A future or damaged copy must not be overwritten by a later automatic save.
             do {
                 let previous = try metadata(url)
                 guard previous.version == RecoveryRecord.current,
                       ProjectManifest.supported.contains(previous.projectVersion) else { throw RecoveryError.version }
-                try await resources.validateExisting(url)
+                validation = try await resources.validateExisting(url)
+                validation.readBytes += try RecoveryFileStamp.read(url.appendingPathComponent("recovery.json")).size
                 try await resources.removeInterruptedStages(beside: url)
-            } catch {
+            } catch is CancellationError { throw CancellationError() }
+            catch {
                 if let known = error as? RecoveryError { throw known }
                 throw RecoveryError.invalid
             }
         } else { await resources.forget(url) }
-        let available = byteLimit - existing.filter { $0.lastPathComponent != url.lastPathComponent }.reduce(0) { $0 + bytes(in: $1) }
+        let existingSet = Set(existing.map(\.lastPathComponent))
+        inventories = inventories.filter { existingSet.contains($0.key) }
+        var occupied = 0
+        for package in existing where package.lastPathComponent != url.lastPathComponent {
+            try Task.checkCancellation()
+            var inventory: RecoveryFileInventory
+            if let known = inventories[package.lastPathComponent] {
+                inventory = known
+                if try inventory.refresh(package) { validation.scannedPackages += 1 }
+            } else { inventory = try RecoveryFileInventory.scan(package); validation.scannedPackages += 1 }
+            inventories[package.lastPathComponent] = inventory; occupied += inventory.bytes
+        }
+        let available = byteLimit - occupied
         guard available > 0 else { throw RecoveryError.capacity }
         let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
-        lastWriteStatistics = try await resources.write(snapshot, to: url, metadata: encoder.encode(record), maximumBytes: available)
+        var stats = try await resources.write(snapshot, to: url, metadata: encoder.encode(record), maximumBytes: available)
+        stats.readBytes += validation.readBytes; stats.hashedFiles += validation.hashedFiles
+        stats.checkedFiles += validation.checkedFiles; stats.scannedPackages += validation.scannedPackages
+        inventories[url.lastPathComponent] = stats.inventory
+        stats.elapsedMilliseconds = Double(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000
+        lastWriteStatistics = stats
     }
     func load(_ url: URL) async throws -> ProjectSnapshot {
         let record = try metadata(url)
@@ -147,5 +160,6 @@ actor RecoveryStore {
         try validateLocation(url)
         try FileManager.default.removeItem(at: url)
         await resources.forget(url)
+        inventories.removeValue(forKey: url.lastPathComponent)
     }
 }

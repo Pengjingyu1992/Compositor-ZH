@@ -24,7 +24,7 @@ struct GradientControls: View {
                     TextField("Opacity", value: Binding<Double>(get: { Double(session.gradientSettings.opacity * 100) },
                         set: { session.gradientSettings.opacity = $0.isFinite ? CGFloat(min(100, max(1, $0)) / 100) : 1 }),
                         format: .number.precision(.fractionLength(0)))
-                        .frame(width: 42).textFieldStyle(.roundedBorder)
+                        .frame(width: 42).textFieldStyle(ToolNumberFieldStyle())
                         .arrowSteps(value: { Double(session.gradientSettings.opacity * 100) },
                                     change: { session.gradientSettings.opacity = CGFloat(min(100, max(1, $0)) / 100) })
                         .help(ShortcutSettings.shared.opacityHelp)
@@ -36,7 +36,7 @@ struct GradientControls: View {
                         Button("Apply") { Task { await session.commitGradient() } }
                     }
                 }
-            }.scrollIndicators(.hidden)
+            }.scrollIndicators(.automatic)
         }
         .padding(.horizontal, 18).toolHeaderBar().releasesFocusOnCommit(session)
         .disabled(session.showsBusy || session.document == nil)

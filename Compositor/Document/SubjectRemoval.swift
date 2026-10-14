@@ -10,16 +10,12 @@ nonisolated enum SubjectRemoval {
     /// Vision's own mask for an image, kept while the panel is open so moving a slider only redoes the refining.
     private static let cache = MaskCache()
     private final class MaskCache: @unchecked Sendable {
-        private let lock = NSLock()
-        private var key: ObjectIdentifier?
-        private var value: CGImage?
+        private struct Entry { let source: WeakRenderSource; let image: CGImage }
         func mask(for image: CGImage, make: () throws -> CGImage) throws -> CGImage {
-            lock.lock()
-            let hit = key == ObjectIdentifier(image) ? value : nil
-            lock.unlock()
-            if let hit { return hit }
+            let key = RenderCache.Key(.subject, ObjectIdentifier(image))
+            if let entry = RenderCache.shared.value(for: key, as: Entry.self), entry.source.object === image { return entry.image }
             let made = try make()
-            lock.lock(); key = ObjectIdentifier(image); value = made; lock.unlock()
+            RenderCache.shared.insert(Entry(source: WeakRenderSource(image), image: made), for: key, resources: [.image(made)])
             return made
         }
     }

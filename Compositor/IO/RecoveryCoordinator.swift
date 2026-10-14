@@ -40,6 +40,8 @@ final class RecoveryCoordinator {
     }
 
     private func captureCommitted() {
+        let started = PerformanceRecorder.shared.begin()
+        defer { PerformanceRecorder.shared.end(.recoveryCapture, since: started) }
         guard let session, !session.history.hasPendingEdit, let snapshot = session.projectSnapshot() else { return }
         let id = snapshot.manifest.documentID
         guard session.isModified || lastWritten[id] != nil || pending[id] != nil else { return }
@@ -77,10 +79,17 @@ final class RecoveryCoordinator {
             pending.removeValue(forKey: checkpoint.record.documentID)
             cancelTimers()
             let task = Task { [store] in
+                let documentID = checkpoint.record.documentID
+                if session?.document?.id == documentID { session?.recoveryWritingDocumentID = documentID }
+                defer { if session?.recoveryWritingDocumentID == documentID { session?.recoveryWritingDocumentID = nil } }
                 do {
                     try await store.write(checkpoint.snapshot, record: checkpoint.record)
                     lastWritten[checkpoint.record.documentID] = checkpoint.record.revision
-                    if session?.document?.id == checkpoint.record.documentID { session?.recoveryError = nil }
+                    if session?.document?.id == checkpoint.record.documentID {
+                        session?.recoveryError = nil
+                        session?.recoveryProtection = RecoveryProtection(documentID: checkpoint.record.documentID,
+                            revision: checkpoint.record.revision, checkpointDate: checkpoint.record.date, completedAt: Date())
+                    }
                     return true
                 } catch {
                     // Keep the latest committed state available for an explicit retry.

@@ -221,7 +221,8 @@ nonisolated enum TiledLayerRenderer {
 
     /// A committed raster placed at `offset` in the frame's grid, leaving `holes` for pieces drawn over it.
     private static func drawCommitted(_ raster: RasterSnapshot, at offset: CGPoint, holes: [CGRect], frame: Frame, in context: CGContext) {
-        let pieces = TiledPieceCache.shared.pieces(for: raster, level: frame.level).map { $0.offsetBy(offset) }
+        let pieces = TiledPieceCache.shared.pieces(for: raster, level: frame.level,
+            visible: frame.visible.insetBy(dx: -2, dy: -2).offsetBy(dx: -offset.x, dy: -offset.y)).map { $0.offsetBy(offset) }
         if let base = raster.base {
             drawBase(base, at: raster.baseRect.offsetBy(dx: offset.x, dy: offset.y), holes: pieces.map(\.interior) + holes,
                      frame: frame, in: context)
@@ -368,52 +369,53 @@ nonisolated enum TiledLayerRenderer {
     }
 }
 
-/// Committed rasters' pieces, built once per snapshot and level (snapshots never change); the least recently
-/// used are dropped beyond a pixel budget.
+/// Piece identities describe only the pixels sampled by that piece. A later snapshot can reuse it when
+/// those dependencies are unchanged, and offscreen pieces are never built just to populate the cache.
 nonisolated final class TiledPieceCache: @unchecked Sendable {
     static let shared = TiledPieceCache()
-    static let pixelBudget = 150_000_000
+    private struct PatchKey: Hashable {
+        let rect: CGRect
+        let image: ObjectIdentifier
+    }
     private struct Key: Hashable {
-        let raster: ObjectIdentifier
         let level: Int
+        let interior: CGRect
+        let region: CGRect
+        let base: ObjectIdentifier?
+        let baseRect: CGRect
+        let mask: Bool
+        let fill: CGFloat
+        let patches: [PatchKey]
     }
     private struct Entry {
-        let raster: RasterSnapshot
-        let pieces: [TiledLayerRenderer.Piece]
-        var lastUse: UInt64
-        let pixels: Int
+        let sources: [WeakRenderSource]
+        let piece: TiledLayerRenderer.Piece
     }
-    private var entries: [Key: Entry] = [:]
-    private var clock: UInt64 = 0
-    private let lock = NSLock()
+    private let cache: RenderCache
+    init(cache: RenderCache = .shared) { self.cache = cache }
 
-    func pieces(for raster: RasterSnapshot, level: Int) -> [TiledLayerRenderer.Piece] {
-        let key = Key(raster: ObjectIdentifier(raster), level: level)
-        lock.lock()
-        clock += 1
-        if let entry = entries[key], entry.raster === raster {
-            entries[key]?.lastUse = clock
-            lock.unlock()
-            return entry.pieces
-        }
-        lock.unlock()
+    func pieces(for raster: RasterSnapshot, level: Int, visible: CGRect? = nil) -> [TiledLayerRenderer.Piece] {
         let origin = raster.alignment
         let full = CGRect(x: 0, y: 0, width: raster.width, height: raster.height)
-        let squares = TiledLayerRenderer.interiors(near: raster.patches.map(\.rect), margin: TiledLayerRenderer.support(level: level),
-                                                   size: TiledLayerRenderer.committedCell, step: CGFloat(1 << level), origin: origin, visible: nil)
-        let pieces = squares.compactMap { square in
-            TiledLayerRenderer.piece(interior: square, level: level, origin: origin, bounds: full) { context, _ in raster.draw(in: full, context: context) }
+        let margin = TiledLayerRenderer.support(level: level)
+        let step = CGFloat(1 << level)
+        let squares = TiledLayerRenderer.interiors(near: raster.patches.map(\.rect), margin: margin,
+            size: TiledLayerRenderer.committedCell, step: step, origin: origin, visible: visible)
+        return squares.compactMap { square in
+            let region = TiledLayerRenderer.aligned(square.insetBy(dx: -margin, dy: -margin), step: step, origin: origin)
+                .intersection(TiledLayerRenderer.aligned(full, step: step, origin: origin))
+            let patches = raster.patches.filter { $0.rect.intersects(region) }
+            let key = RenderCache.Key(.piece, Key(level: level, interior: square, region: region,
+                base: raster.base.map(ObjectIdentifier.init), baseRect: raster.baseRect, mask: raster.isMask,
+                fill: raster.fill, patches: patches.map { PatchKey(rect: $0.rect, image: ObjectIdentifier($0.image)) }))
+            if let known = cache.value(for: key, as: Entry.self), known.sources.allSatisfy({ $0.object != nil }) { return known.piece }
+            guard let piece = TiledLayerRenderer.piece(interior: square, level: level, origin: origin, bounds: full,
+                mask: raster.isMask, compose: { context, _ in raster.draw(in: full, context: context) }) else { return nil }
+            let sources = (raster.base.map { [WeakRenderSource($0)] } ?? []) + patches.map { WeakRenderSource($0.image) }
+            let resource = RenderResource(id: .object(ObjectIdentifier(piece.image)),
+                bytes: piece.image.bytesPerRow * (piece.image.height + (level > 0 && !raster.isMask ? 8 : 0)))
+            cache.insert(Entry(sources: sources, piece: piece), for: key, resources: [resource])
+            return piece
         }
-        let pixels = pieces.reduce(0) { $0 + $1.image.width * $1.image.height }
-        lock.lock()
-        entries[key] = Entry(raster: raster, pieces: pieces, lastUse: clock, pixels: pixels)
-        var total = entries.values.reduce(0) { $0 + $1.pixels }
-        while total > Self.pixelBudget,
-              let oldest = entries.filter({ $0.key != key }).min(by: { $0.value.lastUse < $1.value.lastUse }) {
-            total -= oldest.value.pixels
-            entries.removeValue(forKey: oldest.key)
-        }
-        lock.unlock()
-        return pieces
     }
 }

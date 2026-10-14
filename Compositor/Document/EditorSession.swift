@@ -333,6 +333,8 @@ final class EditorSession {
     var liquify: LiquifyWorkspace? { didSet { resumeFileRequests() } }
     @ObservationIgnored var recovery: RecoveryCoordinator?
     var recoveryError: String?
+    var recoveryProtection: RecoveryProtection?
+    var recoveryWritingDocumentID: UUID?
     var filterSettings = FilterSettings()
     /// What Filter › Last Filter runs again.
     var lastFilter: FilterKind?
@@ -468,6 +470,8 @@ final class EditorSession {
     func selectTool(_ value: NavigationTool) {
         if tool != value, !finishText() { return }
         guard !isProjectBusy, brushStroke == nil, warpStroke == nil, levels == nil else { return }
+        let started = PerformanceRecorder.shared.begin()
+        defer { PerformanceRecorder.shared.end(.toolSwitch, since: started) }
         if tool != value { commitTransform(); cancelCrop(); resolveGradient(); cancelLasso(); cancelShape(); pathEditing = nil }
         let from = Self.tipFamily(tool), to = Self.tipFamily(value)
         if from != to, let parked = parkedBrushTips[to] {
@@ -653,6 +657,8 @@ final class EditorSession {
     var showsNewDocument = false { didSet { resumeFileRequests() } }
     var showsImporter = false { didSet { resumeFileRequests() } }
     var isImporting = false { didSet { resumeFileRequests() } }
+    private(set) var importCancelRequested = false
+    @ObservationIgnored private var importTask: Task<Void, Never>?
     var importError: String? { didSet { resumeFileRequests() } }
     var showsConversionSheet = false { didSet { resumeFileRequests() } }
     var conversionRequest: PSDConversionRequest?
@@ -919,7 +925,7 @@ final class EditorSession {
     private var pendingImports: [ImportRequest] = []
 
     func importImages(_ urls: [URL], at point: CGPoint? = nil) async {
-        guard !urls.isEmpty else { return }
+        guard !urls.isEmpty, !importCancelRequested else { return }
         if brushStroke != nil { await finishBrush() }
         cancelCrop()
         commitTransform()
@@ -930,21 +936,38 @@ final class EditorSession {
             pendingImports.append(ImportRequest(files: files, point: point, completion: completion))
             if !isImporting {
                 isImporting = true
-                Task { await drainImports() }
+                importTask = Task { await drainImports() }
             }
         }
+    }
+
+    /// Already inserted files remain undoable; an unfinished GIF is never inserted frame by frame.
+    func cancelImport() {
+        guard isImporting else { return }
+        importCancelRequested = true
+        importTask?.cancel()
     }
 
     private func drainImports() async {
         var failures: [String] = []
         while !pendingImports.isEmpty {
           let request = pendingImports.removeFirst()
+          defer {
+              for (url, scoped) in request.files where scoped { url.stopAccessingSecurityScopedResource() }
+              request.completion.resume()
+          }
+          if Task.isCancelled { continue }
           let psdOnly = request.files.allSatisfy { PSDReader.matches($0.0) }
           beginEdit(psdOnly ? "Import Photoshop File" : "Import Images")
           // No document: the first successful image determines the canvas, regardless of drop point.
           let point = document == nil ? nil : request.point
-          for (url, scoped) in request.files {
-            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+          for (url, _) in request.files {
+            if Task.isCancelled { break }
+            let sourceDocumentID = document?.id, sourceRevision = history.currentRevision
+            func checkTarget() throws {
+                try Task.checkCancellation()
+                guard document?.id == sourceDocumentID, history.currentRevision == sourceRevision else { throw EditRefusal.stale }
+            }
             do {
                 guard url.isFileURL else { throw ImageImportError.unsupported }
                 let usedPixels = document?.layers.reduce(0) { total, layer in
@@ -960,11 +983,13 @@ final class EditorSession {
                     // Seconds of work: off the main actor, or pressing Import freezes the window.
                     guard let developed = await RawImporter.Queue.shared.develop(url, settings: settings, limit: nil)
                     else { throw ImageImportError.unreadable }
+                    try checkTarget()
                     let thumbnail = try PixelAdjust.thumbnail(of: developed)
                     insert(ImportedImage(image: developed, thumbnail: thumbnail,
                                          name: url.deletingPathExtension().lastPathComponent), centeredAt: point)
                 } else if url.pathExtension.lowercased() == "gif" || GIFCodec.matches(url) {
                     let gif = try await ImageImporter.shared.decodeGIF(url, remainingPixels: DocumentLimits.documentPixelBudget - usedPixels)
+                    try checkTarget()
                     try insertGIF(gif, centeredAt: point)
                 } else if EPSCodec.matches(url) {
                     guard await confirmPSDConversions([PSDConversion(layerName: url.lastPathComponent,
@@ -972,10 +997,12 @@ final class EditorSession {
                         title: L10n.format("Open “%@”?", url.lastPathComponent), confirmTitle: "Import",
                         notice: "Review this image conversion. Nothing is applied until you continue.") else { continue }
                     let asset = try await ImageImporter.shared.decodeEPS(url, remainingPixels: DocumentLimits.documentPixelBudget - usedPixels)
+                    try checkTarget()
                     insert(asset, centeredAt: point)
                 } else if UTType(filenameExtension: url.pathExtension)?.conforms(to: .svg) == true {
                     let asset = try await ImageImporter.shared.decodeSVG(url, fitting: document?.size,
                                                                          remainingPixels: DocumentLimits.documentPixelBudget - usedPixels)
+                    try checkTarget()
                     insert(asset, centeredAt: point)
                 } else if PSDReader.matches(url) {
                     beginPSDReading(title: L10n.format("Open “%@”?", url.lastPathComponent), confirmTitle: "Import")
@@ -988,6 +1015,7 @@ final class EditorSession {
                             endPSDReading()
                             let asset = try await ImageImporter.shared.decode(url, remainingPixels: DocumentLimits.documentPixelBudget - usedPixels,
                                                                               flattenedPhotoshop: true)
+                            try checkTarget()
                             insert(asset, centeredAt: point)
                             continue
                         }
@@ -998,18 +1026,22 @@ final class EditorSession {
                         throw error
                     }
                     if !(await finishPSDReading(imported.conversions)) { continue }
+                    try checkTarget()
                     try insertPhotoshop(imported, named: url.deletingPathExtension().lastPathComponent, centeredAt: point)
                 } else {
                     let asset = try await ImageImporter.shared.decode(url, remainingPixels: DocumentLimits.documentPixelBudget - usedPixels)
+                    try checkTarget()
                     insert(asset, centeredAt: point)
                 }
-            } catch {
+            } catch is CancellationError { break }
+            catch {
+                if Task.isCancelled { break }
                 failures.append("\(url.lastPathComponent): \(error.localizedDescription)")
             }
           }
           endEdit()
-          request.completion.resume()
         }
+        importTask = nil; importCancelRequested = false
         isImporting = false
         if !failures.isEmpty { importError = failures.joined(separator: "\n\n") }
     }

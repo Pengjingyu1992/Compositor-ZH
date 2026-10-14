@@ -100,6 +100,9 @@ extension EditorSession {
         } catch { cancelBrush(); brushError = error.localizedDescription }
     }
     func continueBrush(at point: CGPoint) {
+        guard warpStroke != nil || brushStroke != nil else { return }
+        let started = PerformanceRecorder.shared.begin()
+        defer { PerformanceRecorder.shared.end(.brushUpdate, since: started) }
         if let warpStroke { warpStroke.append(point); lastBrushPoint?.point = point; brushRevision += 1; return }
         guard let brushStroke else { return }
         brushPointer = point
@@ -137,6 +140,8 @@ extension EditorSession {
     /// Called directly by mouse-up, before the next input event can be handled.
     @discardableResult
     func finishBrushImmediately() -> Bool {
+        let started = (warpStroke != nil || brushStroke != nil) ? PerformanceRecorder.shared.begin() : 0
+        defer { PerformanceRecorder.shared.end(.brushCommit, since: started) }
         if warpStroke != nil {
             guard !isProjectBusy else { return false }
             finishWarp()

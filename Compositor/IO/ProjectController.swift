@@ -88,7 +88,7 @@ final class ProjectController {
                 sheet.styleMask = [.titled, .fullSizeContentView]
                 sheet.title = L10n.text("Export As")
                 sheet.contentViewController = NSHostingController(rootView: ExportAsSheet(
-                    raster: raster, session: session, format: start ?? lastExportFormat) { chosen in
+                    raster: raster, session: session, format: start ?? lastExportFormat, snapshot: snapshot) { chosen in
                     window.endSheet(sheet)
                     sheet.orderOut(nil)
                     // Release the hosted view and its closure after dismissal.

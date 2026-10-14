@@ -44,9 +44,9 @@ struct LiquifySheet: View {
                                     edit.tool = tool
                                 } label: {
                                     Text(L10n.text(tool.rawValue)).frame(maxWidth: .infinity, minHeight: 26)
-                                        .background(edit.tool == tool ? Color.accentColor.opacity(0.25) : Color.clear)
-                                        .clipShape(RoundedRectangle(cornerRadius: 4))
-                                }.buttonStyle(.bordered).accessibilityIdentifier("liquifyTool-\(tool.code)")
+                                }.buttonStyle(ToolChoiceStyle(selected: edit.tool == tool))
+                                    .accessibilityAddTraits(edit.tool == tool ? .isSelected : [])
+                                    .accessibilityIdentifier("liquifyTool-\(tool.code)")
                             }
                         }
                         Divider()
@@ -104,7 +104,7 @@ struct LiquifySheet: View {
                 Button("Apply") { Task { await session.applyLiquify() } }.buttonStyle(.borderedProminent)
                     .configuredNativeShortcut(.return).disabled(edit.isApplying || edit.isStroking)
             }.padding(12)
-            if let error = edit.error {
+            if let error = edit.error ?? edit.previewError {
                 Text(error).foregroundStyle(.orange).font(.caption).padding(.horizontal, 12).padding(.bottom, 10)
             }
         }

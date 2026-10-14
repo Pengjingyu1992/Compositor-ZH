@@ -8,7 +8,7 @@ struct PaintBucketControls: View {
             Text("Tolerance")
             TextField("Tolerance", value: Binding(get: { session.bucketSettings.tolerance },
                 set: { session.bucketSettings.tolerance = min(255, max(0, $0)) }), format: .number)
-                .frame(width: 54).textFieldStyle(.roundedBorder).accessibilityIdentifier("bucketTolerance")
+                .frame(width: 54).textFieldStyle(ToolNumberFieldStyle()).accessibilityIdentifier("bucketTolerance")
             Picker("Sample Size", selection: $session.bucketSettings.sampleSize) {
                 ForEach(WandSampleSize.allCases, id: \.self) { Text(L10n.text($0.title)).tag($0) }
             }.frame(width: 200)

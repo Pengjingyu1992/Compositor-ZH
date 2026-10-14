@@ -51,6 +51,11 @@ nonisolated struct BrushSettings: Sendable {
 nonisolated struct BrushPatch: @unchecked Sendable {
     let rect: CGRect
     let image: CGImage
+    /// Cropping a CGImage can retain its whole backing allocation.
+    let storage: CGImage
+    init(rect: CGRect, image: CGImage, storage: CGImage? = nil) {
+        self.rect = rect; self.image = image; self.storage = storage ?? image
+    }
 }
 
 /// Shared top-left raster drawing, including coverage without color conversion.
@@ -141,6 +146,7 @@ nonisolated enum BrushRaster {
 /// Only touched 256px tiles allocate writable pixels. Snapshots copy at most
 /// those tiles, never the entire layer on a mouse-move event.
 final class BrushStroke {
+    private(set) var cacheID = UUID()
     let layer: ImageLayer
     let isMask: Bool
     let width: Int
@@ -985,6 +991,9 @@ final class BrushStroke {
         let crop = locksAlpha ? sourceRect : isMask ? committedBounds : bounds ?? committedBounds
         let raster = RasterSnapshot.replacing(source: isMask ? layer.mask?.asset : layer.asset, sourceRect: sourceRect, patches: patches, crop: crop,
                                               isMask: isMask, fill: maskBackground)
+        raster.strokeID = cacheID; raster.strokeCrop = crop
+        raster.strokePatchIDs = Set(patches.map { ObjectIdentifier($0.storage) })
+        cacheID = UUID()
         let image = try raster.makeImage()
         return (ImportedImage(image: image, thumbnail: try raster.thumbnail(), name: layer.name, raster: raster), transform(for: crop), crop)
     }

@@ -7,6 +7,7 @@ struct ExportAsSheet: View {
     let session: EditorSession
     let animationSnapshot: ProjectSnapshot?
     @State private var gifTransparency = true
+    @State private var gifWork: GIFExportWorkspace
     let finish: ((data: Data, format: ExportFormat)?) -> Void
     @State private var format: ExportFormat
     @State private var options: JPEGOptions
@@ -15,11 +16,12 @@ struct ExportAsSheet: View {
     /// JPEG's quality from the last export, which the next one starts from.
     private static let qualityKey = "jpegExportQuality"
 
-    init(raster: ExportRaster, session: EditorSession, format: ExportFormat,
+    init(raster: ExportRaster, session: EditorSession, format: ExportFormat, snapshot: ProjectSnapshot? = nil,
          finish: @escaping ((data: Data, format: ExportFormat)?) -> Void) {
         self.raster = raster
         self.session = session
-        self.animationSnapshot = session.projectSnapshot()
+        self.animationSnapshot = snapshot ?? session.projectSnapshot()
+        _gifWork = State(initialValue: GIFExportWorkspace(snapshot: snapshot ?? session.projectSnapshot(), fallback: raster))
         self.finish = finish
         var start = JPEGOptions()
         if let saved = UserDefaults.standard.object(forKey: Self.qualityKey) as? Double, saved.isFinite {
@@ -48,6 +50,7 @@ struct ExportAsSheet: View {
     }
     private var settings: Settings { Settings(format: format, options: options, width: width, height: height, printSettings: session.printSettings, gifTransparency: gifTransparency) }
     @State private var result: Encoded?
+    @State private var finished = false
     @State private var error: String?
     @State private var comparesOriginal = false
     private var isReady: Bool { result?.settings == settings && error == nil }
@@ -138,7 +141,7 @@ struct ExportAsSheet: View {
             if format == .cmykTIFF { PrintControls(session: session, showsPreviewControls: false) }
             if format == .gif {
                 Toggle("Keep GIF Transparency", isOn: $gifTransparency)
-                Text("GIF · all animation frames · up to 256 colors per frame").font(.caption).foregroundStyle(.secondary)
+                Text("GIF previews the current frame; export includes all frames, up to 256 colors per frame").font(.caption).foregroundStyle(.secondary)
             } else if format == .eps {
                 Text("Raster EPS · flattened RGB image · text and paths are not editable").font(.caption).foregroundStyle(.secondary)
             }
@@ -147,17 +150,27 @@ struct ExportAsSheet: View {
                     .foregroundStyle(.secondary)
                 Spacer()
                 if let error { Text(error).foregroundStyle(.red) }
-                else if isReady, let result {
+                else if format == .gif, gifWork.isEncoding {
+                    ProgressView().controlSize(.small)
+                    Text(L10n.format("%lld / %lld frames encoded", gifWork.completedFrames, gifWork.frameCount)).monospacedDigit()
+                    Button("Cancel Encoding") { gifWork.cancel() }
+                } else if format == .gif, gifWork.encodedOptions == gifOptions(settings), let encoded = gifWork.encoded {
+                    Text(ByteCountFormatter.string(fromByteCount: Int64(encoded.data.count), countStyle: .file)).monospacedDigit()
+                } else if format == .gif, isReady {
+                    Text("File size not calculated").foregroundStyle(.secondary)
+                    Button("Calculate Size") { encodeGIF(export: false) }
+                } else if isReady, let result {
                     Text(ByteCountFormatter.string(fromByteCount: Int64(result.data.count), countStyle: .file)).monospacedDigit()
                 } else { Text("Updating…").foregroundStyle(.secondary) }
-                Button("Cancel") { DialogColorSwatch.closePicker(session); finish(nil) }.configuredNativeShortcut(.escape)
+                Button("Cancel") { gifWork.cancel(); DialogColorSwatch.closePicker(session); complete(nil) }.configuredNativeShortcut(.escape)
                 Button("Export…") {
                     DialogColorSwatch.closePicker(session)
                     if format == .jpeg { UserDefaults.standard.set(options.quality, forKey: Self.qualityKey) }
-                    if let result { finish((result.data, result.settings.format)) }
+                    if format == .gif { encodeGIF(export: true) }
+                    else if let result { complete((result.data, result.settings.format)) }
                 }
                     .configuredNativeShortcut(.return)
-                    .disabled(!isReady)
+                    .disabled(!isReady || gifWork.isEncoding)
             }
         }
         .padding(24)
@@ -169,13 +182,18 @@ struct ExportAsSheet: View {
             case .actual: zoom = 1
             }
         } }
-        .onDisappear { session.previewZoom = nil }
+        .onDisappear { finished = true; gifWork.cancel(); session.previewZoom = nil }
         .task(id: settings) {
             let requested = settings
             error = nil
             do {
+                try Task.checkCancellation()
+                if requested.format == .gif { gifWork.settingsChanged(gifOptions(requested)) }
+                else { gifWork.cancel() }
                 try await Task.sleep(for: .milliseconds(200))
-                let sized = try await ImageExporter.shared.resized(raster, width: requested.width, height: requested.height)
+                let sized: ExportRaster
+                if requested.format == .gif { sized = raster }
+                else { sized = try await ImageExporter.shared.resized(raster, width: requested.width, height: requested.height) }
                 let data: Data, preview: CGImage
                 var original: CGImage?
                 switch requested.format {
@@ -184,10 +202,8 @@ struct ExportAsSheet: View {
                     (data, preview) = (encoded.data, encoded.preview)
                 case .png: (data, preview) = (try await ImageExporter.shared.pngData(sized), sized.image)
                 case .gif:
-                    let background = CGColor(srgbRed: requested.options.red, green: requested.options.green,
-                                             blue: requested.options.blue, alpha: 1)
-                    let encoded = try await ImageExporter.shared.animationGIF(animationSnapshot, fallback: sized, width: requested.width, height: requested.height, background: background, keepTransparency: requested.gifTransparency)
-                    (data, preview) = (encoded.data, encoded.preview)
+                    // Preview only the currently displayed frame. Full encoding is a separate cancellable action.
+                    (data, preview) = (Data(), try await gifWork.preview(gifOptions(requested)))
                 case .eps:
                     let background = CGColor(srgbRed: requested.options.red, green: requested.options.green,
                                              blue: requested.options.blue, alpha: 1)
@@ -211,6 +227,28 @@ struct ExportAsSheet: View {
                 guard !Task.isCancelled else { return }
                 self.error = error.localizedDescription
             }
+        }
+    }
+
+    private func complete(_ result: (data: Data, format: ExportFormat)?) {
+        guard !finished else { return }
+        finished = true; gifWork.cancel(); finish(result)
+    }
+    private func gifOptions(_ settings: Settings) -> GIFExportOptions {
+        GIFExportOptions(width: settings.width, height: settings.height, red: settings.options.red,
+            green: settings.options.green, blue: settings.options.blue, keepTransparency: settings.gifTransparency)
+    }
+    private func encodeGIF(export: Bool) {
+        let requested = settings
+        guard requested.format == .gif else { return }
+        error = nil
+        Task {
+            do {
+                let encoded = try await gifWork.encode(gifOptions(requested))
+                guard settings == requested else { return }
+                if export { complete((encoded.data, .gif)) }
+            } catch is CancellationError { }
+            catch { if settings == requested { self.error = error.localizedDescription } }
         }
     }
 

@@ -20595,6 +20595,125 @@
           }
         }
       }
+    },
+    "16-bit pixels will be converted to 8-bit RGB for editing. Supported layers and masks are retained. The original Photoshop file is unchanged.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "16-bit pixels will be converted to 8-bit RGB for editing. Supported layers and masks are retained. The original Photoshop file is unchanged."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "16 位像素将转换为 8 位 RGB 进行编辑，并保留支持的图层和蒙版。原 Photoshop 文件不会被修改。"
+          }
+        }
+      }
+    },
+    "Photoshop document": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Photoshop document"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Photoshop 文档"
+          }
+        }
+      }
+    },
+    "The Photoshop file could not be read. It may be damaged or incomplete.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The Photoshop file could not be read. It may be damaged or incomplete."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取此 Photoshop 文件，文件可能已损坏或不完整。"
+          }
+        }
+      }
+    },
+    "This Photoshop bit depth is not supported. Import an 8-bit or 16-bit RGB copy; 16-bit pixels are converted to 8-bit.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This Photoshop bit depth is not supported. Import an 8-bit or 16-bit RGB copy; 16-bit pixels are converted to 8-bit."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂不支持此 Photoshop 文件的位深。请导入 8 位或 16 位 RGB 副本；16 位像素会转换为 8 位。"
+          }
+        }
+      }
+    },
+    "This Photoshop color mode is not supported. Convert a copy to RGB Color in Photoshop, then import the copy.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This Photoshop color mode is not supported. Convert a copy to RGB Color in Photoshop, then import the copy."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂不支持此 Photoshop 文件的颜色模式。请在 Photoshop 中将副本转换为 RGB 颜色后，再导入副本。"
+          }
+        }
+      }
+    },
+    "This Photoshop file uses a format version Compositor can’t read.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This Photoshop file uses a format version Compositor can’t read."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "叠绘暂不支持此 Photoshop 文件的格式版本。"
+          }
+        }
+      }
+    },
+    "This Photoshop file uses a layer compression method that isn’t supported.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This Photoshop file uses a layer compression method that isn’t supported."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂不支持此 Photoshop 文件使用的图层压缩方式。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

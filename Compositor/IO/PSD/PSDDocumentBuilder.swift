@@ -21,7 +21,7 @@ nonisolated enum PSDDocumentBuilder {
 
     @MainActor
     static func makeImport(_ document: PSDDocument, assets: [UUID: ImportedImage] = [:]) throws -> PSDImport {
-        var conversions: [PSDConversion] = []
+        var conversions = document.conversions
         var layers: [ImageLayer] = []
         let canvas = CGSize(width: document.width, height: document.height)
         for record in document.layers {

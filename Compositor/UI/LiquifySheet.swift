@@ -109,7 +109,7 @@ struct LiquifySheet: View {
             }
         }
         .frame(width: windowSize.width, height: windowSize.height)
-        .background(Color(white: 0.12)).preferredColorScheme(.dark)
+        .background(EditorTheme.previewBackground).preferredColorScheme(.dark)
         .interactiveDismissDisabled(edit.isApplying)
         .onDisappear { if session.liquify === edit { session.cancelLiquify() } }
     }

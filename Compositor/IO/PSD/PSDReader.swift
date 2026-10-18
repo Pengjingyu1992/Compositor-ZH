@@ -42,11 +42,13 @@ nonisolated enum PSDReader {
               canvasWidth * canvasHeight <= DocumentLimits.maxSurfacePixels else {
             throw ImageImportError.tooLarge
         }
-        guard depth == 8 else { throw PSDError.unsupportedDepth }
+        guard depth == 8 || depth == 16 else { throw PSDError.unsupportedDepth }
         guard mode == 3 else { throw PSDError.unsupportedColorMode }
         try cursor.skip(Int(try cursor.u32()))
         let resourcesLength = Int(try cursor.u32())
+        try cursor.need(resourcesLength)
         let resourcesEnd = cursor.offset + resourcesLength
+        cursor.limit = resourcesEnd
         var resolution = 72.0
         while cursor.offset + 12 <= resourcesEnd {
             let signature = try cursor.string(4)
@@ -56,6 +58,7 @@ nonisolated enum PSDReader {
             try cursor.skip(nameLength)
             if (nameLength + 1) % 2 == 1 { try cursor.skip(1) }
             let length = Int(try cursor.u32())
+            try cursor.need(length)
             let dataStart = cursor.offset
             if id == 1005, length >= 4 {
                 resolution = Double(try cursor.u32()) / 65536
@@ -66,19 +69,23 @@ nonisolated enum PSDReader {
             if length % 2 == 1 { try cursor.skip(1) }
         }
         cursor.offset = resourcesEnd
+        cursor.limit = nil
         let layerSection = try checkedLength(isPSB ? cursor.u64() : UInt64(cursor.u32()))
+        try cursor.need(layerSection)
         let layerSectionEnd = cursor.offset + layerSection
-        guard layerSection >= 4 else {
-            return PSDDocument(width: canvasWidth, height: canvasHeight, resolution: resolution, layers: [])
+        let empty = PSDDocument(width: canvasWidth, height: canvasHeight, resolution: resolution,
+                                layers: [], sourceDepth: Int(depth))
+        guard layerSection > 0 else { return empty }
+        cursor.limit = layerSectionEnd
+        guard var layers = try layerInfo(&cursor, isPSB: isPSB, depth: Int(depth)) else {
+            return empty
         }
-        let layerInfoLength = try checkedLength(isPSB ? cursor.u64() : UInt64(cursor.u32()))
-        _ = layerInfoLength
-        let rawCount = try cursor.i16()
+        let rawCount = try layers.i16()
         let count = abs(Int(rawCount))
         guard count <= 10_000 else { throw ImageImportError.tooLarge }
         var raw = [RawLayer]()
         raw.reserveCapacity(count)
-        for _ in 0..<count { raw.append(try readRecord(&cursor, isPSB: isPSB)) }
+        for _ in 0..<count { raw.append(try readRecord(&layers, isPSB: isPSB)) }
         if !fitsBudget(raw, remainingPixels: remainingPixels) {
             for index in raw.indices {
                 cropToCanvas(&raw[index], width: canvasWidth, height: canvasHeight)
@@ -87,13 +94,47 @@ nonisolated enum PSDReader {
         }
         var usedPixels = 0
         for index in raw.indices {
-            try decodeChannels(&cursor, layer: &raw[index], remainingPixels: remainingPixels - usedPixels, isPSB: isPSB)
+            try Task.checkCancellation()
+            try decodeChannels(&layers, layer: &raw[index], remainingPixels: remainingPixels - usedPixels,
+                               isPSB: isPSB, depth: Int(depth))
             if let image = raw[index].image { usedPixels += image.width * image.height }
         }
         cursor.offset = layerSectionEnd
         return PSDDocument(width: canvasWidth, height: canvasHeight, resolution: resolution,
                            layers: try assemble(raw, canvas: CGSize(width: canvasWidth, height: canvasHeight),
-                                                remainingPixels: remainingPixels - usedPixels))
+                                                remainingPixels: remainingPixels - usedPixels), sourceDepth: Int(depth))
+    }
+
+    /// High-depth Photoshop documents commonly leave the main layer table empty and put
+    /// the actual records and channels in the global Lr16 block instead.
+    private static func layerInfo(_ cursor: inout PSDCursor, isPSB: Bool, depth: Int) throws -> PSDCursor? {
+        let length = try checkedLength(isPSB ? cursor.u64() : UInt64(cursor.u32()))
+        try cursor.need(length)
+        var result: PSDCursor? = length == 0 ? nil : PSDCursor(data: cursor.data, offset: cursor.offset,
+                                                              limit: cursor.offset + length)
+        try cursor.skip(length)
+        if cursor.offset == cursor.limit { return result }
+        let maskLength = Int(try cursor.u32())
+        try cursor.skip(maskLength)
+        while cursor.offset < (cursor.limit ?? cursor.data.count) {
+            // Global tagged blocks are padded to four bytes by Photoshop; some writers use
+            // two. Consume only zero padding, and always honor the declared section boundary.
+            while cursor.offset < (cursor.limit ?? cursor.data.count), cursor.data[cursor.offset] == 0 {
+                try cursor.skip(1)
+            }
+            if cursor.offset == cursor.limit { break }
+            let signature = try cursor.string(4)
+            guard signature == "8BIM" || signature == "8B64" else { throw PSDError.truncated }
+            let key = try cursor.string(4)
+            let size = try checkedLength(signature == "8B64" || (isPSB && psbLargeAdditionalInfoKeys.contains(key))
+                                        ? cursor.u64() : UInt64(cursor.u32()))
+            try cursor.need(size)
+            if key == (depth == 16 ? "Lr16" : "Layr") {
+                result = size == 0 ? nil : PSDCursor(data: cursor.data, offset: cursor.offset, limit: cursor.offset + size)
+            }
+            try cursor.skip(size)
+        }
+        return result
     }
 
     private struct RawLayer {
@@ -156,8 +197,13 @@ nonisolated enum PSDReader {
         layer.hidden = (flags & 2) != 0
         try cursor.skip(1)
         let extraLength = Int(try cursor.u32())
+        try cursor.need(extraLength)
         let extraEnd = cursor.offset + extraLength
+        let recordLimit = cursor.limit
+        cursor.limit = extraEnd
+        defer { cursor.limit = recordLimit }
         let maskLength = Int(try cursor.u32())
+        try cursor.need(maskLength)
         let maskEnd = cursor.offset + maskLength
         if maskLength >= 20 {
             layer.hasMask = true
@@ -280,7 +326,7 @@ nonisolated enum PSDReader {
                        width: croppedRight - croppedLeft, height: croppedBottom - croppedTop)
     }
 
-    private static func decodeChannels(_ cursor: inout PSDCursor, layer: inout RawLayer, remainingPixels: Int, isPSB: Bool) throws {
+    private static func decodeChannels(_ cursor: inout PSDCursor, layer: inout RawLayer, remainingPixels: Int, isPSB: Bool, depth: Int) throws {
         var planes: [Int: [UInt8]] = [:]
         let width = max(0, layer.right - layer.left)
         let height = max(0, layer.bottom - layer.top)
@@ -293,6 +339,7 @@ nonisolated enum PSDReader {
         let sourceMaskWidth = max(0, layer.sourceMaskRight - layer.sourceMaskLeft)
         let sourceMaskHeight = max(0, layer.sourceMaskBottom - layer.sourceMaskTop)
         for channel in layer.channels {
+            try cursor.need(channel.length)
             let start = cursor.offset
             defer { cursor.offset = start + max(0, channel.length) }
             guard unpackedChannelIDs.contains(channel.id), channel.length >= 2 else { continue }
@@ -306,7 +353,7 @@ nonisolated enum PSDReader {
             let crop = isMask ? layer.maskCrop : layer.imageCrop
             if targetW > 0, targetH > 0 {
                 planes[channel.id] = try PSDChannelCoder.decode(compression: compression, width: sourceW, height: sourceH,
-                                                                 data: payload, largeDocument: isPSB, crop: crop)
+                                                                 data: payload, largeDocument: isPSB, crop: crop, depth: depth)
             }
         }
         if layer.hasMask, maskWidth > 0, maskHeight > 0, let gray = planes[-2], gray.count >= maskWidth * maskHeight {
@@ -422,9 +469,11 @@ nonisolated enum PSDReader {
 nonisolated private struct PSDCursor: Sendable {
     let data: Data
     var offset = 0
+    var limit: Int?
 
     mutating func need(_ count: Int) throws {
-        guard offset >= 0, offset + count <= data.count else { throw PSDError.truncated }
+        let end = min(limit ?? data.count, data.count)
+        guard count >= 0, offset >= 0, offset <= end, count <= end - offset else { throw PSDError.truncated }
     }
 
     mutating func skip(_ count: Int) throws {

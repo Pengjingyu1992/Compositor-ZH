@@ -1012,7 +1012,7 @@ final class EditorSession {
                         // Only a background: Photoshop writes no layer records, just the merged image, so that is
                         // what comes in, as one layer.
                         if parsed.layers.isEmpty {
-                            endPSDReading()
+                            if !(await finishPSDReading(parsed.conversions)) { continue }
                             let asset = try await ImageImporter.shared.decode(url, remainingPixels: DocumentLimits.documentPixelBudget - usedPixels,
                                                                               flattenedPhotoshop: true)
                             try checkTarget()

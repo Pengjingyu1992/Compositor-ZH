@@ -82,7 +82,7 @@ struct ExportAsSheet: View {
             }
             .padding(.bottom, -8)
             ZStack {
-                Color(white: 0.12)
+                EditorTheme.previewBackground
                 if let result {
                     JPEGPreview(image: comparesOriginal && format == .cmykTIFF ? (result.original ?? result.preview) : result.preview, pixelWidth: result.settings.width, pixelHeight: result.settings.height, zoom: $zoom)
                 }

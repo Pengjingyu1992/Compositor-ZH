@@ -2,9 +2,9 @@ import SwiftUI
 
 /// Shared metrics keep tool switching from changing typography or canvas layout.
 enum ToolHeaderStyle {
-    static let height: CGFloat = 42
-    static let titleFont = Font.system(size: 13, weight: .semibold)
-    static let controlFont = Font.system(size: 12)
+    static let height = EditorTheme.Metrics.toolHeaderHeight
+    static let titleFont = EditorTheme.Typography.toolTitle
+    static let controlFont = EditorTheme.Typography.toolControl
 }
 
 /// Numeric controls share a readable height, alignment, and keyboard-focus outline.

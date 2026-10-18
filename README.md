@@ -61,6 +61,7 @@ Both editions support painting and image editing with layers, with different UI,
 | 自定义快捷键 / Custom shortcuts | 编辑菜单配置；修复中文标点、图层焦点与提示同步。详见 [修复与验证记录](docs/macos-shortcut-fixes.md)。 / Configure keys in Edit; fixes cover Chinese punctuation, layer focus and live shortcut labels. |
 | 新建画布 / New Canvas | 紧凑毛玻璃面板、尺寸预设、实时比例预览、宽高互换及单一单位下拉按钮。 / Compact glass panel, size presets, live aspect preview, dimension swapping and one unit dropdown. |
 | GIF / EPS | 动画 GIF 的帧、时长、循环与编辑/导出；EPS 栅格导入和扁平 RGB 导出，普通 EPS 导入需独立 Ghostscript。详见 [格式说明](docs/eps-gif.md)。 / Animated GIF frames, timing, loops, editing and export; raster EPS import and flattened RGB export, with separate Ghostscript required for general EPS import. See the [format guide](docs/eps-gif.md). |
+| PSD 导入 / PSD import | 支持 RGB 8/16 位 PSD/PSB 的分层导入及四种通道压缩；16 位经确认转换为 8 位编辑，保留原稿。详见 [PSD 导入说明](docs/psd-import.md)。 / Layered 8/16-bit RGB PSD/PSB import with four channel compression methods; 16-bit pixels convert to 8-bit after confirmation, preserving the original. See the [import guide](docs/psd-import.md). |
 | 对齐与分布 / Align and distribute | 6 种对齐、4 种分布；参照选中对象、画布或关键图层。 / Six alignment and four distribution operations, relative to the selection, canvas, or a key layer. |
 | 油漆桶 / Paint bucket | `K`；颜色容差、连续区域及采样全部图层，结合当前选区。 / `K`; tolerance, contiguous filling, sample-all-layers, and current-selection coverage. |
 | 马赛克 / Mosaic | 1–512 像素色块，支持预览、透明度、选区及撤销。 / 1–512 px blocks, preview, transparency, selections, and undo. |

@@ -34,6 +34,7 @@ jobs:
       - run: ./scripts/build-clt.zsh
       # The poster runner executes poster, liquify, first-batch and shortcut checks together.
       - run: ./scripts/check-poster-clt.zsh
+      - run: ./scripts/check-psd-import-clt.zsh
       - run: python3 scripts/check-poster-cli.py build/clt/Compositor.app/Contents/MacOS/compositor-cli
 
   unit:

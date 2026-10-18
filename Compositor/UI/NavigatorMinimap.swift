@@ -26,7 +26,7 @@ struct NavigatorMinimap: View {
             let size = Self.size(for: document.size)
             let geometry = NavigatorGeometry(documentSize: document.size, box: size)
             ZStack(alignment: .topLeading) {
-                Color(white: 0.11)
+                EditorTheme.navigatorBackground
                 if let picture {
                     Image(decorative: picture, scale: 1).resizable().interpolation(.medium)
                 }

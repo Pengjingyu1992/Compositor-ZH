@@ -6,11 +6,11 @@ nonisolated enum PSDError: LocalizedError, Equatable {
     case truncated, unsupportedVersion, unsupportedColorMode, unsupportedDepth, unsupportedCompression
     var errorDescription: String? {
         switch self {
-        case .truncated: "The Photoshop file could not be read. It may be damaged or incomplete."
-        case .unsupportedVersion: "This Photoshop file uses a format version Compositor can’t read."
-        case .unsupportedColorMode: "Only 8-bit RGB Photoshop files can be imported."
-        case .unsupportedDepth: "Only 8-bit RGB Photoshop files can be imported."
-        case .unsupportedCompression: "This Photoshop file uses a layer compression method that isn’t supported."
+        case .truncated: L10n.text("The Photoshop file could not be read. It may be damaged or incomplete.")
+        case .unsupportedVersion: L10n.text("This Photoshop file uses a format version Compositor can’t read.")
+        case .unsupportedColorMode: L10n.text("This Photoshop color mode is not supported. Convert a copy to RGB Color in Photoshop, then import the copy.")
+        case .unsupportedDepth: L10n.text("This Photoshop bit depth is not supported. Import an 8-bit or 16-bit RGB copy; 16-bit pixels are converted to 8-bit.")
+        case .unsupportedCompression: L10n.text("This Photoshop file uses a layer compression method that isn’t supported.")
         }
     }
 }
@@ -32,6 +32,13 @@ nonisolated struct PSDDocument: @unchecked Sendable {
     var resolution: Double
     /// Bottom to top, including folders. Hidden section dividers are not stored.
     var layers: [PSDRecord]
+    var sourceDepth: Int = 8
+
+    var conversions: [PSDConversion] {
+        guard sourceDepth == 16 else { return [] }
+        return [PSDConversion(layerName: L10n.text("Photoshop document"),
+            message: "16-bit pixels will be converted to 8-bit RGB for editing. Supported layers and masks are retained. The original Photoshop file is unchanged.")]
+    }
 }
 
 nonisolated struct PSDRecord: @unchecked Sendable {

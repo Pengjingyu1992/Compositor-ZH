@@ -230,7 +230,7 @@ struct PSDRoundTripTests {
     @Test func unsupportedHeadersAreRejected() throws {
         #expect(throws: PSDError.unsupportedVersion) { try PSDReader.read(header(version: 3)) }
         #expect(throws: PSDError.unsupportedColorMode) { try PSDReader.read(header(mode: 4)) }
-        #expect(throws: PSDError.unsupportedDepth) { try PSDReader.read(header(depth: 16)) }
+        #expect(throws: PSDError.unsupportedDepth) { try PSDReader.read(header(depth: 32)) }
         #expect(throws: ImageImportError.tooLarge) { try PSDReader.read(header(width: 30_001, height: 10)) }
     }
 

@@ -152,7 +152,7 @@ struct ContentView: View {
     // Split again for 1.1: the chain outgrew the type checker once more.
     @ViewBuilder private var editorChrome: some View {
         editorStack
-        .background(Color(white: 0.14))
+        .background(EditorTheme.workspaceBackground)
         .background {
             if let applicationDelegate, applicationDelegate.projects.workspace == nil {
                 ProjectWindowBridge(controller: applicationDelegate.projects).frame(width: 0, height: 0)
@@ -324,11 +324,7 @@ struct ContentView: View {
 
     var body: some View {
         editorImport
-        .alert("Import couldn’t finish", isPresented: Binding<Bool>(
-            get: { session.importError != nil }, set: { if !$0 { session.importError = nil } })) {
-                // No cancel role: an alert with only a cancel button gets a second OK of its own.
-                Button("OK") { session.importError = nil }
-            } message: { Text(session.importError ?? "") }
+        .background(ImportErrorAlert(message: $session.importError))
         .alert("Couldn’t paint", isPresented: Binding<Bool>(get: { session.brushError != nil },
             set: { if !$0 { session.brushError = nil } })) {
                 Button("OK") { session.brushError = nil }
@@ -360,12 +356,12 @@ struct ContentView: View {
                         // The Marquee's icon follows its shape: a dashed circle in Ellipse mode.
                         else { Image(systemName: tool == .marquee && session.marqueeKind == .ellipse ? "circle.dashed" : session.symbol(for: tool)).font(.system(size: 17)) }
                     }
-                    .frame(width: 36, height: 36)
-                        .background(session.tool == tool ? Color.white.opacity(0.12) : .clear,
+                    .frame(width: EditorTheme.Metrics.toolButtonSize, height: EditorTheme.Metrics.toolButtonSize)
+                        .background(session.tool == tool ? EditorTheme.selectedToolFill : .clear,
                                     in: RoundedRectangle(cornerRadius: 7))
                         .overlay {
                             RoundedRectangle(cornerRadius: 7)
-                                .strokeBorder(session.tool == tool ? Color.white.opacity(0.14) : .clear)
+                                .strokeBorder(session.tool == tool ? EditorTheme.selectedToolBorder : .clear)
                         }
                         .contentShape(Rectangle())
                 }
@@ -376,9 +372,9 @@ struct ContentView: View {
             ColorPaletteControls(session: session).padding(.top, 8)
         }
         .padding(.top, 16).padding(.bottom, 12)
-        .frame(width: 56)
+        .frame(width: EditorTheme.Metrics.toolRailWidth)
         }
-        .frame(width: 56)
+        .frame(width: EditorTheme.Metrics.toolRailWidth)
     }
     private var welcome: some View {
         NewCanvasSheet(session: session,

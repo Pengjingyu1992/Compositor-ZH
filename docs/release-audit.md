@@ -1,16 +1,17 @@
 # 发布审查 / Release review
 
-## 1.4.8 build 40.36 / 2026-10-20
+## 1.4.8 build 40.37 / 2026-10-20
 
-- 发布标签：`v1.4.8-zh.5`。包含紧凑工作区、系统／亮／暗外观、实时文档 MCP、滤镜预览取消、按需缩小图缓存，以及工具栏间距、对齐和分割线调整；保留 40.28 的分层 16 位 PSD 导入修复。
+- 发布标签：`v1.4.8-zh.6`。包含紧凑工作区、系统／亮／暗外观、实时文档 MCP、滤镜预览取消、按需缩小图缓存，以及工具栏间距、对齐和分割线调整；保留 40.28 的分层 16 位 PSD 导入修复。
 - 当前 macOS 源码和已安装应用的常见凭据、私钥、凭据网址与私人主目录路径扫描为 456 个文件、0 命中；额外文本检查未发现本机用户名、个人姓名、邮箱或手机号候选。最终发行树和解压包另行复核。
 - 对本地已下载历史中的 2,348 个可达文件对象执行同组凭据／私人路径检查，0 命中。本地克隆仍包含浅边界，因此不声明覆盖所有远端历史。保留既有作者与贡献者署名、许可及已获用户接受的旧提交邮箱；新提交使用 GitHub noreply 身份，不改写历史。
 - 个人照片、参考照片原稿、截图、项目、恢复副本、客户端配置与凭据、偏好设置、原始性能记录和构建日志均不进入提交或发行包。公开的合成测试、源代码及文档保留。Windows 目录的本机删除不提交，已有 Windows 源码与发行包保留。
 - 已重新构建应用及内置 CLI；265 个冻结应用／构建输入保持一致。候选源码归档 517 个文件逐一匹配 Git 树，解压应用 12 个文件完成隐私检查，两份 ZIP 的完整性、版本／架构、SHA-256 与应用严格签名均通过；未发现图片私人附加元数据。安装包要求 macOS 26+、Apple Silicon，采用临时签名，未经 Apple Developer ID 公证。
 - 本地化源码检查：1,553 个候选键，缺失、未译和未解析的运行时表达式均为 0。既有定向验收分批记录在 `macos-40.29-validation.md` 至 `macos-40.36-validation.md`；本次不重新运行本机功能测试或完整 Xcode 套件。上一源码提交的 CLT CI 通过，Xcode 单测作业失败；不能据本轮隐私与打包检查声称全套测试通过。新提交的 CI 单独报告。
+- 发布候选 40.36 的云端逐文件编译发现 `MCPSettingsView.swift` 缺少 `UniformTypeIdentifiers` 导入；40.37 补齐该导入，修正源码在 Xcode 中构建的兼容性。40.36 发行退回草稿，旧标签和提交保留，不移动已发布标签。
 - 中英文 README、安装与连接说明已更新；感谢 Robbie Tilton / Compositor 和 Terry Jia / Pentrado，保留原有 MIT 许可及其他贡献者致谢。
 
-This release publishes macOS 1.4.8 (40.36) as `v1.4.8-zh.5`. Current-source and installed-bundle credential/private-path scans found no matches. The reachable history available in this shallow clone was checked separately; existing contributor metadata is retained and no history rewrite is performed. Personal inputs, client credentials, projects, recovery data and raw local logs are excluded. Packaging checks do not imply that the full Xcode suite passed. Windows sources and packages remain unchanged. Bilingual installation, connection instructions and upstream credits are included.
+This release publishes macOS 1.4.8 (40.37) as `v1.4.8-zh.6`. Current-source and installed-bundle credential/private-path scans found no matches. The reachable history available in this shallow clone was checked separately; existing contributor metadata is retained and no history rewrite is performed. Personal inputs, client credentials, projects, recovery data and raw local logs are excluded. Packaging checks do not imply that the full Xcode suite passed. Windows sources and packages remain unchanged. Bilingual installation, connection instructions and upstream credits are included.
 
 ## 1.4.8 build 40.24 / 2026-10-14
 

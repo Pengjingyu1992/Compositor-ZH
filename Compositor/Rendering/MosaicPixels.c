@@ -1,9 +1,11 @@
 #include "MosaicPixels.h"
+#include "FilterCancellation.h"
 
 /* Average premultiplied RGBA together, so translucent edges keep their color. */
 void mosaic_pixels(uint8_t *pixels, size_t width, size_t height, size_t stride, size_t block) {
     if (!pixels || block < 2 || !width || !height) return;
     for (size_t top = 0; top < height; top += block) {
+        if (filter_cancellation_requested()) return;
         const size_t bottom = top + block < height ? top + block : height;
         for (size_t left = 0; left < width; left += block) {
             const size_t right = left + block < width ? left + block : width;

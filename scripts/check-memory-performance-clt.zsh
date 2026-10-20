@@ -18,7 +18,7 @@ import AppKit
 @main struct RunMemoryChecks {
     @MainActor static func main() async throws {
         _ = NSApplication.shared
-        let result = try await MemoryPerformanceRegressionChecks.run(large: CommandLine.arguments.contains("--large"))
+        let result = try await MemoryPerformanceRegressionChecks.run(large: CommandLine.arguments.contains("--large"), widescreen: CommandLine.arguments.contains("--widescreen"))
         print("Memory/rendering: \(result.checks) checks, \(result.failures.count) failures")
         for failure in result.failures { print("FAIL: \(failure)") }
         for measurement in result.measurements { print(measurement) }

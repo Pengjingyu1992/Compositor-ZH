@@ -142,7 +142,9 @@ enum NavigationTool: String, CaseIterable {
 @Observable
 final class EditorSession {
     var skipsInitialClipboardCanvasSize = false
-    var document: CanvasDocument?
+    /// Unlike undo revisions this never returns to a previously observed value (including undo/redo ABA).
+    private(set) var automationChangeToken = UUID()
+    var document: CanvasDocument? { didSet { automationChangeToken = UUID() } }
     var animationPlaying = false
     var canvasFocusRequest = 0
     var showsSampleRing = true
@@ -318,6 +320,7 @@ final class EditorSession {
     var hueSaturation: HueSaturationEdit? { didSet { resumeFileRequests() } }
     /// The open filter (Filter menu), and the settings the next one starts from.
     var filterEdit: FilterEdit? { didSet { resumeFileRequests() } }
+    @ObservationIgnored var filterPreviewRenderer = FilterPreviewRenderer()
     var batchExportDraft: BatchExportDraft?
     var batchExportRunning = false
     var batchExportResult: String?

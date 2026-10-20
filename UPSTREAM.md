@@ -20,6 +20,8 @@ The public repository starts with a curated source snapshot. It preserves the up
 - Editable solid/gradient/pattern fill layers, gradient and pattern overlays, basic inner bevel, manual edge refinement, and color decontamination.
 - Color halftone, selective color, channel mixer, and `.cube` LUT filters; Chinese vertical text and justified alignment; multi-size PNG/JPEG export.
 - Transactional edit commands, a standalone CLI and an independent stdio MCP server.
+- An opt-in live-document MCP bridge with per-client and per-document authorization, bounded previews, atomic edits and approved-folder copy exports.
+- Compact inline tool options, system/light/dark appearance, refined toolbar geometry, cancelable filter previews and demand-driven downsample caching.
 - 8-bit RGB PSD export and fixes around effects preservation, resizing, import, and export.
 - Editable pen paths, text outlines, path/arc text, vector masks and supported editable PSD records.
 - Upstream 1.4.8 RAW/noise/tone and translucent-effect fixes, export previews/PDF, Navigator, command search, canvas-only view, last-filter repeat and standalone Scanlines.

@@ -576,12 +576,12 @@ import Testing
         let renderer = try #require(GPUCanvasRenderer.shared)
         let image = try pattern(1200, 900, seed: 1)
         #expect(renderer.image(image, level: 2) != nil)
-        #expect(renderer.cachedLevels(of: image) == [0, 1, 2])
+        #expect(renderer.cachedLevels(of: image) == [2])
         renderer.endFrame()
-        #expect(renderer.cachedLevels(of: image) == [1, 2], "the full size is let go: \(renderer.cachedLevels(of: image))")
+        #expect(renderer.cachedLevels(of: image) == [2], "only the displayed reduction is retained: \(renderer.cachedLevels(of: image))")
         // Drawn at full size, it stays.
         #expect(renderer.image(image, level: 0) != nil)
         renderer.endFrame()
-        #expect(renderer.cachedLevels(of: image) == [0, 1, 2])
+        #expect(renderer.cachedLevels(of: image) == [0, 2])
     }
 }

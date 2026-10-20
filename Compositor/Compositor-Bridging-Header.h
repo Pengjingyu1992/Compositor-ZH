@@ -13,3 +13,4 @@
 #import "Rendering/LiquifyPixels.h"
 
 #include "Rendering/PosterPixels.h"
+#include "Rendering/FilterCancellation.h"

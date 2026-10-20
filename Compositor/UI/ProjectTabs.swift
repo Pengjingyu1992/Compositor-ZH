@@ -73,6 +73,10 @@ private enum TabDragPhase {
 }
 
 struct ProjectTabStrip: View {
+    static func preferredWidth(_ workspace: ProjectWorkspace, available: CGFloat) -> CGFloat {
+        let natural = workspace.tabs.reduce(CGFloat(0)) { $0 + projectTabPillWidth($1, active: $1.id == workspace.selectedID) + projectTabSpacing }
+        return min(max(140, available), max(140, natural + projectTabSpacing))
+    }
     let workspace: ProjectWorkspace
     /// An external pasteboard drag (a file, or a layer from the panel) is in the air over the app.
     @State private var dragging = false
@@ -242,10 +246,14 @@ private func projectTabPillWidth(_ tab: ProjectTab, active: Bool) -> CGFloat {
     projectTabLabelWidth(tab, active: active) + 40
 }
 
+private func localizedProjectTabOverflowLabel(for hiddenCount: Int) -> String {
+    hiddenCount == 1 ? L10n.text("1 more tab") : L10n.format("%lld more tabs", Int64(hiddenCount))
+}
+
 /// Sized the same way the tab pills are: text measured at the same weight, plus the chevron and padding.
 private func projectTabOverflowPillWidth(hiddenCount: Int) -> CGFloat {
     let font = NSFont.systemFont(ofSize: 12, weight: .medium)
-    let text = projectTabOverflowLabel(for: hiddenCount)
+    let text = localizedProjectTabOverflowLabel(for: hiddenCount)
     let textWidth = (text as NSString).size(withAttributes: [.font: font]).width
     return ceil(textWidth) + 11 + 4 + 10 + 11 // leading, gap before chevron, chevron, trailing
 }
@@ -289,7 +297,7 @@ private struct NewTabDropSlot: View {
 private struct OverflowTabsPill: View {
     let workspace: ProjectWorkspace
     let hiddenIDs: [UUID]
-    private var label: String { projectTabOverflowLabel(for: hiddenIDs.count) }
+    private var label: String { localizedProjectTabOverflowLabel(for: hiddenIDs.count) }
     var body: some View {
         HStack(spacing: 4) {
             Text(label).font(.system(size: 12, weight: .medium))
@@ -309,7 +317,7 @@ private struct OverflowTabsPill: View {
                 }
             }
         })
-        .help(L10n.text(label))
+        .help(label)
         .accessibilityIdentifier("projectTabsOverflow")
     }
 }

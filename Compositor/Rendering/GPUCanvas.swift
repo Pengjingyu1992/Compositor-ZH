@@ -80,6 +80,9 @@ import QuartzCore
         self.device = device
         self.queue = queue
         context = CIContext(mtlCommandQueue: queue, options: [.workingColorSpace: space, .cacheIntermediates: false])
+        trimObservation = NotificationCenter.default.addObserver(forName: .compositorRenderCacheTrimmed, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.context.clearCaches() }
+        }
         // Once the canvas stops redrawing, what its last frame didn't use goes; frames alone would never count past it.
         idle = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
@@ -89,11 +92,14 @@ import QuartzCore
             }
         }
     }
+    private var trimObservation: NSObjectProtocol?
     private var idle: Timer?
     private var lastIdleFrame = -1
 
     /// Lets go of textures: all but the ones the last frame drew from, or all of them.
     private func release(keepingLastFrame: Bool) {
+        // Core Image owns a separate pool of temporary Metal resources outside the document cache.
+        context.clearCaches()
         let last = frame - 1
         cache.remove(kind: .texture) { value in
             guard let entry = value as? Entry else { return false }
@@ -112,12 +118,15 @@ import QuartzCore
         texture(image, level: level, mask: mask, transient: transient, drawing: true)
     }
 
-    /// The texture for one level of `image`. Each reduction is made from the one a level up (sharp halvings, as
-    /// `DownsampleCache` makes them); one used only to make a smaller one — the full size, zoomed out — goes at the end of
-    /// the frame, as nothing draws from it. On a large document seen whole, that full size was most of the memory.
+    /// Each reduction is made from the preceding level. Only a level actually drawn is cached; temporary upload
+    /// and reduction textures are released after their GPU fence, before processing the next layer.
     private func texture(_ image: CGImage, level: Int, mask: Bool, transient: Bool, drawing: Bool) -> CIImage? {
+        autoreleasepool { textureContents(image, level: level, mask: mask, transient: transient, drawing: drawing) }
+    }
+
+    private func textureContents(_ image: CGImage, level: Int, mask: Bool, transient: Bool, drawing: Bool) -> CIImage? {
         let key = Key(id: ObjectIdentifier(image), level: transient ? 0 : level, mask: mask)
-        let keep = transient ? 1 : drawing || level > 0 ? keepFrames : 0
+        let keep = transient ? 1 : drawing ? keepFrames : 0
         let found: CIImage?
         if let entry = touch(key, keep: keep) {
             found = entry.image
@@ -130,7 +139,7 @@ import QuartzCore
                               to: Self.size(image.width, image.height, level: level), mask: mask)
             } else { made = nil }
             guard let made else { return nil }
-            store(made, source: image, key: key, keep: keep)
+            if drawing { store(made, source: image, key: key, keep: keep) }
             found = made.image
         }
         guard transient, level > 0, let found else { return found }
@@ -242,8 +251,12 @@ import QuartzCore
     func image(_ raster: RasterSnapshot, level: Int = 0) -> CIImage? { texture(raster, level: level, drawing: true) }
 
     private func texture(_ raster: RasterSnapshot, level: Int, drawing: Bool) -> CIImage? {
+        autoreleasepool { rasterTextureContents(raster, level: level, drawing: drawing) }
+    }
+
+    private func rasterTextureContents(_ raster: RasterSnapshot, level: Int, drawing: Bool) -> CIImage? {
         let key = Key(id: ObjectIdentifier(raster), level: level, mask: raster.isMask)
-        let keep = drawing || level > 0 ? keepFrames : 0
+        let keep = drawing ? keepFrames : 0
         if let entry = touch(key, keep: keep) { return entry.image }
         let made: Surface?
         if level == 0 {
@@ -253,7 +266,7 @@ import QuartzCore
                           to: Self.size(raster.width, raster.height, level: level), mask: raster.isMask)
         } else { made = nil }
         guard let made else { return nil }
-        store(made, source: raster, key: key, keep: keep)
+        if drawing { store(made, source: raster, key: key, keep: keep) }
         return made.image
     }
 

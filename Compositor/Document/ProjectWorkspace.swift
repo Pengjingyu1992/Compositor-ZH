@@ -55,6 +55,18 @@ final class ProjectWorkspace {
         tabs.append(tab); selectedID = tab.id
         return tab
     }
+    /// Publish a fully opened staging tab only after its caller's authorization and conflict checks pass.
+    @discardableResult
+    func adoptOpenedTab(_ tab: ProjectTab) -> Bool {
+        guard canSwitch, tab.session.document != nil, !tabs.contains(where: { $0.id == tab.id }) else { return false }
+        tab.controller.workspace = self; tab.controller.window = window
+        if tab.session.recovery == nil, let recoveryStore {
+            tab.session.recovery = RecoveryCoordinator(session: tab.session, title: tab.title, store: recoveryStore)
+        }
+        if tabs.count == 1, current.session.document == nil { tabs.removeAll() }
+        tabs.append(tab); selectedID = tab.id
+        return true
+    }
     /// Reorders a tab by dragging it in the strip. Chrome, not a document edit, so it never touches undo.
     /// `index` is where the tab should land in the final order, clamped to the array's bounds.
     func moveTab(_ id: UUID, to index: Int) {

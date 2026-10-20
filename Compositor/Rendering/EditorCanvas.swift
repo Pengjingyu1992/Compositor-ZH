@@ -865,7 +865,11 @@ final class CanvasView: NSView {
     }
 
     /// The gray around the canvas, black in Canvas Only (F).
-    private var surround: CGFloat { session.canvasOnly ? 0 : 0.105 }
+    private var darkInterface: Bool { effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua }
+    private var surround: CGFloat { session.canvasOnly ? 0 : darkInterface ? 0.105 : 0.90 }
+    private var checkerBase: CGFloat { darkInterface ? 0.30 : 0.82 }
+    private var checkerAlternate: CGFloat { darkInterface ? 0.35 : 0.89 }
+    override func viewDidChangeEffectiveAppearance() { super.viewDidChangeEffectiveAppearance(); needsDisplay = true }
 
     override func draw(_ dirtyRect: NSRect) {
         // The grid and a text frame being dragged follow the pixels under them.
@@ -889,7 +893,7 @@ final class CanvasView: NSView {
         context.restoreGState()
         context.saveGState()
         context.clip(to: rect.intersection(dirtyRect))
-        context.setFillColor(NSColor(white: 0.30, alpha: 1).cgColor)
+        context.setFillColor(NSColor(white: checkerBase, alpha: 1).cgColor)
         context.fill(rect)
         // Work scales with the visible viewport, not document dimensions.
         let tile: CGFloat = 10
@@ -899,7 +903,7 @@ final class CanvasView: NSView {
             let maxX = Int(ceil((visible.maxX - rect.minX) / tile))
             let minY = Int(floor((visible.minY - rect.minY) / tile))
             let maxY = Int(ceil((visible.maxY - rect.minY) / tile))
-            context.setFillColor(NSColor(white: 0.35, alpha: 1).cgColor)
+            context.setFillColor(NSColor(white: checkerAlternate, alpha: 1).cgColor)
             for row in minY..<maxY {
                 for column in minX..<maxX where (row + column).isMultiple(of: 2) {
                     context.fill(CGRect(x: rect.minX + CGFloat(column) * tile,
@@ -920,7 +924,7 @@ final class CanvasView: NSView {
             context.endTransparencyLayer()
         }
         context.restoreGState()
-        context.setStrokeColor(NSColor.white.withAlphaComponent(0.13).cgColor)
+        context.setStrokeColor((darkInterface ? NSColor.white : NSColor.black).withAlphaComponent(0.13).cgColor)
         context.setLineWidth(1 / session.viewport.backingScale)
         context.stroke(rect)
     }
@@ -2712,10 +2716,10 @@ extension CanvasView {
             .transformed(by: CGAffineTransform(translationX: 0, y: 3 * device)).applyingGaussianBlur(sigma: 7 * device)
         frame = shadow.composited(over: frame)
         let tile = 10 * device
-        let squares = gray(0.35).cropped(to: CGRect(x: 0, y: 0, width: tile, height: tile))
-            .composited(over: gray(0.30).cropped(to: CGRect(x: tile, y: 0, width: tile, height: tile)))
-            .composited(over: gray(0.30).cropped(to: CGRect(x: 0, y: tile, width: tile, height: tile)))
-            .composited(over: gray(0.35).cropped(to: CGRect(x: tile, y: tile, width: tile, height: tile)))
+        let squares = gray(checkerAlternate).cropped(to: CGRect(x: 0, y: 0, width: tile, height: tile))
+            .composited(over: gray(checkerBase).cropped(to: CGRect(x: tile, y: 0, width: tile, height: tile)))
+            .composited(over: gray(checkerBase).cropped(to: CGRect(x: 0, y: tile, width: tile, height: tile)))
+            .composited(over: gray(checkerAlternate).cropped(to: CGRect(x: tile, y: tile, width: tile, height: tile)))
         let offset = NSAffineTransform()
         offset.translateX(by: rect.minX, yBy: rect.minY)
         let checkerboard = squares.applyingFilter("CIAffineTile", parameters: [kCIInputTransformKey: offset]).cropped(to: rect)
@@ -2727,7 +2731,7 @@ extension CanvasView {
         if crisp { layers = layers.cropped(to: pixels).samplingNearest().transformed(by: mapping) }
         frame = layers.cropped(to: rect).composited(over: frame)
         // The document's edge: a one-pixel line centered on it.
-        let edge = gray(1, alpha: 0.13)
+        let edge = gray(darkInterface ? 1 : 0, alpha: 0.13)
         for line in [CGRect(x: rect.minX - 0.5, y: rect.minY - 0.5, width: rect.width + 1, height: 1),
                      CGRect(x: rect.minX - 0.5, y: rect.maxY - 0.5, width: rect.width + 1, height: 1),
                      CGRect(x: rect.minX - 0.5, y: rect.minY + 0.5, width: 1, height: rect.height - 1),

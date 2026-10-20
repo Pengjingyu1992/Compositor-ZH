@@ -3,12 +3,12 @@ import SwiftUI
 struct PathControls: View {
     @Bindable var session: EditorSession
     var body: some View {
-        HStack(spacing: 12) {
+        ToolControlsRow(spacing: 8) {
             Text("Pen").font(ToolHeaderStyle.titleFont)
-            Button("New Path") { session.pathEditing = nil; session.beginPathEditing(new: true) }
-            Button("Edit Path") { session.beginPathEditing() }.disabled(session.pathEditing != nil || session.activeLayer?.liveShape?.style.vector == nil)
-            ScrollView(.horizontal) {
-                HStack(spacing: 12) {
+            Button("New Path") { session.pathEditing = nil; session.beginPathEditing(new: true) }.fixedSize()
+            Button("Edit Path") { session.beginPathEditing() }.disabled(session.pathEditing != nil || session.activeLayer?.liveShape?.style.vector == nil).fixedSize()
+            ToolControlsScroll {
+                ToolControlsRow(spacing: 8) {
                     if session.pathEditing != nil {
                         if session.pathEditing?.mask != true {
                             Button("Use Foreground Color") {
@@ -23,7 +23,7 @@ struct PathControls: View {
                             }))
                             TextField("Width", value: Binding<Double>(get: { Double(session.pathEditing?.style.strokeWidth ?? 2) }, set: {
                                 if $0.isFinite { session.pathEditing?.style.strokeWidth = CGFloat(min(5000, max(0, $0))) }
-                            }), format: .number).frame(width: 52).textFieldStyle(ToolNumberFieldStyle())
+                            }), format: .number).frame(width: 52).textFieldStyle(ToolNumberFieldStyle(height: 22))
                         }
                         Toggle("Even-Odd", isOn: Binding(get: { session.pathEditing?.style.evenOdd ?? false },
                             set: { session.pathEditing?.style.evenOdd = $0 }))
@@ -34,12 +34,11 @@ struct PathControls: View {
                             session.pathEditing?.adding = true
                         }.disabled((session.pathEditing?.style.contours.count ?? 0) >= 10_000)
                         Spacer(minLength: 0)
-                        Button("Cancel") { session.pathEditing = nil }
-                        Button("Apply") { session.finishPathEditing() }
                     } else { Spacer(minLength: 0) }
                 }
             }.scrollIndicators(.automatic)
-        }.toggleStyle(.checkbox).padding(.horizontal, 18).toolHeaderBar().releasesFocusOnCommit(session)
+            ToolEditActions(session: session)
+        }.toggleStyle(.checkbox).padding(.horizontal, 10).toolHeaderBar().releasesFocusOnCommit(session)
     }
 }
 

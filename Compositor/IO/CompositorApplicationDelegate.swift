@@ -3,6 +3,7 @@ import SwiftUI
 
 final class CompositorApplicationDelegate: NSObject, NSApplicationDelegate {
     let workspace = ProjectWorkspace(recoveryStore: .shared)
+    lazy var mcp = MCPLiveService(workspace: workspace)
     var session: EditorSession { workspace.current.session }
     var projects: ProjectController { workspace.current.controller }
     var showEditor: (() -> Void)?
@@ -26,6 +27,8 @@ final class CompositorApplicationDelegate: NSObject, NSApplicationDelegate {
         Task { await workspace.receive(urls) }
     }
 
+    func applicationWillTerminate(_ notification: Notification) { mcp.stop() }
+
     private static func reopen() {
         let event = NSAppleEventDescriptor(eventClass: AEEventClass(kCoreEventClass), eventID: AEEventID(kAEReopenApplication),
                                            targetDescriptor: .currentProcess(), returnID: AEReturnID(kAutoGenerateReturnID),
@@ -34,13 +37,13 @@ final class CompositorApplicationDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillFinishLaunching(_ notification: Notification) {
-        // Always dark, alerts and open/save panels included, whatever the Mac is set to.
-        NSApp.appearance = NSAppearance(named: .darkAqua)
+        ApplicationAppearance.apply()
         // Slider knobs snap to a click on the track instead of gliding there.
         SliderSnap.install()
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        mcp.restore()
         // View › Canvas Only's key is a plain F, and the menu takes a plain letter even while something is being
         // typed. So an F meant for a text field (the palette's search, a layer's name, a number) goes straight to it,
         // before the menu sees it.

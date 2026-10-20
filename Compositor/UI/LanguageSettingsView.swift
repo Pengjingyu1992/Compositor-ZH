@@ -20,8 +20,6 @@ struct LanguageSettingsView: View {
                 Label("Language preference saved.", systemImage: "checkmark.circle")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            Divider()
-            GhostscriptSettings()
         }
             .padding(24).frame(width: 380, alignment: .leading)
     }

@@ -3,7 +3,7 @@ import UniformTypeIdentifiers
 
 struct ContentView: View {
     /// The Layers panel's width, remembered across launches.
-    @AppStorage("layersPanelWidth") private var layersPanelWidth = 252.0
+    @AppStorage("layersPanelWidth") private var layersPanelWidth = 280.0
     @AppStorage("navigator.visible") private var showsNavigator = false
     @Bindable var session: EditorSession
     var applicationDelegate: CompositorApplicationDelegate? = nil
@@ -17,92 +17,96 @@ struct ContentView: View {
     @State private var effectsPanel = FloatingPanelController(name: "effectsPanel")
     @State private var isDropTargeted = false
     @State private var showsToolHelp = false
+    @State private var showsInspectorPopover = false
+    @AppStorage("inspector.visible") private var showsInspector = true
+    @AppStorage("interface.appearance") private var appearance = InterfaceAppearance.system.rawValue
+    private var inspectorInline: Bool { showsInspector && windowWidth >= 1060 }
     /// The window's width, so the tab strip can use the toolbar's free space.
     @State private var windowWidth: CGFloat = 1180
+    @State private var navigationControlsWidth: CGFloat = 96
+    @State private var actionControlsWidth: CGFloat = 272
+    private var actionToolbarWidth: CGFloat { inspectorInline ? layersPanelWidth - 8 : 272 }
+    private var actionToolbarSpacing: CGFloat { applicationDelegate?.mcp.enabled == true ? 6 : 10 }
+    private var availableTabWidth: CGFloat {
+        // Native window buttons, toolbar margins, and gaps between the three groups.
+        max(140, windowWidth - navigationControlsWidth - actionControlsWidth - 124)
+    }
     /// A layer dragged from this canvas's own tab has nowhere to go, so the canvas doesn't light up for it.
     private var acceptsDrop: Bool {
         guard let workspace = applicationDelegate?.workspace else { return true }
         return workspace.canReceiveDrag(into: workspace.current.id)
     }
     // Extracted from `body`: as one expression the type checker times out (Xcode 26.1).
-    @ViewBuilder private var toolHeaders: some View {
+    @ViewBuilder private var rawToolHeaders: some View {
         Group {
             if session.tool == .move {
                 TransformInspector(session: session).id(session.activeLayerID)
-                Divider()
             }
             if session.tool.isBrushTool {
                 BrushControls(session: session)
-                Divider()
             }
             if session.tool.isSelectionTool {
                 LassoControls(session: session)
-                Divider()
             }
             if session.tool == .gradient {
                 GradientControls(session: session)
-                Divider()
             }
             if session.tool == .bucket {
                 PaintBucketControls(session: session)
-                Divider()
             }
             if session.tool == .type {
                 TypeControls(session: session)
-                Divider()
             }
             if session.tool == .shape {
                 ShapeControls(session: session)
-                Divider()
             }
             if session.tool == .pen {
                 PathControls(session: session)
-                Divider()
             }
             if session.tool == .eyedropper {
-                HStack(spacing: 16) {
+                HStack(spacing: 8) {
                     Text("Eyedropper").font(ToolHeaderStyle.titleFont)
                     Toggle("Sample Ring", isOn: $session.showsSampleRing).toggleStyle(.checkbox)
                     Spacer()
-                }.padding(.horizontal, 18).toolHeaderBar()
-                Divider()
+                }.padding(.horizontal, 10).toolHeaderBar()
             }
             if session.tool == .hand || session.tool == .zoom {
                 NavigationToolHeader(session: session)
-                Divider()
             }
             if session.tool == .crop {
                 CropControls(session: session)
-                Divider()
             }
             // No tool (A) keeps the header, so the canvas doesn't jump.
             if session.tool == .idle {
-                HStack(spacing: 16) {
+                HStack(spacing: 8) {
                     Text("Select a tool").font(ToolHeaderStyle.titleFont)
                     Spacer()
-                }.padding(.horizontal, 18).toolHeaderBar()
-                Divider()
+                }.padding(.horizontal, 10).toolHeaderBar()
             }
         }
     }
 
+    private var toolHeaders: some View {
+        rawToolHeaders.frame(height: ToolHeaderStyle.height)
+    }
+
     @ViewBuilder private var editorStack: some View {
         VStack(spacing: 0) {
-            if !session.canvasOnly {
-                if session.document == nil {
-                    HStack {
-                        Text("Create a canvas or import an image.").foregroundStyle(.secondary)
-                        Spacer()
-                    }.padding(.horizontal, 18).toolHeaderBar()
-                    Divider()
-                } else { toolHeaders }
-            }
             HStack(spacing: 0) {
                 if !session.canvasOnly {
                     toolRail
                     Divider()
                 }
                 VStack(spacing: 0) {
+                    if !session.canvasOnly {
+                        if session.document == nil {
+                            HStack { Text("Create a canvas or import an image.").foregroundStyle(.secondary); Spacer() }
+                                .padding(.horizontal, 14).toolHeaderBar().background(EditorTheme.optionsBackground, ignoresSafeAreaEdges: [])
+                        } else {
+                            toolHeaders.background(EditorTheme.optionsBackground, ignoresSafeAreaEdges: [])
+                        }
+                        Divider()
+                    }
                     if session.showsRulers, session.document != nil, !session.canvasOnly {
                         HStack(spacing: 0) {
                             CanvasRulerCorner()
@@ -134,7 +138,7 @@ struct ContentView: View {
                         .onGeometryChange(for: CGRect.self) { $0.frame(in: .named("editor")) } action: { canvasFrame = $0 }
                     }
                 }
-                if !session.canvasOnly {
+                if !session.canvasOnly, inspectorInline {
                     PanelResizeEdge(width: $layersPanelWidth, range: LayersPanel.widths)
                     LayersPanel(session: session, width: layersPanelWidth)
                 }
@@ -147,12 +151,17 @@ struct ContentView: View {
                     .modifier(WidthReader(width: $windowWidth))
             }
         }
+        .overlay(alignment: .top) {
+            if !session.canvasOnly {
+                Divider().allowsHitTesting(false).accessibilityHidden(true)
+            }
+        }
     }
 
     // Split again for 1.1: the chain outgrew the type checker once more.
     @ViewBuilder private var editorChrome: some View {
         editorStack
-        .background(EditorTheme.workspaceBackground)
+        .background(EditorTheme.workspaceBackground, ignoresSafeAreaEdges: [])
         .background {
             if let applicationDelegate, applicationDelegate.projects.workspace == nil {
                 ProjectWindowBridge(controller: applicationDelegate.projects).frame(width: 0, height: 0)
@@ -185,57 +194,83 @@ struct ContentView: View {
                     .allowsHitTesting(false)
             }
         }
-        .onAppear { applicationDelegate?.showEditor = { openWindow(id: "editor") } }
-        .preferredColorScheme(.dark)
+        .onAppear { layersPanelWidth = min(320, max(260, layersPanelWidth)); applicationDelegate?.showEditor = { openWindow(id: "editor") } }
+        .preferredColorScheme(InterfaceAppearance(rawValue: appearance)?.scheme)
         // Canvas Only (F): the canvas runs up under where the title bar was, so no gray strip is left across the top.
         // The toolbar itself is hidden and shown by the window (see `toggleCanvasOnly`), which lays its buttons out
         // again properly; hidden here instead, it came back with the tabs over the window buttons.
         .ignoresSafeArea(.container, edges: session.canvasOnly ? .top : [])
         .navigationTitle(session.projectURL?.deletingPathExtension().lastPathComponent ?? L10n.text("Untitled"))
-        .toolbar {
-            ToolbarItem(placement: .navigation) {
+        .toolbar { navigationToolbar; actionToolbar }
+        .toolbarBackground(EditorTheme.optionsBackground, for: .windowToolbar)
+        .toolbarBackgroundVisibility(.visible, for: .windowToolbar)
+    }
+
+    @ToolbarContentBuilder private var navigationToolbar: some ToolbarContent {
+        ToolbarItem(placement: .navigation) {
+            HStack(spacing: 6) {
                 Button { requestNewCanvas() } label: { Label("New canvas", systemImage: "plus") }
                     .help(L10n.format("New canvas (%@)", ShortcutSettings.shared.keyLabel("n", 1, menu: true))).accessibilityIdentifier("newCanvasToolbar")
                     .disabled(session.isImporting || session.showsBusy || session.levels != nil)
+                    .accessibilityLabel("New canvas")
                     .modifier(NewProjectDropTarget(workspace: applicationDelegate?.workspace))
+                Button { session.undo() } label: { Label("Undo", systemImage: "arrow.uturn.backward") }
+                    .disabled(!session.canUndo).help("Undo").accessibilityLabel("Undo")
+                Button { session.redo() } label: { Label("Redo", systemImage: "arrow.uturn.forward") }
+                    .disabled(!session.canRedo).help("Redo").accessibilityLabel("Redo")
             }
-            ToolbarSpacer(.fixed, placement: .navigation)
-            if let workspace = applicationDelegate?.workspace {
-                ToolbarItem(placement: .navigation) {
-                    ProjectTabStrip(workspace: workspace)
-                        // As wide as the toolbar allows: the window less the traffic lights and New button before it
-                        // and the zoom controls after it. Bounded, so adding tabs never pushes those aside; the
-                        // strip scrolls instead.
-                        .frame(width: max(200, windowWidth - 352), height: 34, alignment: .center)
-                }
-                .sharedBackgroundVisibility(.hidden)
+            .labelStyle(.iconOnly).controlSize(.small)
+            .accessibilityElement(children: .contain)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { navigationControlsWidth = $0 }
+        }
+        if let workspace = applicationDelegate?.workspace {
+            ToolbarItem(placement: .navigation) {
+                ProjectTabStrip(workspace: workspace)
+                    .frame(width: ProjectTabStrip.preferredWidth(workspace, available: availableTabWidth), height: 34, alignment: .leading)
             }
-            // Absorb all remaining navigation-toolbar width before the zoom controls.
-            // Without this spacer, the growing tab strip pushes the primary actions left.
-            ToolbarSpacer(.flexible, placement: .navigation)
-            ToolbarItem(placement: .primaryAction) {
-                Button("Fit") { session.fit() }.help(L10n.format("Fit canvas in window (%@)", ShortcutSettings.shared.keyLabel("0", 1, menu: true)))
-                    .accessibilityIdentifier("fitCanvas").disabled(session.document == nil)
-                    .padding(.horizontal, 4)
-            }
-            ToolbarItem(placement: .primaryAction) {
-                Button("100%") { session.zoom(to: 1) }.help(L10n.format("Actual pixels (%@)", ShortcutSettings.shared.keyLabel("1", 1, menu: true)))
-                    .accessibilityIdentifier("actualPixels").disabled(session.document == nil)
-                    .padding(.horizontal, 4)
-            }
-            ToolbarItemGroup(placement: .primaryAction) {
+            .sharedBackgroundVisibility(.hidden)
+        }
+        ToolbarSpacer(.flexible, placement: .navigation)
+    }
+
+    @ToolbarContentBuilder private var actionToolbar: some ToolbarContent {
+        ToolbarItem(placement: .primaryAction) {
+            HStack(spacing: actionToolbarSpacing) {
+                Button { session.fit() } label: {
+                    Text("Fit").frame(minWidth: 30, maxWidth: .infinity, minHeight: 24)
+                }.help(L10n.format("Fit canvas in window (%@)", ShortcutSettings.shared.keyLabel("0", 1, menu: true)))
+                    .accessibilityIdentifier("fitCanvas").accessibilityLabel("Fit").disabled(session.document == nil)
+                Button { session.zoom(to: 1) } label: {
+                    Text(Double(session.viewport.zoom).formatted(.percent.precision(.fractionLength(0))))
+                        .monospacedDigit().frame(minWidth: 44, maxWidth: .infinity, minHeight: 24)
+                }.help(L10n.format("Actual pixels (%@)", ShortcutSettings.shared.keyLabel("1", 1, menu: true)))
+                    .accessibilityIdentifier("actualPixels")
+                    .accessibilityLabel(Double(session.viewport.zoom).formatted(.percent.precision(.fractionLength(0))))
+                    .disabled(session.document == nil)
+                Button {
+                    if windowWidth < 1060 { showsInspectorPopover.toggle() } else { showsInspector.toggle() }
+                } label: { Label("Inspector", systemImage: "sidebar.right").frame(minWidth: 24, maxWidth: .infinity, minHeight: 24) }
+                    .help("Inspector").accessibilityLabel("Inspector").accessibilityIdentifier("inspectorToggle")
+                    .popover(isPresented: $showsInspectorPopover) { LayersPanel(session: session, width: 280).frame(height: 440) }
+                MCPStatusView(service: applicationDelegate?.mcp)
+                Button { Task { await applicationDelegate?.projects.exportAs() } } label: { Label("Export", systemImage: "square.and.arrow.up").frame(minWidth: 24, maxWidth: .infinity, minHeight: 24) }
+                    .disabled(session.document == nil || !session.canStartProjectOperation).help("Export").accessibilityLabel("Export")
                 Button { session.zoomKeyboard(by: 1) } label: {
-                    Label("Zoom In", systemImage: "plus.magnifyingglass").labelStyle(.iconOnly)
+                    Label("Zoom In", systemImage: "plus.magnifyingglass").frame(minWidth: 24, maxWidth: .infinity, minHeight: 24)
                 }.accessibilityLabel(L10n.text("Zoom In"))
                     .help(L10n.format("Zoom in (%@)", ShortcutSettings.shared.keyLabel("=", 1, menu: true))).disabled(session.document == nil)
-                    .padding(.horizontal, 4)
                 Button { session.zoomKeyboard(by: -1) } label: {
-                    Label("Zoom Out", systemImage: "minus.magnifyingglass").labelStyle(.iconOnly)
+                    Label("Zoom Out", systemImage: "minus.magnifyingglass").frame(minWidth: 24, maxWidth: .infinity, minHeight: 24)
                 }.accessibilityLabel(L10n.text("Zoom Out"))
                     .help(L10n.format("Zoom out (%@)", ShortcutSettings.shared.keyLabel("-", 1, menu: true))).disabled(session.document == nil)
-                    .padding(.horizontal, 4)
             }
+            .labelStyle(.iconOnly).controlSize(.small).buttonStyle(.plain)
+            .padding(.horizontal, 6).frame(width: actionToolbarWidth, height: 28)
+            .glassEffect(.regular, in: Capsule())
+            .accessibilityElement(children: .contain)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { actionControlsWidth = $0 }
         }
+        .sharedBackgroundVisibility(.hidden)
     }
 
     private var editorPanels: some View {
@@ -344,9 +379,23 @@ struct ContentView: View {
     }
     private var toolRail: some View {
         // Scrolls when the window is too short for every tool, rather than pushing the bars above and below away.
-        IndicatorlessScrollView {
-        VStack(spacing: 10) {
-            ForEach(NavigationTool.allCases.filter { $0 != .idle }, id: \.self) { tool in
+        VStack(spacing: 0) {
+        IndicatorlessScrollView(scrollTarget: NavigationTool.allCases.filter { $0 != .idle && $0 != .hand && $0 != .zoom }.firstIndex(of: session.tool)) {
+        VStack(spacing: 4) {
+            ForEach(NavigationTool.allCases.filter { $0 != .idle && $0 != .hand && $0 != .zoom }, id: \.self) { tool in
+                toolButton(tool)
+            }
+        }.padding(.vertical, 10).frame(width: EditorTheme.Metrics.toolRailWidth)
+        }
+        VStack(spacing: 6) {
+            Divider().padding(.horizontal, 12)
+            toolButton(.hand)
+            toolButton(.zoom)
+            ColorPaletteControls(session: session).padding(.top, 6).padding(.bottom, 12)
+        }
+        }.frame(width: EditorTheme.Metrics.toolRailWidth)
+    }
+    private func toolButton(_ tool: NavigationTool) -> some View {
                 Button { session.selectTool(tool) } label: {
                     Group {
                         if tool == .gradient { GradientToolIcon().frame(width: 18, height: 18) }
@@ -366,15 +415,9 @@ struct ContentView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain).help(tool.label).accessibilityLabel(tool.label)
-                .foregroundStyle(.primary)
+                .foregroundStyle(session.tool == tool ? Color.white : Color.primary)
+                .accessibilityIdentifier("tool-" + String(describing: tool))
                 .accessibilityAddTraits(session.tool == tool ? .isSelected : [])
-            }
-            ColorPaletteControls(session: session).padding(.top, 8)
-        }
-        .padding(.top, 16).padding(.bottom, 12)
-        .frame(width: EditorTheme.Metrics.toolRailWidth)
-        }
-        .frame(width: EditorTheme.Metrics.toolRailWidth)
     }
     private var welcome: some View {
         NewCanvasSheet(session: session,
@@ -384,10 +427,9 @@ struct ContentView: View {
     private var statusBar: some View {
         HStack(spacing: 16) {
             if let document = session.document {
-                Text(session.viewport.zoom, format: .percent.precision(.fractionLength(0...1)))
-                    .frame(width: 62, alignment: .leading).accessibilityIdentifier("zoomStatus")
                 Text("\(document.width) × \(document.height) px").accessibilityIdentifier("canvasDimensions")
                 Text("sRGB · 8-bit RGBA").fixedSize()
+                Text("\(Int(document.resolution)) DPI").fixedSize()
             } else { Text("Ready when you are") }
             if session.history.droppedLatestUndo {
                 Text("Undo unavailable: this edit exceeded the history memory budget.")
@@ -405,8 +447,8 @@ struct ContentView: View {
                     .buttonStyle(.plain).disabled(session.importCancelRequested)
                     .help("Keep completed imports; cancel the unfinished file and queued images.")
             } else if session.document != nil {
-                Text(verbatim: shortToolHelp)
-                    .lineLimit(1).truncationMode(.tail).layoutPriority(-1)
+                Text(L10n.text(session.isModified ? "Unsaved Changes" : "Saved"))
+                    .accessibilityIdentifier("saveStatus")
                 Button { showsToolHelp.toggle() } label: { Image(systemName: "questionmark.circle") }
                     .buttonStyle(.plain).help("Tool Help").accessibilityLabel("Tool Help")
                     .accessibilityIdentifier("toolHelp")
@@ -417,7 +459,7 @@ struct ContentView: View {
             }
         }
         .font(.system(size: 11).monospacedDigit()).foregroundStyle(.secondary)
-        .padding(.horizontal, 18).frame(height: 30)
+        .padding(.horizontal, 12).frame(height: 26)
         .accessibilityElement(children: .contain)
     }
 

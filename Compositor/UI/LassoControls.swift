@@ -4,10 +4,10 @@ struct LassoControls: View {
     @Bindable var session: EditorSession
 
     var body: some View {
-        HStack(spacing: 12) {
+        ToolControlsRow(spacing: 8) {
             Text(L10n.text(session.tool == .marquee ? "Marquee" : session.tool == .wand ? "Magic" : "Lasso")).font(ToolHeaderStyle.titleFont)
-            ScrollView(.horizontal) {
-                HStack(spacing: 12) {
+            ToolControlsScroll {
+                ToolControlsRow(spacing: 8) {
                     Button("Color Range…") { session.beginColorRange() }
                         .disabled(!session.canSelectColorRange)
                         .accessibilityIdentifier("openColorRange")
@@ -70,33 +70,33 @@ struct LassoControls: View {
                         TextField("Feather", value: Binding(get: { Double(session.selectionFeatherAmount) },
                                                             set: { session.selectionFeatherAmount = $0.isFinite ? Int(min(250, max(1, $0))) : 2 }),
                                   format: .number.precision(.fractionLength(0)))
-                            .frame(width: 48).textFieldStyle(ToolNumberFieldStyle()).multilineTextAlignment(.trailing)
+                            .frame(width: 48).textFieldStyle(ToolNumberFieldStyle(height: 22)).multilineTextAlignment(.trailing)
                             .arrowSteps(value: { Double(session.selectionFeatherAmount) },
                                         change: { session.selectionFeatherAmount = Int(min(250, max(1, $0))) })
                             .unitSuffix("px", scrubValue: $session.selectionFeatherAmount,
                                         sensitivity: 1, range: 1...250)
                     }
                     Spacer(minLength: 0)
-                    if let selection = session.selection {
-                        if selection.isEmpty { Text("Empty selection").foregroundStyle(.secondary) }
-                        Button("Deselect") { session.deselect() }.disabled(!session.canEditSelection)
-                    }
+                    if session.selection?.isEmpty == true { Text("Empty selection").foregroundStyle(.secondary) }
                 }
             }.scrollIndicators(.automatic)
+            if session.selection != nil {
+                Button("Deselect") { session.deselect() }.disabled(!session.canEditSelection).fixedSize()
+            }
         }
-        .padding(.horizontal, 18).toolHeaderBar().releasesFocusOnCommit(session)
+        .padding(.horizontal, 10).toolHeaderBar().releasesFocusOnCommit(session)
         .disabled(session.showsBusy || session.document == nil)
     }
 
     /// Tolerance, sample size, which pixels to read, and whether matches must connect.
     private var wandControls: some View {
-        HStack(spacing: 12) {
+        ToolControlsRow(spacing: 8) {
             HStack(spacing: 6) {
                 Text("Tolerance").scrubbable(sensitivity: 1, value: $session.wandSettings.tolerance, range: 0...255)
                 TextField("Tolerance", value: Binding(get: { session.wandSettings.tolerance },
                                                       set: { session.wandSettings.tolerance = min(255, max(0, $0)) }),
                           format: .number)
-                    .frame(width: 44).textFieldStyle(ToolNumberFieldStyle())
+                    .frame(width: 44).textFieldStyle(ToolNumberFieldStyle(height: 22))
                     .multilineTextAlignment(.trailing)
                     .arrowSteps(value: { Double(session.wandSettings.tolerance) },
                                 change: { session.wandSettings.tolerance = Int(min(255, max(0, $0.rounded()))) })
@@ -119,7 +119,7 @@ struct LassoControls: View {
     }
 
     private var objectSelectionControls: some View {
-        HStack(spacing: 12) {
+        ToolControlsRow(spacing: 8) {
             Picker("Sample", selection: $session.objectSelectionSettings.sampleAllLayers) {
                 Text("This Layer").tag(false)
                 Text("All Layers").tag(true)
@@ -131,7 +131,7 @@ struct LassoControls: View {
                 TextField("Edge", value: Binding(get: { session.objectSelectionSettings.edgeOffset },
                                                  set: { session.objectSelectionSettings.edgeOffset = min(10, max(-10, $0)) }),
                           format: .number)
-                    .frame(width: 40).textFieldStyle(ToolNumberFieldStyle())
+                    .frame(width: 40).textFieldStyle(ToolNumberFieldStyle(height: 22))
                     .multilineTextAlignment(.trailing)
                     .arrowSteps(value: { Double(session.objectSelectionSettings.edgeOffset) },
                                 change: { session.objectSelectionSettings.edgeOffset = Int(min(10, max(-10, $0.rounded()))) })
@@ -151,7 +151,7 @@ struct LassoControls: View {
             TextField(L10n.text(title), value: Binding(get: { amount.wrappedValue },
                                             set: { amount.wrappedValue = min(500, max(1, $0)) }),
                       format: .number)
-                .frame(width: 40).textFieldStyle(ToolNumberFieldStyle())
+                .frame(width: 40).textFieldStyle(ToolNumberFieldStyle(height: 22))
                 .multilineTextAlignment(.trailing)
                 .arrowSteps(value: { Double(amount.wrappedValue) },
                             change: { amount.wrappedValue = Int(min(500, max(1, $0.rounded()))) })

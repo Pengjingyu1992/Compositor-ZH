@@ -4,10 +4,10 @@ struct GradientControls: View {
     @Bindable var session: EditorSession
 
     var body: some View {
-        HStack(spacing: 12) {
+        ToolControlsRow(spacing: 8) {
             Text("Gradient").font(ToolHeaderStyle.titleFont)
-            ScrollView(.horizontal) {
-                HStack(spacing: 12) {
+            ToolControlsScroll {
+                ToolControlsRow(spacing: 8) {
                     Picker("Shape", selection: $session.gradientSettings.shape) {
                         ForEach(GradientShape.allCases, id: \.self) { Text(L10n.text($0.rawValue)).tag($0) }
                     }
@@ -20,25 +20,22 @@ struct GradientControls: View {
                     .labelsHidden().fixedSize()
                     Toggle("Reverse", isOn: $session.gradientSettings.reversed)
                     Text("Opacity").scrubbable(sensitivity: 0.01, value: $session.gradientSettings.opacity, range: 0.01...1)
-                    Slider(value: $session.gradientSettings.opacity, in: 0.01...1).frame(width: 100)
+                    Slider(value: $session.gradientSettings.opacity, in: 0.01...1).frame(width: 56)
                     TextField("Opacity", value: Binding<Double>(get: { Double(session.gradientSettings.opacity * 100) },
                         set: { session.gradientSettings.opacity = $0.isFinite ? CGFloat(min(100, max(1, $0)) / 100) : 1 }),
                         format: .number.precision(.fractionLength(0)))
-                        .frame(width: 42).textFieldStyle(ToolNumberFieldStyle())
+                        .frame(width: 42).textFieldStyle(ToolNumberFieldStyle(height: 22))
                         .arrowSteps(value: { Double(session.gradientSettings.opacity * 100) },
                                     change: { session.gradientSettings.opacity = CGFloat(min(100, max(1, $0)) / 100) })
                         .help(ShortcutSettings.shared.opacityHelp)
                         .unitSuffix("%")
                     Spacer(minLength: 0)
                     if session.isMaskSelected { Text("Mask").foregroundStyle(.secondary) }
-                    if session.gradientEdit != nil {
-                        Button("Cancel") { session.cancelGradient() }
-                        Button("Apply") { Task { await session.commitGradient() } }
-                    }
                 }
             }.scrollIndicators(.automatic)
+            ToolEditActions(session: session)
         }
-        .padding(.horizontal, 18).toolHeaderBar().releasesFocusOnCommit(session)
+        .padding(.horizontal, 10).toolHeaderBar().releasesFocusOnCommit(session)
         .disabled(session.showsBusy || session.document == nil)
     }
 

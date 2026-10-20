@@ -26,10 +26,10 @@ struct TypeControls: View {
         })
     }
     var body: some View {
-        HStack(spacing: 12) {
+        ToolControlsRow(spacing: 8) {
             Text("Type").font(ToolHeaderStyle.titleFont)
-            ScrollView(.horizontal) {
-                HStack(spacing: 10) {
+            ToolControlsScroll {
+                ToolControlsRow(spacing: 8) {
                     TypeFontPicker(fontName: Binding(get: {
                         guard let draft = session.textDraft else { return session.currentTextStyle.fontName }
                         let selection = draft.selection
@@ -48,7 +48,7 @@ struct TypeControls: View {
                         case .keep: session.keepFontPreview()
                         }
                     })
-                        .frame(width: 210).help("Font face, including bold and italic variants")
+                        .frame(width: 180).help("Font face, including bold and italic variants")
                     TextField("Size", value: number(\.fontSize), format: .number).frame(width: 52)
                         .unitSuffix("px", scrubValue: value(\.fontSize), sensitivity: 1, range: 1...2000, step: 1)
                         .arrowSteps(value: { Double(session.currentTextStyle.fontSize) },
@@ -68,9 +68,9 @@ struct TypeControls: View {
                                 session.changeTextStyle { $0.alignment = alignment }
                             } label: {
                                 Image(systemName: alignment == .left ? "text.alignleft" : alignment == .center ? "text.aligncenter" : alignment == .justified ? "text.justify" : "text.alignright")
-                                    .frame(width: 30, height: 26)
+                                    .frame(width: 24, height: 22)
                             }
-                            .buttonStyle(ToolChoiceStyle(selected: selected))
+                            .buttonStyle(ToolChoiceStyle(selected: selected, height: 22))
                             .help(alignment.localizedLabel)
                             .accessibilityLabel(alignment.localizedLabel)
                             .accessibilityAddTraits(selected ? .isSelected : [])
@@ -98,7 +98,7 @@ struct TypeControls: View {
                 Button("Edit Text") { session.editActiveText() }.disabled(session.activeLayer?.liveText == nil)
             }
         }
-        .textFieldStyle(ToolNumberFieldStyle()).padding(.horizontal, 18).toolHeaderBar()
+        .textFieldStyle(ToolNumberFieldStyle(height: 22)).padding(.horizontal, 10).toolHeaderBar()
         .disabled(session.document == nil || session.showsBusy)
         .onChange(of: session.colorPicker?.color) { _, _ in session.previewTextColor() }
     }
@@ -172,6 +172,8 @@ private struct TypeFontPicker: NSViewRepresentable {
         let button = FixedWidthPopUpButton(frame: .zero, pullsDown: false)
         if !fontName.isEmpty { button.addItem(withTitle: fontName) }
         button.borderShape = .capsule
+        button.controlSize = .small
+        button.font = .systemFont(ofSize: 11)
         // A long font name is cut off at its end rather than widening the control or scrolling its start away.
         button.cell?.lineBreakMode = .byTruncatingTail
         button.cell?.usesSingleLineMode = true

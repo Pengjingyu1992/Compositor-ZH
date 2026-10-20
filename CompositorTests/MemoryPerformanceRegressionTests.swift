@@ -35,8 +35,11 @@ import Testing
         data.withUnsafeMutableBytes { texture.getBytes($0.baseAddress!, bytesPerRow: width * 4, from: MTLRegionMake2D(0, 0, width, height), mipmapLevel: 0) }
         return data
     }
-    static func run(large: Bool = false) async throws -> Result {
+    static func run(large: Bool = false, widescreen: Bool = false) async throws -> Result {
         var result = Result()
+        func stage(_ name: String) {
+            if large { print("STAGE: \(name)"); fflush(stdout) }
+        }
         func check(_ name: String, _ value: Bool) {
             result.checks += 1; if !value { result.failures.append(name); print("FAIL: \(name)") }; fflush(stdout)
         }
@@ -274,6 +277,8 @@ import Testing
         check("later materialization is included in history accounting", materializedHistory.retainedBytes(current: historyDocument) >= sparseBytes + 64 * 64 * 4)
 
         for side in large ? [4096, 8192] : [4096] {
+            try autoreleasepool {
+            stage("history \(side): fixture")
             let started = DispatchTime.now().uptimeNanoseconds
             let base = try pattern(side, side)
             var current = try asset(base)
@@ -289,6 +294,7 @@ import Testing
                 history.end(document: document, selection: document.layers[0].id)
                 check("\(side) stroke \(index) stays lazy and undoable", !raster.hasMaterializedPixels && history.undoCount == index + 1)
             }
+            stage("history \(side): undo/redo")
             let retained = history.retainedBytes(current: document)
             check("\(side) shared base and tiles fit history budget", retained < 8 * 1024 * 1024 && history.undoCount == 100)
             let latest = document
@@ -299,36 +305,56 @@ import Testing
             result.measurements.append("\(side)x\(side), 100 sparse edits: history \(retained) bytes; logical full-image accounting would be at least \(side * side * 4 * 99) bytes; \(String(format: "%.1f", Double(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000)) ms including fixture and undo/redo")
             RenderCache.shared.removeAll()
         }
+            }
         if large, let renderer {
-            for (side, count) in [(4096, 20), (8192, 10)] {
+            let scenes = widescreen ? [(3840, 2160, 20), (7680, 4320, 10)] : [(4096, 4096, 20), (8192, 8192, 10)]
+            for (width, height, count) in scenes {
+                let side = "\(width)x\(height)"
+                try autoreleasepool {
                 let started = DispatchTime.now().uptimeNanoseconds
                 let test = EditorSession()
                 var layers: [ImageLayer] = []
                 for index in 0..<count {
-                    var layer = ImageLayer(asset: try asset(pattern(side, side, seed: index * 19)), origin: .zero)
+                    stage("GPU \(side): fixture \(index + 1)/\(count)")
+                    var layer = try autoreleasepool { ImageLayer(asset: try asset(pattern(width, height, seed: index * 19)), origin: .zero) }
                     layer.opacity = index == 0 ? 1 : 0.4
                     layer.blendMode = index % 3 == 0 ? .screen : index % 3 == 1 ? .multiply : .normal
                     layers.append(layer)
                 }
-                test.document = CanvasDocument(width: side, height: side, layers: layers)
+                test.document = CanvasDocument(width: width, height: height, layers: layers)
                 test.viewport.resize(to: CGSize(width: 512, height: 512), backingScale: 1, documentSize: test.document!.size)
                 test.viewport.fit(documentSize: test.document!.size)
                 let canvas = CanvasView(session: test); canvas.frame = CGRect(x: 0, y: 0, width: 512, height: 512)
                 var firstFrame: Data?
+                var frameTimes: [Double] = []
+                var peakMetalBytes = 0
                 for cycle in 0..<20 {
+                    stage("GPU \(side): frame \(cycle + 1)/20")
+                    try autoreleasepool {
+                    let frameStarted = DispatchTime.now().uptimeNanoseconds
                     guard let frame = canvas.gpuFrame(size: CGSize(width: 512, height: 512)) else { throw ExportError.render }
                     let output = try gpuBytes(frame, renderer: renderer, width: 512, height: 512)
                     renderer.endFrame()
+                    frameTimes.append(Double(DispatchTime.now().uptimeNanoseconds - frameStarted) / 1_000_000)
+                    peakMetalBytes = max(peakMetalBytes, renderer.device.currentAllocatedSize)
                     if cycle == 0 { firstFrame = output }
                     check("\(side), \(count) layers, repeat \(cycle): output and cap", output == firstFrame && RenderCache.shared.retainedBytes <= RenderCache.shared.currentLimit)
                     // Exercise the same common budget with the CPU reductions between GPU frames.
                     _ = DownsampleCache.shared.image(layers[cycle % count].asset!.image, level: 3)
+                    }
                 }
-                result.measurements.append("\(side)x\(side), \(count) distinct layers, 20 GPU viewport renders: \(String(format: "%.1f", Double(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000)) ms including fixture; retained cache \(RenderCache.shared.retainedBytes) / \(RenderCache.shared.currentLimit) bytes")
+                result.measurements.append("\(side), \(count) distinct layers, 20 GPU viewport renders: \(String(format: "%.1f", Double(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000)) ms including fixture; retained cache \(RenderCache.shared.retainedBytes) / \(RenderCache.shared.currentLimit) bytes")
+                let warm = frameTimes.dropFirst().sorted()
+                result.measurements.append("\(side) viewport 512x512 offscreen composition + GPU readback: cold \(String(format: "%.2f", frameTimes[0])) ms, warm median \(String(format: "%.2f", warm[warm.count / 2])) ms, warm p95 \(String(format: "%.2f", warm[min(warm.count - 1, Int(ceil(Double(warm.count) * 0.95)) - 1)])) ms; peak observed Metal allocation \(peakMetalBytes) bytes. This is not display frame rate or input-to-photon latency.")
+                check("\(side) retains no upload intermediates", layers.allSatisfy { layer in
+                    let levels = renderer.cachedLevels(of: layer.asset!.image)
+                    return levels.count <= 1 && !levels.contains(0)
+                })
                 RenderCache.shared.removeAll()
                 check("\(side) explicit cache release returns accounting to zero", RenderCache.shared.retainedBytes == 0)
             }
         }
+            }
         RenderCache.shared.respond(to: .critical)
         check("global critical pressure clears CPU and GPU entries", RenderCache.shared.retainedBytes == 0 && RenderCache.shared.count == 0)
         RenderCache.shared.respond(to: .normal)

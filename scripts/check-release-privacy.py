@@ -19,7 +19,9 @@ parser.add_argument("--bundle", type=Path)
 args = parser.parse_args()
 root = Path(__file__).resolve().parent.parent
 tracked = subprocess.check_output(["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"], cwd=root).split(b"\0")
-paths = [root / path.decode() for path in tracked if path]
+candidates = [root / path.decode() for path in tracked if path]
+# A tracked deletion is not a release file; do not restore an intentionally removed local platform tree.
+paths = [path for path in candidates if path.is_file()]
 if args.bundle:
     paths.extend(path for path in args.bundle.rglob("*") if path.is_file())
 failures = []

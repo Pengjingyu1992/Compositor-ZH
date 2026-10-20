@@ -428,7 +428,7 @@ struct CompositorApp: App {
                 }
             }
         Settings {
-            LanguageSettingsView(settings: languageSettings)
+            ApplicationSettingsView(settings: languageSettings, service: applicationDelegate.mcp)
         }
             .windowResizability(.contentSize)
     }

@@ -307,6 +307,7 @@ nonisolated struct CameraRawSettings: Equatable, Sendable {
         let bytes = data.assumingMemoryBound(to: UInt8.self)
         var red = 0.0, green = 0.0, blue = 0.0, count = 0.0
         for y in 0..<image.height {
+            if y % 32 == 0, Task.isCancelled { return nil }
             let row = y * context.bytesPerRow
             for x in 0..<image.width {
                 let pixel = row + x * 4
@@ -358,6 +359,7 @@ nonisolated struct CameraRawScope: Equatable, Sendable {
         var scope = Array(repeating: 0.0, count: scopeSide * scopeSide)
         let stride = context.bytesPerRow
         for y in 0..<image.height {
+            if y % 32 == 0, Task.isCancelled { return nil }
             let row = y * stride
             for x in 0..<image.width {
                 let pixel = row + x * 4
@@ -398,6 +400,7 @@ nonisolated struct CameraRawScope: Equatable, Sendable {
 
     /// Preview image plus the scope of the grade itself, without Option-drag or indicator paint.
     static func preview(_ job: FilterJob) throws -> (image: CGImage, scope: Self) {
+        try Task.checkCancellation()
         var grade = job
         grade.cameraRawClipping = nil
         grade.showsShadowClipping = false
@@ -405,8 +408,10 @@ nonisolated struct CameraRawScope: Equatable, Sendable {
         grade.visualizesPointColor = -1
         grade.showsSharpenMask = false
         let graded = try PixelFilter.run(grade)
+        try Task.checkCancellation()
         let scope = make(graded) ?? Self(red: Array(repeating: 0, count: binCount), green: Array(repeating: 0, count: binCount),
                                          blue: Array(repeating: 0, count: binCount), vectorscope: Array(repeating: 0, count: scopeSide * scopeSide))
+        try Task.checkCancellation()
         if job.cameraRawClipping != nil || job.showsSharpenMask { return (try PixelFilter.run(job), scope) }
         if job.showsShadowClipping || job.showsHighlightClipping {
             return (try overlay(graded, shadows: job.showsShadowClipping, highlights: job.showsHighlightClipping), scope)

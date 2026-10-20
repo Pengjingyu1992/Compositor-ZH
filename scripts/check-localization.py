@@ -140,7 +140,7 @@ HISTORY_ARGUMENTS = {
     "applyDocumentSize": "actionName",
 }
 UI_CALLS = {
-    "Text", "Button", "Toggle", "Picker", "TextField", "Label", "Section", "GroupBox", "Menu", "alert", "confirmationDialog",
+    "Text", "Button", "Toggle", "Picker", "TextField", "Label", "Section", "GroupBox", "Menu", "DisclosureGroup", "SettingsLink", "alert", "confirmationDialog",
     "help", "accessibilityLabel", "row", "number", "slider", "wheel", "control",
     "colorSlider", "defringeSlider", "entry", "field",
 }

@@ -14,9 +14,11 @@ nonisolated final class DownsampleCache: @unchecked Sendable {
     static let shared = DownsampleCache()
     /// Most halvings ever used; past this Core Graphics does the rest.
     static let maxLevel = 6
+    private struct ReductionKey: Hashable { let source: ObjectIdentifier; let level: Int }
     private struct Entry {
         let source: WeakRenderSource
-        let levels: [CGImage]
+        let image: CGImage
+        let level: Int
     }
     private let cache: RenderCache
     init(cache: RenderCache = .shared) { self.cache = cache }
@@ -37,20 +39,29 @@ nonisolated final class DownsampleCache: @unchecked Sendable {
     /// halving rounds up, so the copy reaches up to 2^level − 1 source pixels past the right and bottom.
     func image(_ image: CGImage, level wanted: Int) -> (image: CGImage, level: Int) {
         guard wanted >= 1, image.width > 1 || image.height > 1 else { return (image, 0) }
-        let key = RenderCache.Key(.downsample, ObjectIdentifier(image))
-        let known = cache.value(for: key, as: Entry.self)
-        var levels = known?.source.object === image ? known!.levels : []
-        while levels.count < min(wanted, Self.maxLevel) {
-            let previous = levels.last ?? image
-            guard previous.width > 1 || previous.height > 1, let next = Self.halve(previous) else { break }
-            levels.append(next)
+        let wanted = min(wanted, Self.maxLevel)
+        func key(_ level: Int) -> RenderCache.Key { .init(.downsample, ReductionKey(source: ObjectIdentifier(image), level: level)) }
+        func cached(_ level: Int) -> Entry? {
+            guard let entry = cache.value(for: key(level), as: Entry.self), entry.source.object === image else { return nil }
+            return entry
         }
-        guard !levels.isEmpty else { return (image, 0) }
-        cache.insert(Entry(source: WeakRenderSource(image), levels: levels), for: key,
-            resources: levels.map { RenderResource(id: .object(ObjectIdentifier($0)),
-                bytes: $0.bytesPerRow * ($0.height + ($0.alphaInfo == .none ? 0 : 8))) })
-        let applied = min(wanted, levels.count)
-        return (levels[applied - 1], applied)
+        if let known = cached(wanted) { return (known.image, known.level) }
+        var reduced = image, applied = 0
+        if wanted > 1 {
+            for level in stride(from: wanted - 1, through: 1, by: -1) {
+                if let known = cached(level) { reduced = known.image; applied = level; break }
+            }
+        }
+        while applied < wanted, reduced.width > 1 || reduced.height > 1 {
+            guard let next = autoreleasepool(invoking: { Self.halve(reduced) }) else { break }
+            reduced = next; applied += 1
+        }
+        guard applied > 0 else { return (image, 0) }
+        // Intermediate levels only serve this reduction; retaining the whole pyramid multiplies memory across layers.
+        cache.insert(Entry(source: WeakRenderSource(image), image: reduced, level: applied), for: key(applied),
+            resources: [RenderResource(id: .object(ObjectIdentifier(reduced)),
+                bytes: reduced.bytesPerRow * (reduced.height + (reduced.alphaInfo == .none ? 0 : 8)))])
+        return (reduced, applied)
     }
 
     /// Exactly half the size, rounded up, with Lanczos resampling. Color images are padded with transparent

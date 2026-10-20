@@ -31,6 +31,7 @@ nonisolated struct PosterCommand: Codable, Sendable {
 nonisolated struct PosterBatchRequest: Codable, Sendable {
     let documentID: UUID
     let expectedRevision: UUID
+    var expectedChangeToken: UUID?
     var expectedLockRevision: UUID?
     var commands: [PosterCommand]
 }
@@ -46,12 +47,14 @@ nonisolated enum PosterCommandError: Error {
 
 extension EditorSession {
     /// The UI command panel, CLI and MCP all enter here. Work is isolated until validation succeeds.
-    func executePosterBatch(_ request: PosterBatchRequest) async -> PosterBatchResult {
+    func executePosterBatch(_ request: PosterBatchRequest, canCommit: (() -> Bool)? = nil) async -> PosterBatchResult {
         func result(_ status: String, _ code: String? = nil, _ message: String? = nil) -> PosterBatchResult {
             PosterBatchResult(status: status, revision: history.currentRevision, errorCode: code, message: message)
         }
         guard let source = document, source.id == request.documentID, history.currentRevision == request.expectedRevision else { return result("rejected", "stale", L10n.text("The document changed before the operation finished.")) }
         guard request.expectedLockRevision == nil || request.expectedLockRevision == lockRevision else { return result("rejected", "stale_locks") }
+        guard request.expectedChangeToken == nil || request.expectedChangeToken == automationChangeToken else { return result("rejected", "stale_change_token") }
+        let initialChangeToken = automationChangeToken
         let initialLockRevision = lockRevision
         guard canEditLayers, effectsEditing == nil, !history.hasPendingEdit, (1...500).contains(request.commands.count), let owner = beginOwnedEdit() else { return result("rejected", "busy", L10n.text("Finish or cancel the current edit first.")) }
         defer { releaseEdit(owner) }
@@ -65,7 +68,7 @@ extension EditorSession {
             }
             guard let snapshot = candidate.projectSnapshot() else { throw PosterCommandError.invalid }
             try await ProjectStore.shared.validateSnapshot(snapshot)
-            guard !Task.isCancelled, ownsEdit(owner), lockRevision == initialLockRevision, !violatesLayerLocks(before: source, after: candidate.document) else { return result("rejected", "stale_or_locked") }
+            guard !Task.isCancelled, canCommit?() != false, automationChangeToken == initialChangeToken, ownsEdit(owner), lockRevision == initialLockRevision, !violatesLayerLocks(before: source, after: candidate.document) else { return result("rejected", "stale_or_locked") }
             guard source != candidate.document else { return result("unchanged") }
             beginEdit("Edit Command Batch")
             document = candidate.document; activeLayerID = candidate.activeLayerID; selectedLayerIDs = candidate.selectedLayerIDs

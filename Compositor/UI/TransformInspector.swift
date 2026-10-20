@@ -7,59 +7,82 @@ struct TransformInspector: View {
             ?? LayerTransform(origin: .zero, size: CGSize(width: 1, height: 1))
     }
     var body: some View {
-        HStack(spacing: 12) {
-          Text(L10n.text(session.transformTargetsMask ? "Transform Mask" : "Transform")).font(ToolHeaderStyle.titleFont)
-              .padding(.leading, 18)
-          // Command flips Auto Select while it's held, and the box shows it flipped (see HeldModifiers).
-          Toggle("Auto Select", isOn: Binding(get: { session.transformAutoSelect != held.contains(.command) },
-                                              set: { session.transformAutoSelect = $0 != held.contains(.command) }))
-              .help("Select layers by clicking the canvas. Hold Command to turn it the other way while you click.")
-              .accessibilityIdentifier("transformAutoSelect")
-          Toggle("Show Controls", isOn: $session.showsTransformControls)
-              .help(L10n.format("Show the transform box and handles (%@). When hidden, drag anywhere to move the layer.", ShortcutSettings.shared.keyLabel("h", 1, menu: true)))
-          ScrollView(.horizontal) {
-            HStack(spacing: 12) {
-                field("X", value: value.origin.x) { $0.origin.x = $1 }.frame(width: 85)
-                field("Y", value: value.origin.y) { $0.origin.y = $1 }.frame(width: 85)
-                TransformValueField(label: "W", value: value.size.width, range: 1...30_000, finish: finish) { resize($0, width: true) }.frame(width: 85)
-                TransformValueField(label: "H", value: value.size.height, range: 1...30_000, finish: finish) { resize($0, width: false) }.frame(width: 85)
-                // Shift flips the lock while dragging a handle, and the button shows it flipped.
-                Toggle(isOn: Binding(get: { session.locksTransformRatio != held.contains(.shift) },
-                                     set: { session.locksTransformRatio = $0 != held.contains(.shift) })) { Image(systemName: "link") }
-                    .toggleStyle(.button).help("Lock aspect ratio. Hold Shift while dragging a handle to turn it the other way.")
-                TransformValueField(label: "Scale", suffix: "%", value: value.scalePercent(pixelSize: pixelSize), range: 0.1...30_000, finish: finish) { number in
-                    change { value in
-                        guard number > 0 else { return }
-                        value = value.scaled(toPercent: number, pixelSize: pixelSize)
-                    }
-                }.frame(width: 110).help("Scale width and height together, about the center")
-                field("°", value: value.rotation, range: -360...360) { $0.rotation = $1.truncatingRemainder(dividingBy: 360) }.frame(width: 75)
-                Picker("Sampling", selection: Binding(get: { value.sampling }, set: { sampling in
-                    change { $0.sampling = sampling }
-                })) {
-                    ForEach(LayerSampling.allCases, id: \.self) { Text(L10n.text($0.rawValue)).tag($0) }
-                }.frame(width: 170)
-                Button("Flip H") { change { $0.flipX.toggle() } }
-                Button("Flip V") { change { $0.flipY.toggle() } }
+        HStack(spacing: 8) {
+            ScrollView(.horizontal) {
+                HStack(spacing: 8) {
+                    Text(L10n.text(session.transformTargetsMask ? "Transform Mask" : "Transform"))
+                        .font(.system(size: 11, weight: .semibold))
+                    selectionOptions
+                    positionFields
+                    sizeFields
+                    ratioLock
+                    scaleField
+                    field("°", value: value.rotation, range: -360...360) {
+                        $0.rotation = $1.truncatingRemainder(dividingBy: 360)
+                    }.frame(width: 68).disabled(numbersDisabled)
+                    Picker("Sampling", selection: Binding(get: { value.sampling }, set: { sampling in
+                        change { $0.sampling = sampling }
+                    })) {
+                        ForEach(LayerSampling.allCases, id: \.self) { Text(L10n.text($0.rawValue)).tag($0) }
+                    }.frame(width: 148).disabled(numbersDisabled)
+                    Button("Flip H") { change { $0.flipX.toggle() } }.disabled(numbersDisabled)
+                    Button("Flip V") { change { $0.flipY.toggle() } }.disabled(numbersDisabled)
+                    LayerArrangeMenu(session: session, compact: true)
+                }
+                .font(.system(size: 11)).controlSize(.small)
+                .fixedSize(horizontal: true, vertical: false)
+                .padding(.vertical, 4)
+            }.scrollIndicators(.automatic)
+            ToolEditActions(session: session).font(.system(size: 11)).controlSize(.small)
+        }.padding(.horizontal, 10).toolHeaderBar()
+        .onSubmit {
+            if session.transformEdit?.persistent == true { session.commitTransform() }
+            session.canvasFocusRequest += 1
+        }
+        .onExitCommand {
+            session.cancelTransform()
+            session.canvasFocusRequest += 1
+        }
+    }
 
-            // Numbers describe an ordinary transform; while distorted, the handles are the controls.
-            }.disabled((!session.canTransform && session.transformEdit == nil) || session.transformEdit?.corners != nil)
-                .padding(.horizontal, 18)
-          }.scrollIndicators(.automatic)
-          LayerArrangeMenu(session: session, compact: true)
-          // Only an edit that waits for them — typed values, ⌘T, a distortion — has anything to cancel or apply. A
-          // handle drag applies itself on release, and ghosted buttons after it read as the pixels being resampled,
-          // which they never are. Left in place unseen, so Escape and Return still reach a drag in progress.
-          let pending = session.transformEdit?.persistent == true
-          HStack(spacing: 12) {
-              Button("Cancel") { session.cancelTransform() }.configuredNativeShortcut(.escape)
-                  .disabled(session.transformEdit == nil)
-              Button("Apply") { session.commitTransform() }.configuredNativeShortcut(.return)
-                  .disabled(session.transformEdit == nil).accessibilityIdentifier("applyTransform")
-          }
-          .opacity(pending ? 1 : 0).allowsHitTesting(pending).accessibilityHidden(!pending)
-          .animation(.easeOut(duration: 0.12), value: pending)
-        }.padding(.trailing, 18).toolHeaderBar().releasesFocusOnCommit(session)
+    private var positionFields: some View {
+        HStack(spacing: 6) {
+            field("X", value: value.origin.x) { $0.origin.x = $1 }.frame(width: 62)
+            field("Y", value: value.origin.y) { $0.origin.y = $1 }.frame(width: 62)
+        }.disabled(numbersDisabled)
+    }
+    private var sizeFields: some View {
+        HStack(spacing: 6) {
+            TransformValueField(label: "W", value: value.size.width, range: 1...30_000, finish: finish) { resize($0, width: true) }.frame(width: 62)
+            TransformValueField(label: "H", value: value.size.height, range: 1...30_000, finish: finish) { resize($0, width: false) }.frame(width: 62)
+        }.disabled(numbersDisabled)
+    }
+    private var ratioLock: some View {
+        Toggle(isOn: Binding(get: { session.locksTransformRatio != held.contains(.shift) },
+                             set: { session.locksTransformRatio = $0 != held.contains(.shift) })) { Image(systemName: "link") }
+            .toggleStyle(.button).help("Lock aspect ratio. Hold Shift while dragging a handle to turn it the other way.")
+            .disabled(numbersDisabled)
+    }
+    private var selectionOptions: some View {
+        HStack(spacing: 8) {
+            Toggle("Auto Select", isOn: Binding(get: { session.transformAutoSelect != held.contains(.command) },
+                set: { session.transformAutoSelect = $0 != held.contains(.command) }))
+                .help("Select layers by clicking the canvas. Hold Command to turn it the other way while you click.")
+                .accessibilityIdentifier("transformAutoSelect")
+            Toggle("Show Controls", isOn: $session.showsTransformControls)
+                .help(L10n.format("Show the transform box and handles (%@). When hidden, drag anywhere to move the layer.", ShortcutSettings.shared.keyLabel("h", 1, menu: true)))
+        }.fixedSize()
+    }
+    private var scaleField: some View {
+        TransformValueField(label: "Scale", suffix: "%", value: value.scalePercent(pixelSize: pixelSize), range: 0.1...30_000, finish: finish) { number in
+            change { transform in
+                guard number > 0 else { return }
+                transform = transform.scaled(toPercent: number, pixelSize: pixelSize)
+            }
+        }.frame(width: 100).disabled(numbersDisabled)
+    }
+    private var numbersDisabled: Bool {
+        (!session.canTransform && session.transformEdit == nil) || session.transformEdit?.corners != nil
     }
 
     /// 100% scale: the layer's pixels (a blank layer's size before this edit, so typing doesn't compound).
@@ -114,13 +137,13 @@ private struct TransformValueField: View {
     @FocusState private var focused: Bool
     var body: some View {
         HStack(spacing: 4) {
-            Text(L10n.text(label)).font(.caption).foregroundStyle(.secondary)
+            Text(L10n.text(label)).font(.system(size: 10)).foregroundStyle(.secondary)
                 .scrubbable(sensitivity: 1, value: Binding(get: { value }, set: { newValue in
                     change(newValue)
                     text = Self.formatted(Double(newValue))
                 }), range: range, step: 1, onEnd: finish)
             TextField(L10n.text(label), text: $text)
-                .textFieldStyle(ToolNumberFieldStyle()).focused($focused)
+                .textFieldStyle(ToolNumberFieldStyle(height: 22)).focused($focused)
                 .accessibilityIdentifier("transform\(label)")
                 .onAppear { sync() }
                 .onChange(of: value) { if !focused { sync() } }
@@ -135,7 +158,7 @@ private struct TransformValueField: View {
                                 change(CGFloat(stepped))
                                 text = Self.formatted(stepped)
                             })
-            if let suffix { Text(L10n.text(suffix)).font(.caption).foregroundStyle(.secondary) }
+            if let suffix { Text(L10n.text(suffix)).font(.system(size: 10)).foregroundStyle(.secondary) }
         }
     }
     private func sync() { text = Self.formatted(Double(value)) }

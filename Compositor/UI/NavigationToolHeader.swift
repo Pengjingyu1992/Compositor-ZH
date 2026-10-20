@@ -8,12 +8,12 @@ struct NavigationToolHeader: View {
     @FocusState private var editingZoom: Bool
 
     var body: some View {
-        HStack(spacing: 12) {
+        ToolControlsRow(spacing: 8) {
             Text(L10n.text(session.tool == .hand ? "Pan" : "Zoom")).font(ToolHeaderStyle.titleFont)
             if session.tool == .zoom {
                 TextField("Zoom", text: $zoomText)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 72)
+                    .textFieldStyle(ToolNumberFieldStyle(height: 22))
+                    .frame(width: 60)
                     .multilineTextAlignment(.trailing)
                     .focused($editingZoom)
                     .onSubmit { releaseFocus() }
@@ -31,7 +31,7 @@ struct NavigationToolHeader: View {
             }
             Spacer()
         }
-        .padding(.horizontal, 18).toolHeaderBar()
+        .padding(.horizontal, 10).toolHeaderBar()
         .onAppear { syncZoom() }
         .onChange(of: session.viewport.zoom) { _, _ in
             if !editingZoom { syncZoom() }

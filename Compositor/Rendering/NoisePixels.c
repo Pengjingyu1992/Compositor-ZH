@@ -1,4 +1,5 @@
 #include "NoisePixels.h"
+#include "FilterCancellation.h"
 #include <math.h>
 
 // A well-mixed 32-bit hash, so neighbouring pixels get unrelated values.
@@ -22,6 +23,7 @@ void noise_add_at(uint8_t *rgba, size_t width, size_t height, size_t stride,
                   int64_t origin_x, int64_t origin_y) {
     float spread = amount / 100.0f * 127.5f;
     for (size_t y = 0; y < height; ++y) {
+        if ((y & 7) == 0 && filter_cancellation_requested()) return;
         uint8_t *row = rgba + y * stride;
         for (size_t x = 0; x < width; ++x) {
             uint8_t *p = row + x * 4;

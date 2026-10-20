@@ -15,13 +15,14 @@ parser = argparse.ArgumentParser()
 parser.add_argument("runner", type=Path)
 parser.add_argument("--output", required=True, type=Path)
 parser.add_argument("--large", action="store_true", help="Mixed 4K/8K fixture, not a frame-rate measurement")
+parser.add_argument("--widescreen", action="store_true", help="Use 3840x2160 and 7680x4320 GPU scenes with --large")
 parser.add_argument("--timeout", type=float, default=120)
 parser.add_argument("--rss-limit-mib", type=int, default=4096)
 args = parser.parse_args()
 if not math.isfinite(args.timeout) or args.timeout <= 0 or args.rss_limit_mib <= 0:
     parser.error("Resource bounds must be positive.")
 runner = args.runner.resolve(strict=True)
-command = [str(runner)] + (["--large"] if args.large else [])
+command = [str(runner)] + (["--large"] if args.large else []) + (["--widescreen"] if args.widescreen else [])
 started = time.monotonic()
 process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 stop_reason = None
@@ -70,7 +71,7 @@ result = {
     "recordedAtUTC": datetime.now(timezone.utc).isoformat(),
     "runnerName": runner.name,
     "runnerSHA256": hashlib.sha256(runner.read_bytes()).hexdigest(),
-    "scenario": "mixed-square-4096-8192" if args.large else "square-4096-sparse-history-and-regressions",
+    "scenario": "widescreen-3840-2160-7680-4320" if args.large and args.widescreen else "mixed-square-4096-8192" if args.large else "square-4096-sparse-history-and-regressions",
     "exitCode": process.returncode,
     "stopReason": stop_reason,
     "wallSeconds": wall,
@@ -84,7 +85,7 @@ result = {
     "limitations": [
         "Fixture setup and regression checks are included; this is not input-to-photon or frame timing.",
         "RSS does not measure total GPU allocation or the application's full physical footprint.",
-        "The large runner contains both 4K and 8K scenes; early termination does not identify which scene failed.",
+        "The large runner contains multiple scenes; flushed STAGE markers identify the last reached phase.",
     ],
 }
 args.output.parent.mkdir(parents=True, exist_ok=True)

@@ -195,6 +195,7 @@ nonisolated enum PixelFilter {
     static let lensStrength = 0.35
 
     static func run(_ job: FilterJob) throws -> CGImage {
+        try Task.checkCancellation()
         let settings = job.settings.normalized
         let width = job.image.width, height = job.image.height
         let extent = CGRect(x: 0, y: 0, width: width, height: height)
@@ -299,8 +300,49 @@ nonisolated enum PixelFilter {
             guard let corrected = destination.makeImage() else { throw ExportError.render }
             image = corrected
         }
+        try Task.checkCancellation()
         guard let selection = job.selection else { return image }
         return try PixelAdjust.blend(image, over: job.image, through: selection, pixelToDocument: job.mapping, isMask: false)
+    }
+}
+
+nonisolated struct FilterPreviewResult: @unchecked Sendable {
+    let image: CGImage
+    let scope: CameraRawScope?
+}
+
+/// The C kernel reads only this atomic flag, never Swift state from another thread.
+nonisolated final class FilterKernelCancellation: @unchecked Sendable {
+    private let context = filter_cancellation_create()
+    deinit { filter_cancellation_destroy(context) }
+    func cancel() { filter_cancellation_cancel(context) }
+    func withScope<T>(_ body: () throws -> T) rethrows -> T {
+        let previous = filter_cancellation_enter(context)
+        defer { _ = filter_cancellation_enter(previous) }
+        return try body()
+    }
+}
+
+/// A document runs one preview kernel at a time, including a canceled kernel finishing a safe boundary.
+actor FilterPreviewRenderer {
+    private let operation: @Sendable (FilterJob) throws -> FilterPreviewResult
+    init(operation: @escaping @Sendable (FilterJob) throws -> FilterPreviewResult = { job in
+        if job.kind == .cameraRaw {
+            let made = try CameraRawScope.preview(job)
+            return FilterPreviewResult(image: made.image, scope: made.scope)
+        }
+        return FilterPreviewResult(image: try PixelFilter.run(job), scope: nil)
+    }) { self.operation = operation }
+
+    func render(_ job: FilterJob, cancellation: FilterKernelCancellation) throws -> FilterPreviewResult {
+        try Task.checkCancellation()
+        let started = PerformanceRecorder.shared.begin()
+        defer { PerformanceRecorder.shared.end(.filterPreview, since: started) }
+        return try autoreleasepool {
+            let result = try cancellation.withScope { try operation(job) }
+            try Task.checkCancellation()
+            return result
+        }
     }
 }
 
@@ -601,30 +643,30 @@ extension EditorSession {
         let sourceVersion = edit.previewSourceVersion
         edit.preparing = true
         edit.previewError = nil
+        let renderer = filterPreviewRenderer
         edit.previewTask = Task { @MainActor [weak self, weak edit] in
-            let result = await Task.detached(priority: .userInitiated) { () -> (CGImage?, CameraRawScope?, String?) in
-                let started = PerformanceRecorder.shared.begin()
-                defer { PerformanceRecorder.shared.end(.filterPreview, since: started) }
-                do {
-                    if job.kind == .cameraRaw {
-                        let made = try CameraRawScope.preview(job)
-                        return (made.image, made.scope, nil)
-                    }
-                    return (try PixelFilter.run(job), nil, nil)
-                } catch {
-                    return (nil, nil, error.localizedDescription)
-                }
-            }.value
+            guard !Task.isCancelled else { return }
+            let cancellation = FilterKernelCancellation()
+            let worker = Task.detached(priority: .userInitiated) { try await renderer.render(job, cancellation: cancellation) }
+            let result = await withTaskCancellationHandler { await worker.result } onCancel: {
+                cancellation.cancel()
+                worker.cancel()
+            }
             guard let self, let edit, self.filterEdit === edit, !Task.isCancelled else { return }
             edit.previewTask = nil
             edit.preparing = false
+            guard edit.documentID == self.document?.id, edit.revision == self.history.currentRevision else {
+                self.cancelFilter()
+                return
+            }
             // Made before the layer grew for a bigger blur: it still shows, in the place it was made for, until the
             // render from the grown layer replaces it.
             let current = sourceVersion == edit.previewSourceVersion
-            edit.previewError = result.2
-            if let scope = result.1 { edit.cameraRawScope = scope }
+            let made = try? result.get()
+            if case .failure(let error) = result { edit.previewError = error.localizedDescription }
+            if let scope = made?.scope { edit.cameraRawScope = scope }
             if (edit.preview || edit.kind.isAutomatic), current || !edit.kind.isAutomatic {
-                edit.preparedPreview = result.0
+                edit.preparedPreview = made?.image
                 edit.preparedTransform = placement
                 edit.preparedSettings = current ? job.settings : nil
                 self.brushRevision += 1
@@ -640,7 +682,9 @@ extension EditorSession {
         if case .dither = colorPicker?.target { closeColorPicker(commit: false) }
         if finishAdjustmentEditing(commit: false) { return }
         guard let edit = filterEdit, !edit.committing else { return }
+        edit.pending = nil
         edit.previewTask?.cancel()
+        edit.preparing = false
         filterEdit = nil
         brushRevision += 1
     }
@@ -679,13 +723,18 @@ extension EditorSession {
             || (edit.kind == .cameraRaw && rendered.cameraRaw.isIdentity) { cancelFilter(); return }
         guard let owner = beginOwnedEdit() else { return }
         edit.committing = true
-        edit.previewTask?.cancel()
-        if edit.kind != .cameraRaw { filterSettings = edit.settings }
-        // The preview stays up until the result is on the layer, so the canvas never flashes the original.
+        // Cleanup covers the suspension while a canceled preview leaves its kernel.
         defer {
             if filterEdit === edit { filterEdit = nil; brushRevision += 1 }
             releaseEdit(owner)
         }
+        edit.pending = nil
+        edit.previewTask?.cancel()
+        // Do not start a full-size commit alongside an obsolete preview kernel.
+        await edit.previewTask?.value
+        guard !Task.isCancelled, ownsEdit(owner), filterEdit === edit else { return }
+        if edit.kind != .cameraRaw { filterSettings = edit.settings }
+        // The preview stays up until the result is on the layer, so the canvas never flashes the original.
         // Remove Background masks the background out rather than erasing it, so it can be brought back at any time
         // by painting the mask, disabling it, or deleting it.
         if edit.kind == .removeBackground { await commitBackgroundMask(edit, owner: owner); return }

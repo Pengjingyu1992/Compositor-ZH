@@ -3,8 +3,10 @@ import SwiftUI
 struct LayersPanel: View {
     @Bindable var session: EditorSession
     /// Dragging the panel's left edge sets it, within `widths`.
-    var width: CGFloat = 252
-    static let widths: ClosedRange<Double> = 202...352
+    var width: CGFloat = 280
+    static let widths: ClosedRange<Double> = 260...320
+
+    @AppStorage("inspector.properties.expanded") private var propertiesExpanded = true
 
     var body: some View {
         VStack(spacing: 0) {
@@ -12,7 +14,9 @@ struct LayersPanel: View {
                 Text("Layers").tag(false)
                 Text("History").tag(true)
             }
-            .pickerStyle(.segmented).labelsHidden().padding(12).accessibilityIdentifier("sidebarPanel")
+            .pickerStyle(.segmented).labelsHidden().controlSize(.small)
+            .padding(.horizontal, 12).frame(height: ToolHeaderStyle.height)
+            .accessibilityIdentifier("sidebarPanel")
             Divider()
             if session.showsHistory { HistoryPanel(session: session) }
             else { layersBody }
@@ -28,11 +32,13 @@ struct LayersPanel: View {
                 Spacer()
                 Text("\(session.document?.layers.count ?? 0)").font(.caption.monospacedDigit()).foregroundStyle(.tertiary)
                     .accessibilityIdentifier("layerCount")
-            }.padding(.horizontal, 12).padding(.vertical, 10)
+            }.padding(.horizontal, 12).frame(height: 32)
             Divider()
             if session.document != nil {
-                LayerAppearanceControls(session: session, layerID: session.activeLayerID).id(session.activeLayerID)
-                LayerLockControls(session: session)
+                DisclosureGroup("Properties", isExpanded: $propertiesExpanded) {
+                    LayerAppearanceControls(session: session, layerID: session.activeLayerID).id(session.activeLayerID)
+                    LayerLockControls(session: session)
+                }.padding(.horizontal, 10).padding(.vertical, 8)
                 Divider()
             }
             if let layers = session.document?.layers, !layers.isEmpty {
@@ -101,7 +107,7 @@ struct FooterIcon: View {
         // Disabled, as dim as the menus' icons (a quarter-strength white, measured): SwiftUI halves a disabled
         // button's own color again, so the button asks for half-strength white.
         Image(systemName: systemName)
-            .foregroundStyle(isEnabled ? AnyShapeStyle(.primary) : AnyShapeStyle(Color.white.opacity(0.5)))
+            .foregroundStyle(isEnabled ? AnyShapeStyle(.primary) : AnyShapeStyle(Color.primary.opacity(0.4)))
             .footerHitArea()
     }
 }

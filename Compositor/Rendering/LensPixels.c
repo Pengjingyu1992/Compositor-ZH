@@ -1,10 +1,12 @@
 #include "LensPixels.h"
+#include "FilterCancellation.h"
 #include <math.h>
 
 void lens_distort(const uint8_t *source, uint8_t *destination, size_t width, size_t height, size_t stride, double k) {
     double cx = width * 0.5, cy = height * 0.5;
     double halfDiagonal2 = cx * cx + cy * cy;
     for (size_t y = 0; y < height; ++y) {
+        if ((y & 7) == 0 && filter_cancellation_requested()) return;
         double dy = y + 0.5 - cy;
         uint8_t *out = destination + y * stride;
         for (size_t x = 0; x < width; ++x) {

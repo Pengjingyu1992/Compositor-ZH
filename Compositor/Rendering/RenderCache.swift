@@ -101,8 +101,14 @@ nonisolated final class RenderCache: @unchecked Sendable {
             for key in keys { removeLocked(key) }
         }
     }
-    func removeAll() { lock.withLock { entries.removeAll(); allocations.removeAll(); bytes = 0 } }
-    func respond(to pressure: Pressure) { lock.withLock { self.pressure = pressure; trimLocked() } }
+    func removeAll() {
+        lock.withLock { entries.removeAll(); allocations.removeAll(); bytes = 0 }
+        NotificationCenter.default.post(name: .compositorRenderCacheTrimmed, object: nil)
+    }
+    func respond(to pressure: Pressure) {
+        lock.withLock { self.pressure = pressure; trimLocked() }
+        if pressure != .normal { NotificationCenter.default.post(name: .compositorRenderCacheTrimmed, object: nil) }
+    }
     private func trimLocked() {
         while bytes > limit || entries.count > 512, let key = entries.min(by: { $0.value.used < $1.value.used })?.key { removeLocked(key) }
     }
@@ -115,4 +121,8 @@ nonisolated final class RenderCache: @unchecked Sendable {
             else { allocations[id] = allocation }
         }
     }
+}
+
+extension Notification.Name {
+    nonisolated static let compositorRenderCacheTrimmed = Notification.Name("CompositorRenderCacheTrimmed")
 }

@@ -17,22 +17,25 @@ nonisolated enum ExportError: LocalizedError {
 actor ImageExporter {
     static let shared = ImageExporter()
 
-    func render(_ input: ProjectSnapshot) throws -> ExportRaster {
+    func render(_ input: ProjectSnapshot, longSide: Int? = nil) throws -> ExportRaster {
         try Task.checkCancellation()
         let snapshot = input.presentingAnimationFrame(input.displayedAnimationFrameID)
         let width = snapshot.manifest.width, height = snapshot.manifest.height
         guard (1...DocumentLimits.maxSide).contains(width), (1...DocumentLimits.maxSide).contains(height),
               width * height <= DocumentLimits.maxSurfacePixels else { throw ExportError.tooLarge }
+        let scale = longSide.map { min(1, Double(max(1, $0)) / Double(max(width, height))) } ?? 1
+        let pixelWidth = max(1, Int((Double(width) * scale).rounded()))
+        let pixelHeight = max(1, Int((Double(height) * scale).rounded()))
         return try autoreleasepool {
             guard let space = CGColorSpace(name: CGColorSpace.sRGB),
-                  let context = CGContext(data: nil, width: width, height: height,
-                                          bitsPerComponent: 8, bytesPerRow: width * 4, space: space,
+                  let context = CGContext(data: nil, width: pixelWidth, height: pixelHeight,
+                                          bitsPerComponent: 8, bytesPerRow: pixelWidth * 4, space: space,
                                           bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
                 throw ExportError.render
             }
             context.clear(CGRect(x: 0, y: 0, width: width, height: height))
-            context.translateBy(x: 0, y: CGFloat(height))
-            context.scaleBy(x: 1, y: -1)
+            context.translateBy(x: 0, y: CGFloat(pixelHeight))
+            context.scaleBy(x: CGFloat(pixelWidth) / CGFloat(width), y: -CGFloat(pixelHeight) / CGFloat(height))
             let records = Dictionary(uniqueKeysWithValues: snapshot.manifest.layers.map { ($0.id, $0) })
             for layer in snapshot.manifest.layers {
                 try Task.checkCancellation()

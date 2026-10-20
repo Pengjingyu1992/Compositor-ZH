@@ -9,44 +9,48 @@ struct CropControls: View {
     private let ratios = ["Free", "Original", "1:1", "4:3", "3:4", "16:9", "9:16", "9:20"]
 
     var body: some View {
-        HStack(spacing: 14) {
-            Text("Crop").font(ToolHeaderStyle.titleFont)
-            Picker("Ratio", selection: ratioSelection) {
-                ForEach(ratios, id: \.self) { Text(L10n.text($0)) }
-                if !ratios.contains(session.cropRatioChoice) {
-                    Text(session.cropRatioChoice).tag(session.cropRatioChoice)
-                }
-                Divider()
-                Text("Custom…").tag("Custom")
-            }.frame(width: 170)
-                .popover(isPresented: $showsCustomRatio) {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Custom ratio").font(.headline)
-                        TextField("Width:Height", text: $customRatio)
-                            .textFieldStyle(.roundedBorder)
-                            .onSubmit { applyCustomRatio() }
-                        Text("Width:height, such as 9:20 or 2.5:1")
-                            .font(.caption).foregroundStyle(.secondary)
-                        if CropGeometry.ratio(customRatio) == nil {
-                            Text("Enter a positive ratio within the document size limits.")
-                                .font(.caption).foregroundStyle(.orange)
+        ToolControlsRow(spacing: 8) {
+            ToolControlsScroll {
+                ToolControlsRow(spacing: 8) {
+                    Text("Crop").font(ToolHeaderStyle.titleFont)
+                    Picker("Ratio", selection: ratioSelection) {
+                        ForEach(ratios, id: \.self) { Text(L10n.text($0)) }
+                        if !ratios.contains(session.cropRatioChoice) {
+                            Text(session.cropRatioChoice).tag(session.cropRatioChoice)
                         }
-                        HStack {
-                            Button("Cancel") { showsCustomRatio = false }
-                            Spacer()
-                            Button("Apply") { applyCustomRatio() }
-                                .disabled(CropGeometry.ratio(customRatio) == nil)
+                        Divider()
+                        Text("Custom…").tag("Custom")
+                    }.frame(width: 150)
+                        .popover(isPresented: $showsCustomRatio) {
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("Custom ratio").font(.headline)
+                                TextField("Width:Height", text: $customRatio)
+                                    .textFieldStyle(.roundedBorder)
+                                    .onSubmit { applyCustomRatio() }
+                                Text("Width:height, such as 9:20 or 2.5:1")
+                                    .font(.caption).foregroundStyle(.secondary)
+                                if CropGeometry.ratio(customRatio) == nil {
+                                    Text("Enter a positive ratio within the document size limits.")
+                                        .font(.caption).foregroundStyle(.orange)
+                                }
+                                HStack {
+                                    Button("Cancel") { showsCustomRatio = false }
+                                    Spacer()
+                                    Button("Apply") { applyCustomRatio() }
+                                        .disabled(CropGeometry.ratio(customRatio) == nil)
+                                }
+                            }.padding(16).frame(width: 280)
                         }
-                    }.padding(16).frame(width: 280)
+                    if let rect = session.cropRect {
+                        Text("\(Int(rect.width)) × \(Int(rect.height)) px").monospacedDigit()
+                    }
                 }
-            if let rect = session.cropRect {
-                Text("\(Int(rect.width)) × \(Int(rect.height)) px").monospacedDigit()
             }
-            Spacer()
-            Button("Cancel") { session.cancelCrop() }.disabled(session.cropRect == nil)
+            Button("Cancel") { session.cancelCrop() }.disabled(session.cropRect == nil).fixedSize()
             Button("Apply Crop") { Task { await session.commitCrop() } }
                 .disabled(session.cropRect == nil)
-        }.padding(.horizontal, 18).toolHeaderBar().disabled(session.showsBusy || session.document == nil)
+                .fixedSize()
+        }.padding(.horizontal, 10).toolHeaderBar().disabled(session.showsBusy || session.document == nil)
     }
 
     private var ratioSelection: Binding<String> {

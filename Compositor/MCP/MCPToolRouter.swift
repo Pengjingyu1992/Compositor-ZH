@@ -6,6 +6,11 @@ import Foundation
 
 /// Common admission validation; document and permission checks belong to the host.
 @MainActor enum MCPToolRouter {
+    static func callLive(_ name: String, arguments: [String: Any], host: any MCPDocumentHost) async throws -> [String: Any] {
+        try MCPLiveCatalog.validate(name, arguments: arguments)
+        return try await host.executeMCPTool(name, arguments: arguments)
+    }
+
     static func call(_ name: String, arguments: [String: Any], host: any MCPDocumentHost) async throws -> [String: Any] {
         try validateCall(name, arguments: arguments)
         return try await host.executeMCPTool(name, arguments: arguments)

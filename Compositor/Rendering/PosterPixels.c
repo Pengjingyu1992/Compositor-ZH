@@ -1,4 +1,5 @@
 #include "PosterPixels.h"
+#include "FilterCancellation.h"
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -50,6 +51,7 @@ int poster_halftone_screen(uint8_t *pixels, const uint8_t *source, int width, in
             min_u = fmin(min_u, u); max_u = fmax(max_u, u); min_v = fmin(min_v, v); max_v = fmax(max_v, v);
         }
         for (int j = (int)floor(min_v) - 1; j <= (int)ceil(max_v) + 1; j++) {
+            if (filter_cancellation_requested()) { free(coverage); return 0; }
             for (int i = (int)floor(min_u) - 1; i <= (int)ceil(max_u) + 1; i++) {
                 double cx = ((i + .5) * cs - (j + .5) * sn) * cell;
                 double cy = ((i + .5) * sn + (j + .5) * cs) * cell;

@@ -8,8 +8,11 @@ import CryptoKit
         do {
             let arguments = Array(CommandLine.arguments.dropFirst())
             if arguments.first == "mcp" {
+                if arguments.count == 4, arguments[1] == "--live", arguments[2] == "--config" {
+                    try MCPLiveCLI.run(configURL: URL(fileURLWithPath: arguments[3])); return
+                }
                 if arguments == ["mcp", "--live"] {
-                    throw CLIError.message("Live MCP is not available in this build. Use standalone MCP until the authorized live Host is ready.")
+                    throw CLIError.message("Create a client in Compositor Settings > Connections and use its generated --live --config command. No standalone fallback was used.")
                 }
                 guard arguments == ["mcp"] || arguments == ["mcp", "--standalone"] else {
                     throw CLIError.message("Usage: compositor-cli mcp [--standalone]")

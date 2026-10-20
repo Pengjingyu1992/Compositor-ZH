@@ -4,10 +4,13 @@ import AppKit
 /// and returns the result.
 nonisolated enum ImageAdjustmentPixels {
     static func run(_ image: CGImage, _ body: (UnsafeMutablePointer<UInt8>, Int, Int, Int) -> Void) throws -> CGImage {
+        try Task.checkCancellation()
         let context = try BrushRaster.context(width: image.width, height: image.height, mask: false)
         BrushRaster.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height), mask: false, context: context)
         guard let data = context.data else { throw ExportError.render }
+        try Task.checkCancellation()
         body(data.assumingMemoryBound(to: UInt8.self), image.width, image.height, context.bytesPerRow)
+        try Task.checkCancellation()
         guard let result = context.makeImage() else { throw ExportError.render }
         return result
     }

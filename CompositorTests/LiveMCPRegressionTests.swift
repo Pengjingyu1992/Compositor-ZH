@@ -1,6 +1,7 @@
 import AppKit
 #if !LIVE_MCP_CLT_CHECKS
 import Testing
+@testable import Compositor
 #endif
 
 @MainActor enum LiveMCPRegressionChecks {

@@ -34,7 +34,7 @@ Both editions support painting and image editing with layers, with different UI,
 
 ## 下载与使用 / Download and use
 
-**[macOS 1.4.8（40.37）](https://github.com/Pengjingyu1992/Compositor-ZH/releases/tag/v1.4.8-zh.6)** 更新紧凑工作区、亮色／暗色／系统外观、实时文档 MCP、滤镜预览取消与缩小图缓存，并完善顶部按钮间距、对齐及分割线；保留分层 16 位 PSD 转换、动画 GIF、EPS 和毛玻璃新建画布。见 [外观与实时 MCP](docs/macos-live-mcp.md) 和 [EPS/GIF 说明](docs/eps-gif.md)。普通 EPS 导入需单独安装 Ghostscript。 / **[macOS 1.4.8 (40.37)](https://github.com/Pengjingyu1992/Compositor-ZH/releases/tag/v1.4.8-zh.6)** updates the compact workspace, system/light/dark appearance, live-document MCP, filter-preview cancellation and downsample caching, with refined toolbar spacing, alignment and separators. Layered 16-bit PSD conversion, animated GIF, EPS and glass-style New Canvas remain available. See the [live MCP guide](docs/macos-live-mcp.md) and [format guide](docs/eps-gif.md); general EPS import requires separate Ghostscript.
+**[macOS 1.4.8（40.37）](https://github.com/Pengjingyu1992/Compositor-ZH/releases/tag/v1.4.8-zh.7)** 更新紧凑工作区、亮色／暗色／系统外观、实时文档 MCP、滤镜预览取消与缩小图缓存，并完善顶部按钮间距、对齐及分割线；保留分层 16 位 PSD 转换、动画 GIF、EPS 和毛玻璃新建画布。见 [外观与实时 MCP](docs/macos-live-mcp.md) 和 [EPS/GIF 说明](docs/eps-gif.md)。普通 EPS 导入需单独安装 Ghostscript。 / **[macOS 1.4.8 (40.37)](https://github.com/Pengjingyu1992/Compositor-ZH/releases/tag/v1.4.8-zh.7)** updates the compact workspace, system/light/dark appearance, live-document MCP, filter-preview cancellation and downsample caching, with refined toolbar spacing, alignment and separators. Layered 16-bit PSD conversion, animated GIF, EPS and glass-style New Canvas remain available. See the [live MCP guide](docs/macos-live-mcp.md) and [format guide](docs/eps-gif.md); general EPS import requires separate Ghostscript.
 
 ### Windows 10 / 11
 

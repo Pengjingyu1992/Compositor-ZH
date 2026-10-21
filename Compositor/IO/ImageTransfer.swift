@@ -58,6 +58,22 @@ struct ImageTransferPayload {
     }
 }
 
+enum ImageTransferDrag {
+    static func begin(_ payload: ImageTransferPayload, from view: NSView, event: NSEvent, source: any NSDraggingSource) throws {
+        let file = try payload.write()
+        let item = NSPasteboardItem()
+        item.setString(file.absoluteString, forType: .fileURL)
+        item.setData(payload.png, forType: .png)
+        var placement = payload.placement
+        placement.name = String(payload.name.prefix(255))
+        item.setData(try JSONEncoder().encode(placement), forType: NSPasteboard.PasteboardType(ImageTransferPlacement.typeIdentifier))
+        let dragging = NSDraggingItem(pasteboardWriter: item)
+        let point = view.convert(event.locationInWindow, from: nil)
+        dragging.setDraggingFrame(NSRect(origin: point, size: NSSize(width: 64, height: 64)), contents: NSImage(data: payload.png))
+        view.beginDraggingSession(with: [dragging], event: event, source: source)
+    }
+}
+
 extension EditorSession {
     var canDragImage: Bool { canEditLayers && activeLayer != nil && !isMaskSelected && transformEdit == nil }
 
@@ -160,17 +176,7 @@ final class ImageDragButton: NSButton, NSDraggingSource {
     override func mouseDown(with event: NSEvent) {
         guard session.canDragImage else { return }
         do {
-            let payload = try session.imageTransfer(), file = try payload.write()
-            let item = NSPasteboardItem()
-            item.setString(file.absoluteString, forType: .fileURL)
-            item.setData(payload.png, forType: .png)
-            var placement = payload.placement
-            placement.name = String(payload.name.prefix(255))
-            item.setData(try JSONEncoder().encode(placement), forType: NSPasteboard.PasteboardType(ImageTransferPlacement.typeIdentifier))
-            let dragging = NSDraggingItem(pasteboardWriter: item)
-            let point = convert(event.locationInWindow, from: nil)
-            dragging.setDraggingFrame(NSRect(origin: point, size: NSSize(width: 64, height: 64)), contents: NSImage(data: payload.png))
-            beginDraggingSession(with: [dragging], event: event, source: self)
+            try ImageTransferDrag.begin(session.imageTransfer(), from: self, event: event, source: self)
         } catch { session.importError = error.localizedDescription }
     }
     func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation { .copy }

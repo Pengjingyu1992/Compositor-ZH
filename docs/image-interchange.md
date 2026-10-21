@@ -1,8 +1,17 @@
 # PNG image interchange on macOS
 
-Compositor and Kaleiform offer a dedicated copy-drag handle. In Compositor it is beside the
-Layers count; in Kaleiform it is in Properties when artwork is selected. Drop on the other app's
-canvas to insert a new layer or embedded image. The source remains intact and import is undoable.
+Drag selected artwork directly from the canvas past the source window's outer edge to start a
+native copy-drag. The in-window move preview is cancelled first, leaving the source at its original
+position without adding an undo step. Moving inside a window still edits normally, and Kaleiform's
+existing art drops onto panels remain available. Escape or a rejected drop leaves the source intact.
+Drop on the other app's canvas to insert one new layer or embedded image, undoable in one step.
+Compositor activates its receiving window and focuses the canvas after a successful drop so Delete
+can remove the newly selected layer immediately; Undo restores the original PNG data.
+
+Dedicated handles remain available: beside the Layers count in Compositor, and in Properties in
+Kaleiform. Compositor's automatic transition applies to nonpersistent layer moves without a pixel
+selection or a selected mask; resize/rotate, explicit transform sessions and pixel-selection tools
+keep their existing editing behavior.
 
 ## Payload version 1
 

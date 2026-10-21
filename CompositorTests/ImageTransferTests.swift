@@ -139,6 +139,80 @@ import Testing
         let oldAsset = ImportedImage(image: fromData.activeLayer!.asset!.image, thumbnail: fromData.activeLayer!.asset!.thumbnail, name: "Old")
         let old = EditorSession(); old.insert(oldAsset)
         check("ordinary legacy snapshots retain minimum format", old.projectSnapshot()?.manifest.version == 13)
+        let moving = EditorSession()
+        moving.createDocument(width: 400, height: 300)
+        moving.insert(try await ImageImporter.shared.decode(output.appendingPathComponent("source-8.png")))
+        moving.document!.layers[0].transform = LayerTransform(origin: CGPoint(x: 100, y: 100), size: CGSize(width: 120, height: 80))
+        moving.selectTool(.move)
+        let canvas = CanvasView(session: moving)
+        let window = NSWindow(contentRect: CGRect(x: 100, y: 100, width: 500, height: 400), styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = canvas
+        defer { window.contentView = nil }
+        moving.viewport.resize(to: canvas.bounds.size, backingScale: 1, documentSize: moving.document!.size)
+        canvas.synchronizeDisplay()
+        let before = moving.activeLayer!.transform
+        let undoCount = moving.history.undoCount
+        var transferred: [ImageTransferPayload] = []
+        canvas.imageDragStarter = { payload, _ in transferred.append(payload) }
+        var flags: NSEvent.ModifierFlags = .control
+        func event(_ type: NSEvent.EventType, _ point: CGPoint) -> NSEvent {
+            NSEvent.mouseEvent(with: type, location: point, modifierFlags: flags, timestamp: 0,
+                windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+        }
+        let startView = moving.viewport.viewPoint(from: before.center, documentSize: moving.document!.size)
+        let start = CGPoint(x: startView.x, y: canvas.bounds.height - startView.y)
+        for attempt in 1...3 {
+            flags = attempt == 3 ? [.control, .option] : .control
+            canvas.mouseDown(with: event(.leftMouseDown, start))
+            canvas.mouseDragged(with: event(.leftMouseDragged, CGPoint(x: start.x + 40, y: start.y)))
+            check("canvas move previews before crossing \(attempt)", moving.transformEdit != nil && transferred.count == attempt - 1)
+            canvas.mouseDragged(with: event(.leftMouseDragged, CGPoint(x: canvas.bounds.width + 100, y: start.y)))
+            canvas.mouseDragged(with: event(.leftMouseDragged, CGPoint(x: canvas.bounds.width + 200, y: start.y)))
+            check("one native session per crossing \(attempt)", transferred.count == attempt)
+            check("crossing restores source transform \(attempt)", moving.activeLayer?.transform == before && moving.transformEdit == nil)
+            check("crossing keeps exact PNG \(attempt)", transferred.last?.png == moving.activeLayer?.asset?.originalPNG)
+            check("crossing adds no source undo \(attempt)", moving.history.undoCount == undoCount)
+            check("crossing leaves one original layer \(attempt)", moving.document?.layers.count == 1)
+            canvas.mouseUp(with: event(.leftMouseUp, start))
+        }
+        flags = .control
+        canvas.mouseDown(with: event(.leftMouseDown, start))
+        canvas.mouseDragged(with: event(.leftMouseDragged, CGPoint(x: start.x + 40, y: start.y)))
+        canvas.mouseUp(with: event(.leftMouseUp, CGPoint(x: start.x + 40, y: start.y)))
+        check("ordinary in-window move still commits", moving.activeLayer?.transform != before && transferred.count == 3)
+        moving.undo()
+        check("ordinary move still undoes once", moving.activeLayer?.transform == before)
+        let workspace = ProjectWorkspace()
+        let received = workspace.current.session
+        received.createNewProject(width: 800, height: 600)
+        let dropCanvas = CanvasView(session: received)
+        let dropWindow = NSWindow(contentRect: CGRect(x: 100, y: 100, width: 500, height: 400), styleMask: [.titled], backing: .buffered, defer: false)
+        dropWindow.isReleasedWhenClosed = false
+        dropWindow.contentView = dropCanvas
+        workspace.window = dropWindow
+        defer { dropWindow.orderOut(nil); dropWindow.contentView = nil }
+        let field = NSTextField(frame: CGRect(x: 10, y: 10, width: 100, height: 24))
+        dropCanvas.addSubview(field)
+        dropWindow.makeFirstResponder(field)
+        let focusBefore = received.canvasFocusRequest
+        let layersBefore = received.document!.layers.count
+        await workspace.receiveProviders([placedProvider], into: workspace.current.id)
+        check("completed drop requests keyboard focus", received.canvasFocusRequest > focusBefore)
+        dropCanvas.consumeFocusRequest(received.canvasFocusRequest)
+        await withCheckedContinuation { continuation in DispatchQueue.main.async { continuation.resume() } }
+        if NSApp.isActive { check("completed drop activates receiving window", dropWindow.isKeyWindow) }
+        else { print("SKIP: receiving-window activation requires an active GUI test host; standalone CLI activation is denied") }
+        check("drop puts keyboard focus on canvas", dropWindow.firstResponder === dropCanvas)
+        let importedID = received.activeLayerID!
+        let importedBytes = received.activeLayer!.asset!.originalPNG
+        let deletion = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+            windowNumber: dropWindow.windowNumber, context: nil, characters: "\u{7f}", charactersIgnoringModifiers: "\u{7f}", isARepeat: false, keyCode: 51)!
+        dropWindow.sendEvent(deletion)
+        check("Delete immediately removes received layer", received.document!.layers.count == layersBefore && !received.document!.layers.contains { $0.id == importedID })
+        received.undo()
+        check("undo deletion restores imported PNG bytes", received.activeLayer?.id == importedID && received.activeLayer?.asset?.originalPNG == importedBytes)
+        received.redo()
+        check("redo deletion removes received layer again", received.document!.layers.count == layersBefore)
         return r
     }
 }

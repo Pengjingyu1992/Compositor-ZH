@@ -21,7 +21,7 @@ struct EditorCanvas: NSViewRepresentable {
     }
 }
 
-final class CanvasView: NSView {
+final class CanvasView: NSView, NSDraggingSource {
     var inlineTextEditor: InlineTextEditor?
     /// The text being typed, rendered as the layer will hold it, remade only when its style changes.
     private var draftTextCache: (style: LayerTextStyle, image: CGImage)?
@@ -116,6 +116,9 @@ final class CanvasView: NSView {
     /// Document point where a Cmd-drag of the selected pixels began.
     private var pixelDragStart: CGPoint?
     private var duplicatesTransformOnDrag = false
+    private var imageDragActive = false
+    /// The native starter can be replaced by a harness while exercising real canvas mouse events.
+    var imageDragStarter: ((ImageTransferPayload, NSEvent) throws -> Void)?
     /// Snapping for the crop drag in progress, built when it starts (the zoom can't change mid-drag).
     private var cropSnap: CropSnap?
     /// How close, in screen points, a crop edge comes to a layer or canvas edge before it snaps.
@@ -1917,7 +1920,28 @@ final class CanvasView: NSView {
     }
     override func mouseDragged(with event: NSEvent) {
         guard session.document != nil else { return }
+        if imageDragActive { return }
         let point = convert(event.locationInWindow, from: nil)
+        if let drag = transformDrag, case .move = drag.mode,
+           session.transformEdit?.persistent == false, !session.isMaskSelected, session.selection == nil,
+           let window, !window.frame.contains(window.convertPoint(toScreen: event.locationInWindow)) {
+            // A move is only a preview. Restore it before exporting, without recording an edit.
+            session.cancelTransform()
+            transformDrag = nil
+            duplicatesTransformOnDrag = false
+            lastDragPoint = nil
+            synchronizeDisplay()
+            imageDragActive = true
+            do {
+                let payload = try session.imageTransfer()
+                if let imageDragStarter { try imageDragStarter(payload, event) }
+                else { try ImageTransferDrag.begin(payload, from: self, event: event, source: self) }
+            } catch {
+                imageDragActive = false
+                session.importError = error.localizedDescription
+            }
+            return
+        }
         if session.pathEditing?.dragPart != nil, !spaceHeld, let document = session.document {
             session.dragPath(to: session.viewport.documentPoint(from: point, documentSize: document.size), option: event.modifierFlags.contains(.option))
             synchronizeDisplay(); return
@@ -2102,6 +2126,7 @@ final class CanvasView: NSView {
         window?.invalidateCursorRects(for: self)
     }
     override func mouseUp(with event: NSEvent) {
+        if imageDragActive { finishImageDrag(); return }
         if session.pathEditing?.dragPart != nil { session.pathEditing?.dragPart = nil; synchronizeDisplay(); return }
         if session.filterEdit?.cameraRawGuideDraft != nil {
             session.commitCameraRawGeometryGuide()
@@ -2187,6 +2212,15 @@ final class CanvasView: NSView {
             if !visibleRect.contains(convert(event.locationInWindow, from: nil)) { NSCursor.arrow.set() }
             window?.invalidateCursorRects(for: self)
         }
+    }
+    func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation { .copy }
+    func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) { finishImageDrag() }
+    private func finishImageDrag() {
+        imageDragActive = false
+        lastDragPoint = nil
+        releaseDragCursor()
+        NSCursor.arrow.set()
+        window?.invalidateCursorRects(for: self)
     }
     override func scrollWheel(with event: NSEvent) {
         guard transformDrag == nil, cropDrag == nil, !guideDragging, session.brushStroke == nil, session.warpStroke == nil else { return }

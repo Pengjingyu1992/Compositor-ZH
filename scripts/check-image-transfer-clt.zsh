@@ -16,13 +16,20 @@ done
 cat > "$WORK_ROOT/Run.swift" <<'SWIFT'
 import AppKit
 @main struct RunImageTransferChecks {
-    @MainActor static func main() async throws {
+    @MainActor static func main() {
         _ = NSApplication.shared
-        let output = URL(fileURLWithPath: CommandLine.arguments.dropFirst().first ?? "/private/tmp/image-transfer-checks")
-        let result = try await ImageTransferChecks.run(output: output)
-        print("Image transfer: \(result.checks) checks, \(result.failures.count) failures")
-        for f in result.failures { print("FAIL: \(f)") }
-        if !result.failures.isEmpty { exit(1) }
+        // Window activation needs AppKit's real application event loop.
+        _ = NSApp.setActivationPolicy(.regular)
+        Task { @MainActor in
+            do {
+                let output = URL(fileURLWithPath: CommandLine.arguments.dropFirst().first ?? "/private/tmp/image-transfer-checks")
+                let result = try await ImageTransferChecks.run(output: output)
+                print("Image transfer: \(result.checks) checks, \(result.failures.count) failures")
+                for f in result.failures { print("FAIL: \(f)") }
+                exit(result.failures.isEmpty ? 0 : 1)
+            } catch { print("Image transfer: \(error)"); exit(1) }
+        }
+        NSApp.run()
     }
 }
 SWIFT

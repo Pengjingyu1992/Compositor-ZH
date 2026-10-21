@@ -233,6 +233,19 @@ final class ProjectWorkspace {
         }
     }
     func receiveProviders(_ providers: [NSItemProvider], into destination: UUID? = nil, at point: CGPoint? = nil) async {
+        let revisions = Dictionary(uniqueKeysWithValues: tabs.map { ($0.id, $0.session.history.currentRevision) })
+        defer {
+            // A background window can accept a drop without becoming the keyboard target.
+            // Focus only after a successful import, so Delete acts on the newly selected layer.
+            let session = current.session
+            if session.activeLayer != nil, revisions[selectedID] != session.history.currentRevision {
+                if let window {
+                    window.makeKeyAndOrderFront(nil)
+                    NSApp.activate(ignoringOtherApps: true)
+                }
+                session.canvasFocusRequest += 1
+            }
+        }
         for provider in providers {
             if provider.hasItemConformingToTypeIdentifier(Self.layerType) {
                 let data: Data? = await withCheckedContinuation { continuation in

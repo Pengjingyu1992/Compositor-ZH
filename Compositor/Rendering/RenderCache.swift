@@ -3,7 +3,7 @@ import Foundation
 
 /// Allocation identities, without asking a lazy image provider to materialize its pixels.
 nonisolated struct RenderResource: Sendable {
-    enum ID: Hashable, Sendable { case object(ObjectIdentifier), field(UUID) }
+    enum ID: Hashable, Sendable { case object(ObjectIdentifier), png(ObjectIdentifier), field(UUID) }
     let id: ID
     let bytes: Int
     static func image(_ image: CGImage) -> Self {
@@ -11,6 +11,7 @@ nonisolated struct RenderResource: Sendable {
     }
     static func asset(_ asset: ImportedImage) -> [Self] {
         (asset.raster?.resources ?? [image(asset.image)]) + [image(asset.thumbnail)]
+            + (asset.originalPNG.map { [Self(id: .png(ObjectIdentifier(asset.image)), bytes: $0.count)] } ?? [])
     }
 }
 

@@ -1,0 +1,44 @@
+#!/bin/zsh
+set -euo pipefail
+setopt null_glob
+PROJECT_ROOT=${0:A:h:h}
+SDK_PATH=${COMPOSITOR_SDK_PATH:-$(xcrun --sdk macosx --show-sdk-path)}
+if [[ -z ${COMPOSITOR_SDK_PATH:-} && -d "${SDK_PATH:h}/MacOSX26.sdk" ]]; then
+    SDK_PATH="${SDK_PATH:h}/MacOSX26.sdk"
+fi
+WORK_ROOT=$(mktemp -d /private/tmp/compositor-image-transfer.XXXXXX)
+trap 'rm -rf "$WORK_ROOT"' EXIT
+mkdir -p "$WORK_ROOT/obj"
+for file in "$PROJECT_ROOT"/Compositor/**/*.c; do
+    xcrun clang -O2 -std=c11 -target arm64-apple-macosx26.0 -isysroot "$SDK_PATH" \
+        "-ffile-prefix-map=$PROJECT_ROOT=." -c "$file" -o "$WORK_ROOT/obj/${file:t:r}.o"
+done
+cat > "$WORK_ROOT/Run.swift" <<'SWIFT'
+import AppKit
+@main struct RunImageTransferChecks {
+    @MainActor static func main() async throws {
+        _ = NSApplication.shared
+        let output = URL(fileURLWithPath: CommandLine.arguments.dropFirst().first ?? "/private/tmp/image-transfer-checks")
+        let result = try await ImageTransferChecks.run(output: output)
+        print("Image transfer: \(result.checks) checks, \(result.failures.count) failures")
+        for f in result.failures { print("FAIL: \(f)") }
+        if !result.failures.isEmpty { exit(1) }
+    }
+}
+SWIFT
+sources=("$PROJECT_ROOT"/Compositor/**/*.swift)
+sources=("${(@)sources:#*/CompositorApp.swift}")
+xcrun swiftc -sdk "$SDK_PATH" -target arm64-apple-macosx26.0 -swift-version 5 -default-isolation MainActor \
+    -enable-upcoming-feature DisableOutwardActorInference \
+    -enable-upcoming-feature GlobalActorIsolatedTypesUsability \
+    -enable-upcoming-feature InferIsolatedConformances \
+    -enable-upcoming-feature InferSendableFromCaptures \
+    -enable-upcoming-feature NonisolatedNonsendingByDefault \
+    -D IMAGE_TRANSFER_CLT_CHECKS -parse-as-library -Onone -whole-module-optimization -num-threads 8 \
+    -gnone -file-prefix-map "$PROJECT_ROOT=." \
+    -import-objc-header "$PROJECT_ROOT/Compositor/Compositor-Bridging-Header.h" \
+    "${sources[@]}" "$PROJECT_ROOT/CompositorTests/ImageTransferTests.swift" "$WORK_ROOT/Run.swift" \
+    "$WORK_ROOT"/obj/*.o -o "$WORK_ROOT/image-transfer-checks"
+mkdir -p "$PROJECT_ROOT/build"
+cp "$WORK_ROOT/image-transfer-checks" "$PROJECT_ROOT/build/image-transfer-checks"
+"$WORK_ROOT/image-transfer-checks" "$@"

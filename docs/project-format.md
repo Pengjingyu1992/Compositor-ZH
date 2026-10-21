@@ -89,6 +89,17 @@ Pixel layer records may include optional `text` metadata: content, PostScript fo
 
 An optional `effects` record contains independent `stroke`, `shadow`, `colorOverlay`, `innerShadow`, `outerGlow` and `innerGlow` records, plus the v12 overlays and bevel described above. Stroke carries a size (0–500 layer pixels), a color, an opacity and an `inside` flag choosing which side of the edge it sits on; drop shadow and inner shadow each carry an angle, a distance, a blur, a color and an opacity; color overlay carries a color and an opacity; outer glow and inner glow each carry a size (0–500 layer pixels), a color and an opacity. Each supports optional `enabled` visibility (missing means visible); hidden effects keep all parameters and remain listed under their layer. Effects, including their visibility, are saved and participate in document undo. Canvas Size, Crop, Trim, color adjustments and selection transforms preserve them. Image Size scales their pixel sizes, distances and blurs with the image, using the geometric mean of the horizontal and vertical factors for nonuniform resizing and clamping to supported ranges. Canvas previews run on a serial background worker with a shared pixel budget; exports render the full-resolution effects. A record omitting an effect means that layer does not have it, so older readers see the effects they understand and ignore the rest.
 
+## Version 17: original PNG resources
+
+Version 17 allows image resources in `images/<layer-id>.png` to retain their original PNG bytes,
+including 16-bit samples, color profiles, transparency and resolution metadata. Editing still uses
+8-bit sRGB proxies. A reader must apply PNG orientation and color management when constructing its
+editing proxy. Masks and filter-stack sources retain their existing 8-bit representation. Pixel
+edits replace the immutable asset and discard its original PNG; placement changes keep it. Save
+and recovery write the original resource while it is available. Older versions remain readable;
+snapshots without original PNG resources keep their previous minimum version. Older builds reject
+version 17 instead of misreading high-bit-depth resources. This does not add 16-bit editing.
+
 ## Version 16: frame animation
 
 Optional top-level `animation` makes root layer folders into animation frames:

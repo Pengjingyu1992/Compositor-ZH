@@ -14,7 +14,8 @@ extension EditorSession {
             return ProjectLayerRecord(id: layer.id, name: layer.name, isVisible: layer.isVisible,
                 transform: layer.transform, imageFile: layer.asset == nil ? nil : "\(layer.id.uuidString).png", parentID: layer.parentID, isGroup: layer.isGroup, opacity: layer.opacity, blendMode: layer.blendMode, maskFile: layer.mask == nil ? nil : "\(layer.id.uuidString).mask.png", maskEnabled: layer.mask?.isEnabled, maskSourceID: layer.maskSourceID, adjustment: layer.adjustment, maskPlacement: layer.mask?.placement, maskLinked: layer.mask?.isLinked, shape: layer.liveShape?.style, effects: layer.effects, text: layer.liveText?.style, fill: layer.liveFill?.style, vectorMask: layer.mask?.vector, editableFilters: layer.filterStack.map { LayerFilterStackRecord(layerID: layer.id, stack: $0) })
         }
-        let version = document.animation == nil ? (stacks.values.map(\.minimumProjectVersion).max() ?? 13) : 16
+        let version = images.values.contains(where: { $0.originalPNG != nil }) ? 17
+            : document.animation == nil ? (stacks.values.map(\.minimumProjectVersion).max() ?? 13) : 16
         return ProjectSnapshot(manifest: ProjectManifest(version: version, resolution: document.resolution, documentID: document.id, width: document.width,
             height: document.height, activeLayerID: activeLayerID, layers: layers,
             guides: document.guides.isEmpty ? nil : document.guides, animation: document.animation), images: images, masks: masks, filterStacks: stacks, displayedAnimationFrameID: document.currentAnimationFrameID)

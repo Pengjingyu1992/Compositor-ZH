@@ -11,6 +11,9 @@ nonisolated struct ImportedImage: @unchecked Sendable {
     let name: String
     var raster: RasterSnapshot? = nil
     var sourceResolution: Double? = nil
+    /// Kept with the immutable pixels; pixel edits create a new asset without this source.
+    var originalPNG: Data? = nil
+    var transferPlacement: ImageTransferPlacement? = nil
 }
 
 nonisolated enum ImageImportError: LocalizedError {
@@ -73,13 +76,29 @@ actor ImageImporter {
             let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
             guard let size = attributes[.size] as? NSNumber, size.int64Value <= 64 * 1024 * 1024 else { throw ImageImportError.gifTooLarge }
         }
-        return try decode(source, name: url.deletingPathExtension().lastPathComponent, remainingPixels: remainingPixels, flattenedPhotoshop: flattenedPhotoshop)
+        var original: Data?
+        if CGImageSourceGetType(source) as String? == UTType.png.identifier,
+           CGImageSourceGetCount(source) == 1 {
+            let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+            guard size > 0, size <= 512 * 1024 * 1024 else { throw ImageImportError.tooLarge }
+            original = try Data(contentsOf: url)
+        }
+        // Decode the same bytes retained for transfer, even if the external file changes later.
+        let stableSource = original.flatMap { CGImageSourceCreateWithData($0 as CFData, [kCGImageSourceShouldCache: false] as CFDictionary) } ?? source
+        var asset = try decode(stableSource, name: url.deletingPathExtension().lastPathComponent, remainingPixels: remainingPixels, flattenedPhotoshop: flattenedPhotoshop)
+        asset.originalPNG = original
+        asset.transferPlacement = ImageTransferPlacement.read(beside: url)
+        return asset
     }
 
     func decode(_ data: Data, name: String, remainingPixels: Int) throws -> ImportedImage {
         guard !data.isEmpty, data.count <= 16 * 1024 * 1024,
               let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary) else { throw ImageImportError.unreadable }
-        return try decode(source, name: name, remainingPixels: remainingPixels, flattenedPhotoshop: false)
+        var asset = try decode(source, name: name, remainingPixels: remainingPixels, flattenedPhotoshop: false)
+        if CGImageSourceGetType(source) as String? == UTType.png.identifier, CGImageSourceGetCount(source) == 1 {
+            asset.originalPNG = data
+        }
+        return asset
     }
 
     private func decode(_ source: CGImageSource, name: String, remainingPixels: Int, flattenedPhotoshop: Bool) throws -> ImportedImage {
@@ -113,7 +132,8 @@ actor ImageImporter {
             guard let thumbnail = context.createCGImage(preview, from: preview.extent.integral, format: .RGBA8, colorSpace: sRGB) else {
                 throw ImageImportError.unreadable
             }
-            return ImportedImage(image: image, thumbnail: thumbnail, name: name)
+            return ImportedImage(image: image, thumbnail: thumbnail, name: name,
+                sourceResolution: (properties[kCGImagePropertyDPIWidth] as? Double).flatMap { $0.isFinite && (1...9600).contains($0) ? $0 : nil })
         }
     }
 

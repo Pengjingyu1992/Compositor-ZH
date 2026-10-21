@@ -1062,6 +1062,10 @@ final class EditorSession {
         var layer = ImageLayer(asset: asset, origin: CGPoint(
             x: floor(center.x - CGFloat(asset.image.width) / 2),
             y: floor(center.y - CGFloat(asset.image.height) / 2)))
+        if let placement = asset.transferPlacement, placement.isValid {
+            layer.transform = placement.transform(center: center)
+            if let name = placement.name, !name.isEmpty { layer.name = String(name.prefix(255)) }
+        }
         layer.parentID = activeLayer?.isGroup == true ? activeLayerID : activeLayer?.parentID
         if let parent = layer.parentID { collapsedGroupIDs.remove(parent) }
         self.document?.layers.append(layer)

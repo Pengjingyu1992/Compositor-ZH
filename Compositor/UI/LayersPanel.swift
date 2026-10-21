@@ -30,6 +30,7 @@ struct LayersPanel: View {
                 Text(L10n.text(session.isMaskSelected ? "Mask" : session.selectedEffect != nil ? "Layer effects" : "Layers"))
                     .font(.system(size: 12, weight: .semibold))
                 Spacer()
+                ImageDragHandle(session: session).frame(width: 24, height: 24)
                 Text("\(session.document?.layers.count ?? 0)").font(.caption.monospacedDigit()).foregroundStyle(.tertiary)
                     .accessibilityIdentifier("layerCount")
             }.padding(.horizontal, 12).frame(height: 32)

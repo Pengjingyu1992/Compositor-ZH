@@ -18,6 +18,10 @@ actor ImageExporter {
     static let shared = ImageExporter()
 
     func render(_ input: ProjectSnapshot, longSide: Int? = nil) throws -> ExportRaster {
+        try Self.renderTransfer(input, longSide: longSide)
+    }
+
+    nonisolated static func renderTransfer(_ input: ProjectSnapshot, longSide: Int? = nil) throws -> ExportRaster {
         try Task.checkCancellation()
         let snapshot = input.presentingAnimationFrame(input.displayedAnimationFrameID)
         let width = snapshot.manifest.width, height = snapshot.manifest.height
@@ -112,8 +116,10 @@ actor ImageExporter {
         try pngData(render(snapshot))
     }
 
-    func pngData(_ raster: ExportRaster) throws -> Data {
-        try encode(raster.image, type: .png, properties: [
+    func pngData(_ raster: ExportRaster) throws -> Data { try Self.transferPNG(raster) }
+
+    nonisolated static func transferPNG(_ raster: ExportRaster) throws -> Data {
+        try encodeTransfer(raster.image, type: .png, properties: [
             kCGImagePropertyDPIWidth: raster.resolution, kCGImagePropertyDPIHeight: raster.resolution
         ] as CFDictionary)
     }
@@ -224,6 +230,10 @@ actor ImageExporter {
     }
 
     private func encode(_ image: CGImage, type: UTType, properties: CFDictionary? = nil) throws -> Data {
+        try Self.encodeTransfer(image, type: type, properties: properties)
+    }
+
+    nonisolated private static func encodeTransfer(_ image: CGImage, type: UTType, properties: CFDictionary? = nil) throws -> Data {
         let data = NSMutableData()
         guard let destination = CGImageDestinationCreateWithData(data, type.identifier as CFString, 1, nil) else {
             throw ExportError.encode

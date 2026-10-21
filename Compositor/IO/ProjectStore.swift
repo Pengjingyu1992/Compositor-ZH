@@ -2,6 +2,7 @@ import Foundation
 import CoreGraphics
 import ImageIO
 import UniformTypeIdentifiers
+import CoreImage
 
 extension UTType {
     static let compositorProject = UTType(exportedAs: "com.compositor.project", conformingTo: .package)
@@ -12,8 +13,8 @@ extension UTType {
 }
 
 nonisolated struct ProjectManifest: Codable, Sendable {
-    /// Highest supported format. Ordinary snapshots without animation or editable filters still write version 13.
-    static let current = 16
+    /// Highest supported format. Snapshots without original PNGs, animation or editable filters still write version 13.
+    static let current = 17
     /// Every version `load` accepts. The package-header check, the manifest check and the error
     /// message all read this, so they cannot drift apart when `current` is bumped.
     static let supported = 1...ProjectManifest.current
@@ -36,7 +37,7 @@ nonisolated struct ProjectLayerRecord: Codable, Sendable {
     let id: UUID
     let name: String
     var isVisible: Bool
-    let transform: LayerTransform
+    var transform: LayerTransform
     let imageFile: String?
     var parentID: UUID? = nil
     var isGroup: Bool? = nil
@@ -61,7 +62,7 @@ nonisolated struct ProjectLayerRecord: Codable, Sendable {
 }
 
 nonisolated struct ProjectSnapshot: @unchecked Sendable {
-    let manifest: ProjectManifest
+    var manifest: ProjectManifest
     let images: [UUID: ImportedImage]
     var masks: [UUID: ImportedImage] = [:]
     var filterStacks: [UUID: LayerFilterStack] = [:]
@@ -103,6 +104,7 @@ actor ProjectStore {
                 try checkSize(width: asset.image.width, height: asset.image.height, used: &maskPixels)
             } else { try checkSize(width: asset.image.width, height: asset.image.height, used: &pixels) }
             let data = try autoreleasepool {
+                if !isMask, snapshot.manifest.version >= 17, let original = asset.originalPNG { return original }
                 let data = NSMutableData()
                 guard let destination = CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, 1, nil) else {
                     throw ProjectError.encode
@@ -194,18 +196,26 @@ actor ProjectStore {
                       let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
                       let width = properties[kCGImagePropertyPixelWidth] as? Int,
                       let height = properties[kCGImagePropertyPixelHeight] as? Int,
-                      (properties[kCGImagePropertyDepth] as? Int ?? 8) <= 8 else { throw ProjectError.missingImage }
+                      (properties[kCGImagePropertyDepth] as? Int ?? 8) <= (manifest.version >= 17 && !isMask ? 16 : 8) else { throw ProjectError.missingImage }
                 if isMask { try checkSize(width: width, height: height, used: &maskPixels) }
                 else { try checkSize(width: width, height: height, used: &pixels) }
-                guard let image = CGImageSourceCreateImageAtIndex(source, 0,
+                guard let decoded = CGImageSourceCreateImageAtIndex(source, 0,
                     [kCGImageSourceShouldCacheImmediately: true] as CFDictionary),
                       let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, [
                         kCGImageSourceCreateThumbnailFromImageAlways: true,
                         kCGImageSourceThumbnailMaxPixelSize: 96,
                         kCGImageSourceShouldCacheImmediately: true
                       ] as CFDictionary) else { throw ProjectError.missingImage }
+                var image = decoded
+                if manifest.version >= 17, !isMask {
+                    let oriented = CIImage(cgImage: decoded).oriented(forExifOrientation: (properties[kCGImagePropertyOrientation] as? Int32) ?? 1)
+                    guard let proxy = CIContext(options: [.cacheIntermediates: false]).createCGImage(oriented, from: oriented.extent,
+                        format: .RGBA8, colorSpace: CGColorSpace(name: CGColorSpace.sRGB)!) else { throw ProjectError.missingImage }
+                    image = proxy
+                }
                 if isMask, !LayerMask.isValid(image) { throw ProjectError.invalid }
-                return ImportedImage(image: image, thumbnail: thumbnail, name: layer.name)
+                return ImportedImage(image: image, thumbnail: thumbnail, name: layer.name,
+                    originalPNG: manifest.version >= 17 && !isMask ? bytes : nil)
             }
             if isMask { masks[layer.id] = asset } else { images[layer.id] = asset }
           }
@@ -224,6 +234,9 @@ actor ProjectStore {
             if layer.imageFile != nil {
                 guard let image = snapshot.images[layer.id]?.image else { throw ProjectError.missingImage }
                 try checkSize(width: image.width, height: image.height, used: &used)
+                if let original = snapshot.images[layer.id]?.originalPNG {
+                    guard !original.isEmpty, original.count <= 512 * 1024 * 1024 else { throw ProjectError.tooLarge }
+                }
             }
             if layer.maskFile != nil {
                 guard let image = snapshot.masks[layer.id]?.image, LayerMask.isValid(image) else { throw ProjectError.invalid }

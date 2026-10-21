@@ -1,6 +1,17 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Drag image to another app": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拖出图片到其他应用"
+          }
+        }
+      }
+    },
     "1 more tab": {
       "extractionState": "manual",
       "localizations": {

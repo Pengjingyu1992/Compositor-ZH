@@ -103,8 +103,12 @@ actor RecoveryResources {
             resource.stamp = try RecoveryFileStamp.read(stage.appendingPathComponent(path))
             next[path] = resource; stats.writtenBytes += data.count
         }
-        func writeImage(_ asset: ImportedImage, path: String) throws {
+        func writeImage(_ asset: ImportedImage, path: String, preserveOriginal: Bool = false) throws {
             try Task.checkCancellation()
+            if preserveOriginal, let original = asset.originalPNG {
+                try writeData(original, path: path)
+                return
+            }
             if let old = previous[path], old.image === asset.image { try reuse(path, resource: old); return }
             let data: Data = try autoreleasepool {
                 let bytes = NSMutableData()
@@ -122,7 +126,7 @@ actor RecoveryResources {
         for layer in snapshot.manifest.layers {
             try Task.checkCancellation()
             if let file = layer.imageFile, let asset = snapshot.images[layer.id] {
-                try writeImage(asset, path: "images/" + file)
+                try writeImage(asset, path: "images/" + file, preserveOriginal: snapshot.manifest.version >= 17)
             }
             if let file = layer.maskFile, let asset = snapshot.masks[layer.id] {
                 try writeImage(asset, path: "images/" + file)

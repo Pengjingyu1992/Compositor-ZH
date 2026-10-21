@@ -34,13 +34,15 @@ Completed for this correction:
 - Actual in-window Compositor move/undo was verified. A canvas crossing generated the complete
   original transparent PNG with byte equality and left the source position unchanged. In installed
   40.40, Delete removed a previously received layer and Undo restored it; saving retained both
-  received green PNG resources byte-for-byte. Immediate Delete after a fresh cross-window drop,
-  without an intervening activation click, remains a real-mouse acceptance item.
+  received green PNG resources byte-for-byte. The user then verified a fresh Kaleiform-to-Compositor drop followed immediately by Delete
+  without clicking the receiving window, and confirmed that Command-Z restored the image.
 - Automated cross-window attempts have **not demonstrated a destination insertion**. The user
   subsequently reported insertion into Compositor with a Delete-key problem. Its saved QA document
   contains two imported green PNG resources byte-identical to the Kaleiform source. This confirms
-  retained incoming data, while full real-mouse acceptance of both direct-canvas directions remains
-  pending. No completed bidirectional acceptance is claimed for this correction.
+  retained incoming data. The user confirmed Kaleiform-to-Compositor insertion followed by
+  immediate Delete/Undo, then confirmed a direct Compositor-canvas drag inserts an image into
+  Kaleiform while leaving the Compositor source in place. **Both direct-canvas directions and
+  the receiving Delete/Undo flow passed real-mouse acceptance on the final installed builds.**
 - Changed-source privacy scans found no pattern matches. Compositor's source/bundle scan found
   no matches. Kaleiform binaries contain no literal personal build-home path; broad token-like
   strings and the generic remapped build path are byte-identical to the prior installed app.

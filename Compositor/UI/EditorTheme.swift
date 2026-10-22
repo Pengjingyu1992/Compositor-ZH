@@ -8,10 +8,10 @@ import AppKit
             NSColor(white: appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light, alpha: 1)
         })
     }
-    static let workspaceBackground = adaptive(dark: 0.125, light: 0.95)
-    static let optionsBackground = adaptive(dark: 0.15, light: 0.98)
-    static let navigatorBackground = adaptive(dark: 0.11, light: 0.91)
-    static let previewBackground = adaptive(dark: 0.12, light: 0.91)
+    static let workspaceBackground = Color(nsColor: .underPageBackgroundColor)
+    static let optionsBackground = Color(nsColor: .windowBackgroundColor)
+    static let navigatorBackground = Color(nsColor: .controlBackgroundColor)
+    static let previewBackground = Color(nsColor: .underPageBackgroundColor)
     static let selectedToolFill = Color.accentColor
     static let selectedToolBorder = Color.accentColor
     enum Metrics {

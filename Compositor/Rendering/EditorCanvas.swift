@@ -869,7 +869,14 @@ final class CanvasView: NSView, NSDraggingSource {
 
     /// The gray around the canvas, black in Canvas Only (F).
     private var darkInterface: Bool { effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua }
-    private var surround: CGFloat { session.canvasOnly ? 0 : darkInterface ? 0.105 : 0.90 }
+    private var surroundColor: NSColor {
+        if session.canvasOnly { return .black }
+        var color = NSColor.underPageBackgroundColor
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            color = NSColor.underPageBackgroundColor.usingColorSpace(.sRGB) ?? .underPageBackgroundColor
+        }
+        return color
+    }
     private var checkerBase: CGFloat { darkInterface ? 0.30 : 0.82 }
     private var checkerAlternate: CGFloat { darkInterface ? 0.35 : 0.89 }
     override func viewDidChangeEffectiveAppearance() { super.viewDidChangeEffectiveAppearance(); needsDisplay = true }
@@ -879,7 +886,7 @@ final class CanvasView: NSView, NSDraggingSource {
         if lines.frame != bounds { lines.frame = bounds }
         lines.needsDisplay = true
         if drawOnGPU(dirtyRect) { return }
-        NSColor(white: surround, alpha: 1).setFill()
+        surroundColor.setFill()
         dirtyRect.fill()
         guard let document = session.document,
               let context = NSGraphicsContext.current?.cgContext else { return }
@@ -2743,7 +2750,7 @@ extension CanvasView {
         func gray(_ white: CGFloat, alpha: CGFloat = 1) -> CIImage {
             CIImage(color: CIColor(red: white, green: white, blue: white, alpha: alpha))
         }
-        var frame = gray(surround).cropped(to: full)
+        var frame = CIImage(color: CIColor(cgColor: surroundColor.cgColor)).cropped(to: full)
         guard rect.intersects(full) else { return frame }
         // The document's shadow, then its checkerboard: 10-point squares from its top-left corner.
         let shadow = CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: 0.35)).cropped(to: rect)

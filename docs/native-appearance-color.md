@@ -24,7 +24,8 @@ to the repository. Local validation results are recorded separately when complet
 - CLT application build compiled 40.41. The file-provider copy added signing metadata;
   clean staging in a temporary directory fixed packaging, and the staged/installed app
   passed strict deep signature verification with identical executable hashes.
-- Theme/filter polish: 38 checks passed; editor regression: 78 passed.
+- Final-source theme/filter polish: 38 checks passed; editor regression: 78 passed;
+  shortcut regression: 900 passed.
 - Image interchange: 79 checks passed, no failures; one receiving-window activation
   assertion was skipped because macOS denied activation to the standalone CLI host.
 - In the installed application, Delete removed the imported image (one layer to zero),

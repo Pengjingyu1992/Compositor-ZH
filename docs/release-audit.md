@@ -1,5 +1,17 @@
 # 发布审查 / Release review
 
+## 1.4.8 build 40.40 / 2026-10-22
+
+- 发布标签：`v1.4.8-zh.8`。新增 PNG 原图互传，修复画布越过窗口边界时的复制拖放，以及接收图层后立即 Delete／撤销；本次只更新 macOS 发行包。
+- 完整候选 Git 树 522 个文件（含仓库原有的 73 个 Windows 文件）与已安装应用 12 个文件已扫描：常见凭据、私钥、凭据网址与个人主目录路径均为 0 命中。设备名称候选为公开画布预设；一个邮箱候选是依赖锁文件中的第三方公开联系信息。未发现硬编码凭据或个人文本；仓库 PNG 未发现文本、EXIF 或时间戳附加块。
+- 对本机可达的 2,455 个历史文件对象使用同组凭据／私人路径规则检查，0 命中。本地仓库有浅边界，不声明扫描全部远端历史；既有署名、许可和已获接受的历史邮箱保留，不改写历史。待发布的四个功能／验收提交均使用 GitHub noreply 邮箱。
+- 个人照片、截图、作品、恢复副本、偏好、客户端配置及密钥、运行日志和本机构建／备份目录均不进入发行树。Windows 在本机的删除状态不提交；Windows 源码及既有发行包保留。
+- 既有功能验收见 [PNG 互传验收](image-interchange-validation.md)：最终互传定向检查 80 项，以及较广的 78 项编辑器检查和 900 项快捷键检查通过；最终安装版的两方向真实鼠标拖放与接收 Delete／Undo 已获用户确认。上述是此前验收记录，本轮发布不重跑功能测试或完整 Xcode 套件，也不将隐私／打包校验当作全套测试通过。
+- `.comp` 新增 v17 保存原始 PNG，继续读取 v1–16。原图字节保留不代表增加 16 位或宽色域编辑；效果、多层或像素修改仍受现有 8 位渲染管线约束。旧版不能读取 v17，互换项目须使用副本或导出图像。
+- 发布时核验 ZIP 路径与完整性、源码逐文件匹配标签、版本／架构、严格签名及 SHA-256；上传后的正式附件另行下载复核。应用要求 macOS 26+、Apple Silicon，使用临时签名，未经 Apple Developer ID 公证。中英文下载、安装、格式兼容说明及原作者致谢保留。
+
+This release publishes macOS 1.4.8 (40.40) as `v1.4.8-zh.8`, adding original-PNG interchange and fixing canvas copy-drags plus immediate Delete/Undo on receipt. The candidate source tree and installed bundle had no matches for the checked credential or private-home-path patterns. Reviewed device names are public canvas presets, and the email candidate belongs to a dependency's public metadata. Locally reachable history was checked with the same rules; no history is rewritten. Personal inputs, projects, recovery data, client credentials and raw logs are excluded. Existing targeted and real-mouse acceptance results are referenced rather than rerun. Source/archive, signing and downloaded-asset verification are separate from full unit-test coverage. Windows sources and releases remain unchanged.
+
 ## 1.4.8 build 40.37 / 2026-10-20
 
 - 发布标签：`v1.4.8-zh.7`。包含紧凑工作区、系统／亮／暗外观、实时文档 MCP、滤镜预览取消、按需缩小图缓存，以及工具栏间距、对齐和分割线调整；保留 40.28 的分层 16 位 PSD 导入修复。

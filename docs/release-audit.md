@@ -1,5 +1,16 @@
 # 发布审查 / Release review
 
+## 1.4.8 build 40.41 / 2026-10-25
+
+- 发布标签：`v1.4.8-zh.9`。工作区、工具参数栏、导航与预览改用 AppKit 原生语义颜色；CPU／GPU 画布周围颜色一致。作品像素、sRGB 显示／编辑管线、PNG 原图保留、拖放及文件格式保持原有语义。本次只发布 macOS 包。
+- 完整候选 Git 树 523 个文件（含既有的 73 个 Windows 文件）与已安装应用 12 个文件已扫描：常见凭据、私钥、凭据网址、硬编码凭据和个人主目录路径均无命中；额外个人文本检查无候选。一个邮箱候选来自依赖锁文件中的第三方公开元数据。仓库 PNG 未发现文本、EXIF 或时间戳附加块。技术注释、许可及原作者致谢保留。
+- 本机可达的 2,462 个历史文件对象使用同组凭据／私人路径规则扫描，0 命中；浅克隆之外的远端历史未覆盖。保留既有提交及已获接受的作者信息，不改写历史；待上传的两个功能／验收提交均使用 GitHub noreply 邮箱。
+- 个人照片、作品、截图、恢复项目、偏好、客户端配置和密钥、系统 ICC／字体文件、构建日志、临时包与备份不进入发行树。本机 Windows 文件删除状态不提交，原有 Windows 源码及发行包保留。
+- 既有定向验收见 [原生外观说明](native-appearance-color.md)：主题／滤镜 38 项、编辑器 78 项、快捷键 900 项通过；互传 79 项通过，1 项独立 CLI 窗口激活断言因系统拒绝激活而跳过。安装版 Delete／撤销经过窗口操作验证。本轮不重跑功能测试或完整 Xcode 套件，云端打包与完整测试结果分开报告。
+- 发布时核验源码与标签逐文件一致、ZIP 路径与完整性、版本／arm64 架构、严格代码签名及 SHA-256；云端从标签重建后重新下载正式附件核验。应用要求 macOS 26+、Apple Silicon，临时签名、未经 Apple Developer ID 公证；下载应用无需编译或安装开发工具。`.comp` 继续支持 v1–17，原始 PNG 资源使用 v17，旧版不能读取。
+
+This release publishes macOS 1.4.8 (40.41) as `v1.4.8-zh.9`, using native semantic colors for editor chrome and matching CPU/GPU canvas surrounds without retinting artwork. The complete candidate source tree, installed bundle and locally reachable historical blobs had no matches for the checked credential/private-path rules. The sole email candidate is public dependency metadata. Personal inputs, recovery data, client credentials, system ICC/fonts, raw logs and backups are excluded. Existing history and upstream credits remain intact. Prior targeted and installed-window evidence is referenced rather than rerun; package checks and full-suite CI remain separate. Source, archive, signing, version and downloaded-asset checks accompany publication. Windows sources and releases remain unchanged.
+
 ## 1.4.8 build 40.40 / 2026-10-22
 
 - 发布标签：`v1.4.8-zh.8`。新增 PNG 原图互传，修复画布越过窗口边界时的复制拖放，以及接收图层后立即 Delete／撤销；本次只更新 macOS 发行包。

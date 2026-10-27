@@ -247,7 +247,10 @@ handler('editor:image', async (id, revision) => {
     const choice = await dialog.showOpenDialog(win, { properties: ['openFile'], filters: [{ name: 'Image', extensions: ['png', 'jpg', 'jpeg', 'gif', 'eps', 'epsf', 'epsi'] }] }); if (choice.canceled) return { canceled: true };
     const extension = path.extname(choice.filePaths[0]).toLowerCase();
     let imageResolution;
-    await safeDirectory(path.dirname(choice.filePaths[0])); let b = await safeRead(choice.filePaths[0], ['.eps', '.epsf', '.epsi'].includes(extension) ? EPS_LIMITS.bytes : LIMITS.asset);
+    // Windows dialogs/TEMP may use an 8.3 parent name. Read through the
+    // validated canonical directory, retaining safeRead's file identity checks.
+    const imageDirectory = await safeDirectory(path.dirname(choice.filePaths[0]));
+    let b = await safeRead(path.join(imageDirectory, path.basename(choice.filePaths[0])), ['.eps', '.epsf', '.epsi'].includes(extension) ? EPS_LIMITS.bytes : LIMITS.asset);
     if (['.eps', '.epsf', '.epsi'].includes(extension)) {
       const answer = await dialog.showMessageBox(win, { type: 'warning', buttons: language === 'en' ? ['Cancel', 'Import pixels'] : ['取消', '导入像素'], defaultId: 0, cancelId: 0,
         message: language === 'en' ? 'EPS opens as one raster layer. Text and paths will not remain editable. General EPS is rendered at 144 DPI; Ghostscript 10 must be installed.' : 'EPS 将导入为一个像素图层，文字和路径不再可编辑。普通 EPS 以 144 DPI 渲染，需安装 Ghostscript 10。' });

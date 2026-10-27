@@ -4,7 +4,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { supportsAdjustment, supportsEffects } from './capabilities.mjs';
 
-export const CURRENT_FORMAT_VERSION = 16;
+export const CURRENT_FORMAT_VERSION = 17;
 export const LIMITS = Object.freeze({ manifest: 4 * 1024 ** 2, asset: 64 * 1024 ** 2, encoded: 256 * 1024 ** 2, pixels: 100_000_000, layers: 10_000, side: 30_000 });
 export const BLEND_MODES = Object.freeze(['Normal', 'Darken', 'Multiply', 'Color Burn', 'Linear Burn', 'Lighten', 'Screen', 'Color Dodge', 'Linear Dodge (Add)', 'Overlay', 'Soft Light', 'Hard Light', 'Vivid Light', 'Linear Light', 'Pin Light', 'Hard Mix', 'Difference', 'Exclusion', 'Subtract', 'Divide', 'Hue', 'Saturation', 'Color', 'Luminosity']);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -110,10 +110,11 @@ export function parseManifest(bytes) {
   return freezeDeep(m);
 }
 
-export function pngDimensions(b, mask = false) {
+export function pngDimensions(b, mask = false, original = false) {
   requireValue(b.length >= 33 && b.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) && b.toString('ascii', 12, 16) === 'IHDR', 'asset');
   const w = b.readUInt32BE(16), h = b.readUInt32BE(20);
-  requireValue(w >= 1 && h >= 1 && w <= LIMITS.side && h <= LIMITS.side && b[24] === 8 && (mask ? b[25] === 0 : [2, 6].includes(b[25])) && b[26] === 0 && b[27] === 0 && b[28] <= 1, 'asset');
+  const samples = original && !mask ? ({ 0: [1, 2, 4, 8, 16], 2: [8, 16], 3: [1, 2, 4, 8], 4: [8, 16], 6: [8, 16] }[b[25]] ?? []) : (mask ? b[25] === 0 : [2, 6].includes(b[25])) ? [8] : [];
+  requireValue(w >= 1 && h >= 1 && w <= LIMITS.side && h <= LIMITS.side && samples.includes(b[24]) && b[26] === 0 && b[27] === 0 && b[28] <= 1, 'asset');
   return { width: w, height: h };
 }
 export function jpegDimensions(b) {
@@ -234,7 +235,7 @@ export async function readProject(root) {
       const b = await safeRead(path.join(root, 'images', name), LIMITS.asset);
       bytes += b.length;
       requireValue(bytes <= LIMITS.encoded, 'limit');
-      const isMask = name.endsWith('.mask.png'), d = pngDimensions(b, isMask);
+      const isMask = name.endsWith('.mask.png'), d = pngDimensions(b, isMask, manifest.version >= 17);
       if (isMask) maskPixels += d.width * d.height; else sourcePixels += d.width * d.height;
       requireValue(sourcePixels <= LIMITS.pixels && maskPixels <= LIMITS.pixels, 'limit');
       resources.set(`images/${name}`, { bytes: b, mime: 'image/png', ...d });
@@ -268,8 +269,16 @@ export async function readProject(root) {
       }
     }
     await retain(root);
+    const analysis = analyze(manifest, sourcePixels, maskPixels);
+    if (manifest.version >= 17 && !analysis.issues.includes('memory')) {
+      const { decodeSourceImage } = await import('../platform/image-pipeline.mjs');
+      for (const name of new Set(manifest.layers.map(l => l.imageFile).filter(Boolean))) {
+        const key = `images/${name}`, resource = resources.get(key);
+        resources.set(key, await decodeSourceImage(resource.bytes, { maxPixels: LIMITS.pixels }));
+      }
+    }
     // Never write into the opened package or retain its path in user settings.
-    return { manifest, sourceBytes, resources, preview, name: path.basename(root), analysis: analyze(manifest, sourcePixels, maskPixels) };
+    return { manifest, sourceBytes, resources, preview, name: path.basename(root), analysis };
   } catch (e) {
     if (e instanceof ProjectError) throw e;
     throw new ProjectError(e.code === 'ENOENT' ? 'missing' : 'read');

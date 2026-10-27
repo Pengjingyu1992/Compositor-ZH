@@ -1,4 +1,4 @@
-import { mkdtemp, rm, readFile, stat, mkdir } from 'node:fs/promises';
+import { mkdtemp, rm, readFile, stat, mkdir, readdir } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
@@ -9,8 +9,25 @@ const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 export async function inspectLinuxArtifacts(directory, artifacts) {
   const staging = await mkdtemp(path.join(directory, '.audit-'));
   const expected = digest(await readFile(path.join(directory, 'linux-unpacked/resources/app.asar')));
+  async function inventory(directory, relative = '') {
+    const files = [];
+    let entries;
+    try { entries = await readdir(path.join(directory, relative), { withFileTypes: true }); }
+    catch (error) { if (error.code === 'ENOENT' && !relative) return files; throw error; }
+    for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+      const name = relative ? `${relative}/${entry.name}` : entry.name;
+      if (entry.isSymbolicLink()) throw new Error('Unexpected symlink in native application resources');
+      if (entry.isDirectory()) files.push(...await inventory(directory, name));
+      else files.push([name, digest(await readFile(path.join(directory, name)))]);
+    }
+    return files;
+  }
+  const nativeFiles = JSON.stringify(await inventory(path.join(directory, 'linux-unpacked/resources/app.asar.unpacked')));
+  const licenseFiles = JSON.stringify(await inventory(path.join(directory, 'linux-unpacked/resources/licenses')));
   async function checkApplication(application) {
     if (digest(await readFile(path.join(application, 'resources/app.asar'))) !== expected) throw new Error('Installer application differs from the tested unpacked application');
+    if (JSON.stringify(await inventory(path.join(application, 'resources/app.asar.unpacked'))) !== nativeFiles) throw new Error('Installer native libraries differ from the tested unpacked application');
+    if (JSON.stringify(await inventory(path.join(application, 'resources/licenses'))) !== licenseFiles) throw new Error('Installer notices differ from the tested unpacked application');
     if (!((await stat(path.join(application, 'compositor-linux'))).mode & 0o111)) throw new Error('Linux executable lost its execute permission');
     for (const license of ['LICENSE.electron.txt', 'LICENSES.chromium.html', 'resources/licenses/THIRD_PARTY_NOTICES.md']) await readFile(path.join(application, license));
   }

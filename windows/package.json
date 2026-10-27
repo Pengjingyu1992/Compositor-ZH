@@ -55,7 +55,10 @@
       "packages/editor-adapter/*.mjs",
       "out/renderer/**",
       "out/codecs/**",
-      "package.json"
+      "package.json",
+      "!node_modules/@img/sharp-wasm32/**",
+      "!node_modules/@emnapi/**",
+      "!node_modules/tslib/**"
     ],
     "extraResources": [
       {
@@ -88,11 +91,17 @@
       "createDesktopShortcut": true,
       "shortcutName": "Compositor Windows",
       "uninstallDisplayName": "Compositor Windows"
-    }
+    },
+    "asarUnpack": [
+      "node_modules/@img/**"
+    ]
   },
   "repository": {
     "type": "git",
     "url": "https://github.com/Pengjingyu1992/Compositor-ZH.git"
   },
-  "homepage": "https://github.com/Pengjingyu1992/Compositor-ZH"
+  "homepage": "https://github.com/Pengjingyu1992/Compositor-ZH",
+  "dependencies": {
+    "sharp": "0.35.5"
+  }
 }

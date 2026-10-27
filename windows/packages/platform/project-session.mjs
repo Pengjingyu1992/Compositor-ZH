@@ -71,7 +71,7 @@ export class ProjectSession {
     if(!this.current||this.current.id!==id||this.revision!==revision)return {error:'stale'};
     this.pending=true;const own=this.generation,current=this.current,before=current.data;
     try {const after=await build(before,op);if(own!==this.generation||this.current!==current||this.revision!==revision)return {error:'stale'};
-      after.sourceBytes=Buffer.from(after.sourceBytes);for(const [key,r] of after.resources){r.bytes=Buffer.from(r.bytes);const old=before.resources.get(key);if(old?.bytes.equals(r.bytes))after.resources.set(key,old);}
+      after.sourceBytes=Buffer.from(after.sourceBytes);for(const [key,r] of after.resources){r.bytes=Buffer.from(r.bytes);if(r.proxyBytes)r.proxyBytes=Buffer.from(r.proxyBytes);const old=before.resources.get(key);if(old?.bytes.equals(r.bytes)&&!!old.proxyBytes===!!r.proxyBytes&&(!r.proxyBytes||old.proxyBytes.equals(r.proxyBytes)))after.resources.set(key,old);}
       const changesSelection=o=>['selection','canvas','imageSize'].includes(o.kind)||(o.kind==='batch'&&o.operations.some(changesSelection));
       if(!changesSelection(op))after.selection=before.selection;
       if(after.selection&&before.selection&&after.selection.width===before.selection.width&&after.selection.height===before.selection.height&&after.selection.data.every((v,i)=>v===before.selection.data[i]))after.selection=before.selection;
@@ -87,7 +87,7 @@ export class ProjectSession {
     for (const data of [this.current?.data, ...this.undoStack, ...this.redoStack].filter(Boolean)) {
       size += data.sourceBytes.length;
       if(data.selection && !seen.has(data.selection.data)){seen.add(data.selection.data);size+=data.selection.data.byteLength;}
-      for (const r of data.resources.values()) if (!seen.has(r.bytes)) { seen.add(r.bytes); size += r.bytes.length; }
+      for (const r of data.resources.values()) for(const buffer of [r.bytes,r.proxyBytes].filter(Boolean)) if (!seen.has(buffer)) { seen.add(buffer); size += buffer.length; }
     }
     return size;
   }

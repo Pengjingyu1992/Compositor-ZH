@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir, readdir, copyFile } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, readdir, copyFile, cp } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
@@ -38,5 +38,18 @@ async function license(name) {
 await license('pentrado'); await license('vue');
 await license('ag-psd'); await license('pngjs');
 await license('gifenc'); await license('omggif');
+await license('sharp');
+await cp(path.join(root, 'licenses/sharp-libvips'), path.join(destination, 'sharp-libvips'), { recursive: true });
+const nativePlatform = `${process.platform}-${process.arch}`;
+const sharpMetadata = JSON.parse(await readFile(path.join(root, 'node_modules/sharp/package.json')));
+for (const name of [`@img/sharp-${nativePlatform}`, `@img/sharp-libvips-${nativePlatform}`].filter(name => sharpMetadata.optionalDependencies[name])) {
+  const directory = path.join(root, 'node_modules', name), metadata = JSON.parse(await readFile(path.join(directory, 'package.json')));
+  index.push({ name, version: metadata.version, license: metadata.license });
+  const safe = name.replaceAll('/', '-').replace('@', '');
+  for (const file of ['LICENSE', 'README.md', 'versions.json']) {
+    try { await copyFile(path.join(directory, file), path.join(destination, `${safe}-${file}`)); }
+    catch (error) { if (error.code !== 'ENOENT') throw error; }
+  }
+}
 await writeFile(path.join(destination, 'DEPENDENCIES.json'), JSON.stringify(index.sort((a, b) => a.name.localeCompare(b.name)), null, 2) + '\n');
-await build({ entryPoints: [path.join(root, 'packages/comp-bridge/codecs.mjs')], outfile: path.join(root, 'out/codecs/index.cjs'), platform: 'node', format: 'cjs', bundle: true, sourcemap: false, minify: true, target: 'node24' });
+await build({ entryPoints: [path.join(root, 'packages/comp-bridge/codecs.mjs')], outfile: path.join(root, 'out/codecs/index.cjs'), platform: 'node', format: 'cjs', bundle: true, external: ['sharp'], sourcemap: false, minify: true, target: 'node24' });

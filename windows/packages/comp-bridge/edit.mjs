@@ -99,7 +99,7 @@ function animationEdit(data, op, codecs) {
       } else fail('invalid');
     }
   }
-  m.version = 16;
+  m.version = Math.max(m.version, 16);
   resources.delete('QuickLook/Preview.jpg'); resources.delete('QuickLook/Thumbnail.png');
   const result = projectData(m, resources, data.name);
   if (result.analysis.issues.length) fail(result.analysis.issues.includes('memory') ? 'limit' : 'unsupported');

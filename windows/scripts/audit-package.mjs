@@ -7,7 +7,8 @@ const linux = process.argv.includes('--linux');
 const directory = path.resolve(linux ? '../linux/release' : 'release'), unpacked = path.join(directory, linux ? 'linux-unpacked' : 'win-unpacked');
 const asar = path.join(unpacked, 'resources/app.asar');
 const entries = listPackage(asar).map(p => p.replaceAll('\\', '/'));
-const forbidden = entries.filter(p => /(?:node_modules|\.map$|\/tests\/|\.comp\/|\.env|\.git\/|\/release\/)/.test(p));
+const runtimeModule = /^\/node_modules\/(?:sharp|semver|detect-libc|@img\/(?:colour|sharp-(?:libvips-)?(?:linux|win32)-x64))(?:\/|$)/;
+const forbidden = entries.filter(p => /(?:\.map$|\/tests\/|\.comp\/|\.env|\.git\/|\/release\/)/.test(p) || p.includes('/node_modules/') && p !== '/node_modules/@img' && !runtimeModule.test(p));
 if (forbidden.length) throw new Error(`Unexpected packaged files: ${forbidden.join(', ')}`);
 const privatePath = /(?:\/(?:Users|home)\/[^/\\\s]+(?:\/|$)|\/root(?:\/|$)|[A-Z]:\\Users\\[^\\\s]+(?:\\|$)|gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,}|sk-(?:proj-)?[A-Za-z0-9_-]{30,}|xox[baprs]-[A-Za-z0-9-]{20,}|AIza[0-9A-Za-z_-]{35}|AKIA[0-9A-Z]{16}|-----BEGIN (?:RSA |EC |OPENSSH |DSA |ENCRYPTED )?PRIVATE KEY-----|(?:api[_-]?key|access[_-]?token|password)\s*[:=]\s*["'][A-Za-z0-9_\-]{20,}["'])/i;
 for (const entry of entries.filter(p => /\.(?:js|mjs|cjs|json|html|css)$/.test(p))) {
@@ -16,6 +17,13 @@ for (const entry of entries.filter(p => /\.(?:js|mjs|cjs|json|html|css)$/.test(p
 }
 for (const license of ['LICENSE.electron.txt', 'LICENSES.chromium.html']) await readFile(path.join(unpacked, license));
 const notices = await readdir(path.join(unpacked, 'resources/licenses'));
+for (const name of ['sharp-LICENSE', 'detect-libc-LICENSE', 'semver-LICENSE', 'img-colour-LICENSE.md', 'sharp-libvips/LGPL-3.0.txt', 'sharp-libvips/GPL-3.0.txt', 'sharp-libvips/SOURCES.md']) {
+  await readFile(path.join(unpacked, 'resources/licenses', name));
+}
+const nativePlatform = linux ? 'linux-x64' : 'win32-x64';
+const bindings = entries.filter(name => name.startsWith(`/node_modules/@img/sharp-${nativePlatform}/`) && name.endsWith('.node'));
+if (bindings.length !== 1) throw new Error('Missing platform image decoder binding');
+await readFile(path.join(unpacked, 'resources/app.asar.unpacked', bindings[0].slice(1)));
 for (const name of ['Compositor-LICENSE.txt', 'pentrado-LICENSE', 'ag-psd-LICENSE', 'pngjs-LICENSE', 'gifenc-LICENSE.md', 'omggif-LICENSE', 'Typr-LICENSE.txt', 'DEPENDENCIES.json', 'THIRD_PARTY_NOTICES.md']) {
   if (!notices.includes(name)) throw new Error(`Missing notice: ${name}`);
 }

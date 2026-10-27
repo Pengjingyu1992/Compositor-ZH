@@ -28,8 +28,9 @@ export function encodePixels(pixels, gray = false) {
   return { bytes: png, mime: 'image/png', width: pixels.width, height: pixels.height };
 }
 export function decodePNG(resource) {
-  const dim=pngDimensions(resource.bytes,resource.bytes[25]===0);bound(dim.width,dim.height);
-  const image=PNG.sync.read(resource.bytes,{checkCRC:true});return {...dim,data:new Uint8ClampedArray(image.data)};
+  const source = Buffer.from(resource.proxyBytes ?? resource.bytes);
+  const dim=pngDimensions(source,source[25]===0);bound(dim.width,dim.height);
+  const image=PNG.sync.read(source,{checkCRC:true});return {...dim,data:new Uint8ClampedArray(image.data)};
 }
 export function validatePNG(value, mask = false) {
   const b = bytes(value), dim = pngDimensions(b,mask && b[25]===0); bound(dim.width, dim.height);

@@ -7,6 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getLanguage, setLanguage } from '../../../packages/platform/preferences.mjs';
 import { ProjectSession } from '../../../packages/platform/project-session.mjs';
+import { editProject, projectData } from '../../../packages/comp-bridge/edit.mjs';
 import { compatibilityReport } from '../../../packages/platform/compatibility-report.mjs';
 import { RecoveryStore, recoverSaves, fingerprint } from '../../../packages/platform/save-project.mjs';
 import { safeDirectory, safeRead, readProject, jpegDimensions, pngDimensions, ProjectError, LIMITS } from '../../../packages/comp-bridge/project.mjs';
@@ -153,7 +154,7 @@ protocol.handle('compositor', async request => {
       if (!session.current || id !== session.current.id || (url.searchParams.has('revision') && url.searchParams.get('revision') !== session.revision) || !/^(0|[1-9][0-9]*)$/.test(index) || extra.length) return new Response(null, { status: 404 });
       const resource = session.current.resources[Number(index)];
       if (!resource) return new Response(null, { status: 404 });
-      return new Response(new Uint8Array(resource.bytes), { headers: { ...headers, 'Content-Type': resource.mime } });
+      return new Response(new Uint8Array(resource.proxyBytes ?? resource.bytes), { headers: { ...headers, 'Content-Type': resource.mime } });
     }
     if (url.host !== 'app') return new Response(null, { status: 404 });
     const relative = decodeURIComponent(url.pathname).replace(/^\//, '');
@@ -246,7 +247,7 @@ handler('editor:image', async (id, revision) => {
   try {
     const choice = await dialog.showOpenDialog(win, { properties: ['openFile'], filters: [{ name: 'Image', extensions: ['png', 'jpg', 'jpeg', 'gif', 'eps', 'epsf', 'epsi'] }] }); if (choice.canceled) return { canceled: true };
     const extension = path.extname(choice.filePaths[0]).toLowerCase();
-    let imageResolution;
+    let imageResolution, importedResource;
     // Windows dialogs/TEMP may use an 8.3 parent name. Read through the
     // validated canonical directory, retaining safeRead's file identity checks.
     const imageDirectory = await safeDirectory(path.dirname(choice.filePaths[0]));
@@ -270,7 +271,13 @@ handler('editor:image', async (id, revision) => {
       imported.name = path.basename(choice.filePaths[0]).replace(/\.gif$/i, '.comp');
       session.generation++;
       const result = session.install(imported); session.scheduleRecovery(); return result;
-    } else if (extension !== '.png') { jpegDimensions(b); const image = nativeImage.createFromBuffer(b); if (image.isEmpty()) throw new ProjectError('asset'); b = image.toPNG(); }
+    } else {
+      importedResource = await imageCodec('decodeSourceImage', b);
+      importedResource.bytes = Buffer.from(importedResource.bytes);
+      if (importedResource.proxyBytes) importedResource.proxyBytes = Buffer.from(importedResource.proxyBytes);
+      imageResolution = importedResource.resolution;
+      b = importedResource.proxyBytes ?? importedResource.bytes;
+    }
     if (session.current !== owner || generation !== session.generation || owner && session.revision !== revision) return { error: 'stale' };
     session.pending = false;
     if (!owner) {
@@ -278,7 +285,15 @@ handler('editor:image', async (id, revision) => {
       if (created.error) return created;
       id = session.current.id; revision = session.revision;
     }
-    const result = session.edit(id, revision, { kind: 'importPixels', png: new Uint8Array(b), name: path.basename(choice.filePaths[0]).slice(0, 256) });
+    const op = { kind: 'importPixels', png: new Uint8Array(b), name: path.basename(choice.filePaths[0]).slice(0, 256) };
+    const result = importedResource?.originalPNG ? await session.editAsync(id, revision, op, async data => {
+      const candidate = editProject(data, op, codecs), manifest = structuredClone(candidate.manifest);
+      const layer = manifest.layers.find(l => l.id === manifest.activeLayerID);
+      const resources = new Map(candidate.resources);
+      resources.set(`images/${layer.imageFile}`, importedResource);
+      manifest.version = 17;
+      return projectData(manifest, resources, candidate.name);
+    }) : session.edit(id, revision, op);
     if (!owner && result.error) session.close();
     return result;
   } catch (e) { return { error: e.code ?? 'asset' }; } finally { session.pending = false; nativeMenu(); }

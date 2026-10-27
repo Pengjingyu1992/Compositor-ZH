@@ -35,7 +35,9 @@ async function nativeHistory(direction) {
 async function textDialog() {
   await instance.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.send('editor:text'));
   const field = page.getByTestId('text-content');
-  await expect(field).toBeVisible(); await field.pressSequentially('Draft text');
+  await expect(field).toBeVisible(); await field.focus();
+  // One native insertion has one undo boundary; per-key coalescing varies by OS.
+  await page.keyboard.insertText('Draft text');
   return field;
 }
 

@@ -35,7 +35,7 @@ jobs:
       - name: Install desktop test prerequisites
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb libgtk-3-0t64 libnss3 libasound2t64 libgbm1 libsecret-1-0 gnome-keyring ghostscript fonts-noto-cjk desktop-file-utils
+          sudo apt-get install -y xvfb libgtk-3-0t64 libnss3 libasound2t64 libgbm1 libsecret-1-0 gnome-keyring ghostscript fontconfig fonts-noto-cjk desktop-file-utils
       - run: npm ci --no-audit --no-fund
       - name: Source review and type check
         run: |
@@ -56,12 +56,13 @@ jobs:
         env:
           COMPOSITOR_SMOKE_NO_SANDBOX: '1'
           COMPOSITOR_SMOKE_PASSWORD_STORE: 'gnome-libsecret'
+          PLAYWRIGHT_JSON_OUTPUT_NAME: 'playwright-report/smoke-results.json'
         run: |
           export XDG_DATA_HOME="$(mktemp -d /tmp/compositor-keyring.XXXXXX)"
           export XDG_CONFIG_HOME="$XDG_DATA_HOME/config"
           export XDG_CACHE_HOME="$XDG_DATA_HOME/cache"
           mkdir -p "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME"
-          dbus-run-session -- bash -euc 'printf smoke-keyring | gnome-keyring-daemon --unlock --components=secrets; xvfb-run -a -s "-screen 0 1440x1000x24 -nolisten tcp" npm run smoke'
+          dbus-run-session -- bash -euc 'printf smoke-keyring | gnome-keyring-daemon --unlock --components=secrets; xvfb-run -a -s "-screen 0 1440x1000x24 -nolisten tcp" npm run smoke -- --reporter=github,list,json'
       - name: Extracted AppImage launcher regression
         env:
           COMPOSITOR_SMOKE_NO_SANDBOX: '1'

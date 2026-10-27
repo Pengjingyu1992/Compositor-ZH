@@ -1,17 +1,17 @@
 import { makeCanvas, pngBytes } from './render';
 export { remapRuns, rangeStyle } from './text-runs.mjs';
 const rgb=(s:Record<string,any>)=>'rgb('+[s.red,s.green,s.blue].map(v=>Math.round(v*255)).join(',')+')';
-const family=(v:string)=>({'ArialMT':'Arial','Helvetica':'Arial','MicrosoftYaHei':'Microsoft YaHei','SimSun':'SimSun','SegoeUI':'Segoe UI'} as Record<string,string>)[v]??v;
-export async function renderText(style:Record<string,any>) {
-  const [w,h]=style.boxSize.map((v:number)=>Math.ceil(v));if(w*h>16_000_000||w>30000||h>30000)throw new Error('limit');
-  const c=makeCanvas(w,h),ctx=c.getContext('2d')!,size=style.fontSize,leading=style.leading||size*1.2,tracking=style.tracking||0,padding=12;
-  const Segmenter=(Intl as any).Segmenter,segments: {segment:string;index:number}[]=Segmenter?[...new Segmenter(undefined,{granularity:'grapheme'}).segment(style.content)]:Array.from(style.content).map((segment,index)=>({segment,index}));
-  type Glyph={text:string;index:number;width:number;color:string;font:string};const lines:Glyph[][]=[[]];let width=0,fi=0,ci=0;const fonts=[...(style.fontRuns??[])].sort((a,b)=>a.location-b.location),colors=[...(style.colorRuns??[])].sort((a,b)=>a.location-b.location);
-  for(const seg of segments){if(seg.segment==='\n'){lines.push([]);width=0;continue;}while(fi<fonts.length&&seg.index>=fonts[fi].location+fonts[fi].length)fi++;while(ci<colors.length&&seg.index>=colors[ci].location+colors[ci].length)ci++;const run=fonts[fi]?.location<=seg.index?fonts[fi]:undefined,col=colors[ci]?.location<=seg.index?colors[ci]:undefined;
-    const font=size+'px "'+family(run?.fontName??style.fontName).replace(/["\\]/g,'')+'", sans-serif';ctx.font=font;const advance=ctx.measureText(seg.segment).width+tracking;
-    if(width+advance>w-padding*2&&lines.at(-1)!.length){lines.push([]);width=0;}lines.at(-1)!.push({text:seg.segment,index:seg.index,width:advance,color:rgb(col??style),font});width+=advance;
+import {layoutText,fontFamily} from '../comp-bridge/text-layout.mjs';
+export async function renderText(style:Record<string,any>,owner?:{id:string;revision:string}) {
+  if(style.pathLayout||style.warp){
+    if(!owner)throw new Error('invalid');const result=await window.editor.textTools('render',{id:owner.id,revision:owner.revision,style:JSON.parse(JSON.stringify(style))});if(result.error||!result.png)throw new Error(result.error??'glyph');return new Uint8Array(result.png);
   }
-  ctx.textBaseline='alphabetic';for(let n=0;n<lines.length;n++){const line=lines[n],length=line.reduce((v,g)=>v+g.width,0)-tracking;let x=style.alignment==='Center'?(w-length)/2:style.alignment==='Right'?w-padding-length:padding;const y=padding+size+n*leading;if(y-size>h)break;for(const g of line){ctx.font=g.font;ctx.fillStyle=g.color;ctx.fillText(g.text,x,y);x+=g.width;}}
+  const [w,h]=style.boxSize.map((v:number)=>Math.ceil(v));if(w*h>16_000_000||w>30000||h>30000)throw new Error('limit');
+  const c=makeCanvas(w,h),ctx=c.getContext('2d')!;
+  const font=(name:string,size:number)=>size+'px "'+fontFamily(name).replace(/["\\]/g,'')+'", sans-serif';
+  const glyphs=layoutText(style,(text:string,name:string,size:number)=>{ctx.font=font(name,size);return ctx.measureText(text).width;});
+  ctx.textBaseline='alphabetic';
+  for(const glyph of glyphs){ctx.save();ctx.translate(glyph.x,glyph.y);ctx.rotate(glyph.angle);ctx.font=font(glyph.font,style.fontSize);ctx.fillStyle=rgb(glyph.color);ctx.fillText(glyph.text,0,0);ctx.restore();}
   try{return await pngBytes(c);}finally{c.width=c.height=1;}
 }
 export async function renderShape(style:Record<string,any>,w:number,h:number) {

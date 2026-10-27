@@ -32,7 +32,7 @@ chmod +x Compositor-Linux-0.4.0-alpha.1-x86_64.AppImage
 
 AppImage 使用静态运行时，也支持 `--appimage-extract-and-run`。在不支持挂载的环境可执行 `--appimage-extract`，然后运行 `squashfs-root/AppRun`。tar.gz 需完整解压，再运行其中的 `compositor-linux`；保留 `resources`、许可证和运行时文件。
 
-便携包仍需系统 GTK 3、NSS、ALSA、GBM 等桌面库。Deb 包声明运行依赖；中文文字建议安装 `fonts-noto-cjk`。程序保留 Chromium 沙箱，不在发行启动器中自动添加 `--no-sandbox`。Ubuntu 24.04 等限制非特权用户命名空间的系统优先使用 Deb 包，其安装脚本按系统能力配置沙箱与 AppArmor。遇到沙箱启动错误时，检查系统或组织的沙箱策略，不要关闭系统防护。
+便携包仍需系统 GTK 3、NSS、ALSA、GBM 等桌面库。Deb 包声明运行依赖；开发分支的轮廓/路径文字还需要 `fontconfig`（提供 `fc-match`/`fc-list`，新 Deb 已声明）；中文文字建议安装 `fonts-noto-cjk`。程序保留 Chromium 沙箱，不在发行启动器中自动添加 `--no-sandbox`。Ubuntu 24.04 等限制非特权用户命名空间的系统优先使用 Deb 包，其安装脚本按系统能力配置沙箱与 AppArmor。遇到沙箱启动错误时，检查系统或组织的沙箱策略，不要关闭系统防护。
 
 ## 项目与设置
 

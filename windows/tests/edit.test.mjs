@@ -35,7 +35,7 @@ test('unknown nested fields and opaque resources survive allowed renames and sav
   const copy=path.join(directory,'copy.comp');await saveProject(b,copy);const loaded=await readProject(copy);assert.deepEqual(loaded.manifest,b.manifest);assert.deepEqual(resourceDigests(loaded),resourceDigests(b));
 });
 test('painting deletes invalidated editable text/shape metadata but retains unrelated bytes',async t=>{
-  const {data}=await sample(t),m=structuredClone(data.manifest);m.layers[0].text={content:'中文',fontName:'Test'};m.layers[0].shape={kind:'rectangle'};const a=projectData(m,data.resources),b=change(a,{kind:'pixels',target:'content',png:new Uint8Array(png(64,48,[5,6,7,128]))});
+  const {data}=await sample(t),m=structuredClone(data.manifest);m.layers[0].text={content:'中文',fontName:'ArialMT',fontSize:24,red:0,green:0,blue:0,alignment:'Left',tracking:0,leading:0,boxSize:[64,48]};m.layers[0].shape={kind:'rectangle'};const a=projectData(m,data.resources),b=change(a,{kind:'pixels',target:'content',png:new Uint8Array(png(64,48,[5,6,7,128]))});
   assert.equal(b.manifest.layers[0].text,undefined);assert.equal(b.manifest.layers[0].shape,undefined);assert.deepEqual(b.resources.get(`images/${IDS[1]}.png`).bytes,data.resources.get(`images/${IDS[1]}.png`).bytes);
 });
 test('group moves propagate to children; deleting clipping source removes dangling links',async t=>{

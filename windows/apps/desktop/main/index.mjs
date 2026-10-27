@@ -89,7 +89,7 @@ function nativeMenu() {
       { id: 'layer-new', label: zh ? '新建像素层' : 'New pixel layer', click: () => win?.webContents.send('editor:addPixels') },
       { id: 'layer-group', label: zh ? '新建组' : 'New group', click: () => win?.webContents.send('editor:addGroup') },
       { id: 'layer-mask', label: zh ? '添加蒙版' : 'Add mask', click: () => win?.webContents.send('editor:addMask') },
-      ...[['newFill','新建填充图层…','New fill layer…'],['editFill','编辑填充图层…','Edit fill layer…'],['newPath','钢笔／新建路径…','Pen / New path…'],['editPath','编辑路径…','Edit path…'],['newVectorMask','新建矢量蒙版…','New vector mask…'],['editVectorMask','编辑矢量蒙版…','Edit vector mask…'],['vectorMaskFromPath','在下方图层创建矢量蒙版','Path to vector mask on layer below']].map(([name,cn,en])=>({id:`layer-${name}`,label:zh?cn:en,enabled:!!session.current&&!session.pending,click:()=>win?.webContents.send(`editor:${name}`)})),
+      ...[['textOutlines','文字转轮廓','Convert text to outlines'],['newFill','新建填充图层…','New fill layer…'],['editFill','编辑填充图层…','Edit fill layer…'],['newPath','钢笔／新建路径…','Pen / New path…'],['editPath','编辑路径…','Edit path…'],['newVectorMask','新建矢量蒙版…','New vector mask…'],['editVectorMask','编辑矢量蒙版…','Edit vector mask…'],['vectorMaskFromPath','在下方图层创建矢量蒙版','Path to vector mask on layer below']].map(([name,cn,en])=>({id:`layer-${name}`,label:zh?cn:en,enabled:!!session.current&&!session.pending,click:()=>win?.webContents.send(`editor:${name}`)})),
       { type: 'separator' },
       ...[['text','新建文字／编辑文字…','New / edit text…'],['shape','新建形状／编辑形状…','New / edit shape…'],['group','编组','Group','Ctrl+G'],['ungroup','解组','Ungroup','Ctrl+Shift+G'],['duplicate','复制图层','Duplicate layers'],['delete','删除图层','Delete layers'],['merge','合并所选图层','Merge selected layers'],['flatten','拼合图像','Flatten image'],['rasterize','栅格化','Rasterize'],['applyMask','应用蒙版','Apply mask']].map(([name,cn,en,accelerator])=>({label:zh?cn:en,accelerator,enabled:!!session.current,click:()=>win?.webContents.send('editor:'+name)})),
       { type: 'separator' },
@@ -203,7 +203,7 @@ handler('viewer:close', async () => { if (!(await canLeave())) return { closed: 
 handler('editor:new', async (w, h) => { if (!(await canLeave())) return { canceled: true }; return projectRequest(() => Promise.resolve(session.create(w, h))); });
 function buildEdit(data,op) {
   return new Promise((resolve,reject)=>{
-    const worker=new Worker(new URL('../../../packages/platform/edit-worker.mjs',import.meta.url),{workerData:{data:{manifest:data.manifest,resources:data.resources,sourceBytes:data.sourceBytes,name:data.name,preview:data.preview,analysis:data.analysis,selection:data.selection,locks:data.locks},op,codecPath:path.join(ROOT,'out/codecs/index.cjs')}});
+    const worker=new Worker(new URL('../../../packages/platform/edit-worker.mjs',import.meta.url),{workerData:{data:{manifest:data.manifest,resources:data.resources,sourceBytes:data.sourceBytes,name:data.name,preview:data.preview,analysis:data.analysis,selection:data.selection,locks:data.locks},op,typographyPath:path.join(ROOT,'out/typography/index.cjs'),codecPath:path.join(ROOT,'out/codecs/index.cjs')}});
     const timer=setTimeout(()=>{worker.terminate();reject(new ProjectError('limit'));},30000);
     worker.once('message',r=>{clearTimeout(timer);worker.terminate();if(r.error)reject(new ProjectError(r.error));else resolve(r.data);});worker.once('error',()=>{clearTimeout(timer);reject(new ProjectError('invalid'));});
   });
@@ -225,8 +225,19 @@ function imageCodec(operation, bytes, resolution) {
     worker.once('exit', () => { if (!settled) finish('asset'); });
   });
 }
+let installedFontNames;
+handler('editor:textTools',async(action,payload)=>{
+  if(!['fonts','render'].includes(action))return {error:'invalid'};
+  if(action==='fonts'&&installedFontNames)return {fonts:installedFontNames};
+  if(action==='render'&&(!session.current||session.current.id!==payload?.id||session.revision!==payload?.revision))return {error:'stale'};
+  if(session.pending)return {error:'busy'};
+  const current=session.current,revision=session.revision;
+  try{const result=await new Promise((resolve,reject)=>{const worker=new Worker(new URL('../../../packages/platform/typography-worker.mjs',import.meta.url),{workerData:{action,payload,typographyPath:path.join(ROOT,'out/typography/index.cjs')},resourceLimits:{maxOldGenerationSizeMb:256,maxYoungGenerationSizeMb:32}});let settled=false;const finish=(error,result)=>{if(settled)return;settled=true;clearTimeout(timer);worker.terminate();error?reject(new ProjectError(error)):resolve(result);},timer=setTimeout(()=>finish('limit'),30000);worker.once('message',value=>finish(value.error,value.result));worker.once('error',error=>finish(error.code==='ERR_WORKER_OUT_OF_MEMORY'?'limit':'glyph'));worker.once('exit',()=>{if(!settled)finish('glyph');});});
+    if(action==='render'&&(session.current!==current||session.revision!==revision))return {error:'stale'};if(action==='fonts')installedFontNames=result.fonts;return result;
+  }catch(error){return {error:error.code??'glyph'};}
+});
 handler('editor:edit', (id,revision,op)=>{
-  const heavy=o=>['stroke','fill','gradient','bucket','filter','imageSize','applyMask','selectionMask','fillLayer','path','vectorMask','filterStack'].includes(o?.kind)||o?.kind==='selection'||(o?.kind==='batch'&&Array.isArray(o.operations)&&o.operations.some(heavy));
+  const heavy=o=>['stroke','fill','gradient','bucket','filter','imageSize','applyMask','selectionMask','fillLayer','path','vectorMask','filterStack','textOutlines','styled'].includes(o?.kind)||o?.kind==='selection'||(o?.kind==='batch'&&Array.isArray(o.operations)&&o.operations.some(heavy));
   return projectRequest(async()=>{const result=heavy(op)?await session.editAsync(id,revision,op,buildEdit):session.edit(id,revision,op);nativeMenu();return result;});
 });
 handler('editor:clipboard',async(id,revision,action,png)=>{

@@ -52,6 +52,7 @@ declare global {
       onActual(callback: () => void): () => void;
     };
     editor: {
+      textTools(action:string,payload:Record<string,unknown>):Promise<{error?:string;png?:Uint8Array;fonts?:string[]}>;
       textClipboard(action:string):Promise<void>;
       clipboard(id:string,revision:string,action:string,png?:Uint8Array):Promise<OpenResult>;
       create(w: number, h: number): Promise<OpenResult>;

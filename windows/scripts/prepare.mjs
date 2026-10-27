@@ -28,17 +28,30 @@ async function license(name) {
     const notice = source.split('\n').slice(0, 21).map(line => line.replace(/^\/\/ ?/, '')).join('\n');
     if (!notice.includes('Dean McNamee') || !notice.includes('Permission is hereby granted') || !notice.includes('IN THE SOFTWARE.')) throw new Error('Missing omggif MIT notice');
     await writeFile(path.join(destination, 'omggif-LICENSE'), notice + '\n');
+  } else if(!candidates.length&&name==='fontkit'){
+    const readme=await readFile(path.join(directory,'README.md'),'utf8');if(metadata.version!=='2.0.4'||metadata.license!=='MIT'||!readme.includes('## License\n\nMIT'))throw new Error('Unexpected fontkit license declaration');
+    await copyFile(path.join(root,'licenses/fontkit-MIT.txt'),path.join(destination,'fontkit-LICENSE'));
+  } else if(!candidates.length&&name==='brotli'){
+    const source=await readFile(path.join(directory,'dec/decode.js'),'utf8'),header=source.slice(0,source.indexOf('*/')+2);
+    if(metadata.version!=='1.3.3'||metadata.license!=='MIT'||!header.includes('Copyright 2013 Google Inc.')||!header.includes('Apache License, Version 2.0'))throw new Error('Unexpected brotli notices');
+    const mit=(await readFile(path.join(root,'licenses/fontkit-MIT.txt'),'utf8')).split('MIT License\n')[1];
+    await writeFile(path.join(destination,'brotli-LICENSE'),'brotli 1.3.3, port author Devon Govett. Upstream package declares MIT.\nhttps://github.com/devongovett/brotli.js/tree/e36051345f6d27a56e5f39ea70d2f789b8574046\n\nMIT License\n'+mit+'\nDecoder source notice (retained verbatim):\n'+header+'\n');
+    await copyFile(path.join(root,'licenses/brotli-Apache-2.0.txt'),path.join(destination,'brotli-Apache-2.0.txt'));
+  } else if(!candidates.length&&name==='dfa'){
+    if(metadata.version!=='1.2.0'||metadata.license!=='MIT'||!(await readFile(path.join(directory,'README.md'),'utf8')).includes('## License\n\nMIT'))throw new Error('Unexpected dfa license declaration');
+    const mit=(await readFile(path.join(root,'licenses/fontkit-MIT.txt'),'utf8')).split('MIT License\n')[1];
+    await writeFile(path.join(destination,'dfa-LICENSE'),'dfa 1.2.0, author Devon Govett. Package metadata and README declare MIT; no dedicated license file is shipped.\nhttps://github.com/devongovett/dfa/tree/3f5e603e5082caedabefefdf53e8a6ca3111e966\n\nMIT License\n'+mit);
   } else if (!candidates.length) throw new Error(`Missing license: ${name}`);
   const safeName = name.replaceAll('/', '-').replace('@', '');
   for (const entry of candidates) await copyFile(path.join(directory, entry), path.join(destination, `${safeName}-${entry}`));
-  index.push({ name, version: metadata.version, license: metadata.license });
+  index.push({ name, version: metadata.version, license: name==='brotli'?'MIT AND Apache-2.0':metadata.license });
   for (const dependency of Object.keys(metadata.dependencies ?? {})) await license(dependency);
 }
 // Runtime libraries are compiled into the renderer; record their dependency notices.
 await license('pentrado'); await license('vue');
 await license('ag-psd'); await license('pngjs');
 await license('gifenc'); await license('omggif');
-await license('sharp');
+await license('sharp'); await license('fontkit');
 await cp(path.join(root, 'licenses/sharp-libvips'), path.join(destination, 'sharp-libvips'), { recursive: true });
 const nativePlatform = `${process.platform}-${process.arch}`;
 const sharpMetadata = JSON.parse(await readFile(path.join(root, 'node_modules/sharp/package.json')));
@@ -53,3 +66,5 @@ for (const name of [`@img/sharp-${nativePlatform}`, `@img/sharp-libvips-${native
 }
 await writeFile(path.join(destination, 'DEPENDENCIES.json'), JSON.stringify(index.sort((a, b) => a.name.localeCompare(b.name)), null, 2) + '\n');
 await build({ entryPoints: [path.join(root, 'packages/comp-bridge/codecs.mjs')], outfile: path.join(root, 'out/codecs/index.cjs'), platform: 'node', format: 'cjs', bundle: true, external: ['sharp'], sourcemap: false, minify: true, target: 'node24' });
+
+await build({entryPoints:[path.join(root,'packages/platform/typography.mjs')],outfile:path.join(root,'out/typography/index.cjs'),platform:'node',format:'cjs',bundle:true,external:['sharp'],sourcemap:false,minify:true,target:'node24'});

@@ -30,6 +30,7 @@
     "electron": "44.5.1",
     "electron-builder": "26.15.3",
     "esbuild": "0.28.2",
+    "fontkit": "2.0.4",
     "gifenc": "1.0.3",
     "omggif": "1.0.10",
     "pentrado": "0.1.1",
@@ -55,10 +56,13 @@
       "packages/editor-adapter/*.mjs",
       "out/renderer/**",
       "out/codecs/**",
+      "out/typography/**",
       "package.json",
       "!node_modules/@img/sharp-wasm32/**",
       "!node_modules/@emnapi/**",
-      "!node_modules/tslib/**"
+      "!node_modules/tslib/**",
+      "!node_modules/@img/sharp-linuxmusl-*/**",
+      "!node_modules/@img/sharp-libvips-linuxmusl-*/**"
     ],
     "extraResources": [
       {

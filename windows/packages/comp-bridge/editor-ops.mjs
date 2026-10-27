@@ -1,4 +1,5 @@
 import { readFilterNodes, renderFilterStack, validateFilterNode, capturedCoverage, copyFilterResources } from './editable-filters.mjs';
+import { supportsTextStyle } from './text-layout.mjs';
 import { randomUUID } from 'node:crypto';
 import { supportsAdjustment } from './capabilities.mjs';
 import { ProjectError, LIMITS } from './project.mjs';
@@ -23,7 +24,7 @@ export function checkPermission(data,op) {
   if(op.kind==='imageSize'&&op.width===data.manifest.width&&op.height===data.manifest.height)return;
   if(['duplicate','duplicateTree'].includes(op.kind)){const source=data.manifest.layers.find(layer=>layer.id===op.id);if(!source)fail('stale');if(source.parentID)checkPermission(data,{kind:'add',parentID:source.parentID});return;}
   const inserting=['add','importPixels'].includes(op.kind)||(['styled','fillLayer','path'].includes(op.kind)&&!op.id);
-  const dimensions=['delete','group','ungroup','reorder','parent','merge','imageSize'].includes(op.kind)?['content','position','appearance','alpha']:['transform','transformMask','transformLayers','moveLayers','arrange','canvas','flipCanvas'].includes(op.kind)||op.kind==='mask'&&op.action==='link'?['position']:['appearance','effect','effects'].includes(op.kind)||op.kind==='mask'&&op.action==='toggle'?['appearance']:op.kind==='rename'?[]:['content'];
+  const dimensions=op.kind==='styled'&&op.resetTransform===true?['content','position']:['delete','group','ungroup','reorder','parent','merge','imageSize'].includes(op.kind)?['content','position','appearance','alpha']:['transform','transformMask','transformLayers','moveLayers','arrange','canvas','flipCanvas'].includes(op.kind)||op.kind==='mask'&&op.action==='link'?['position']:['appearance','effect','effects'].includes(op.kind)||op.kind==='mask'&&op.action==='toggle'?['appearance']:op.kind==='rename'?[]:['content'];
   const targets=inserting?[]:operationTargets(data.manifest,op);
   if(op.parentID){const parent=data.manifest.layers.find(l=>l.id===op.parentID);if(!parent?.isGroup)fail('invalid');targets.push(parent);}
   for(const l of targets) {
@@ -65,8 +66,7 @@ function validateStyle(kind,s) {
   if(!s||typeof s!=='object')fail('invalid');
   for(const c of ['red','green','blue'])if(!finite(s[c],0,1))fail('invalid');
   if(kind==='text'){
-    if(typeof s.content!=='string'||!s.content.length||s.content.length>100000||typeof s.fontName!=='string'||s.fontName.length>200||/[\r\n]/.test(s.fontName)||!finite(s.fontSize,1,2000)||!['Left','Center','Right'].includes(s.alignment)||!finite(s.tracking,-100,1000)||!finite(s.leading,0,5000)||!pair(s.boxSize)||s.boxSize.some(n=>n<16))fail('invalid');
-    for(const field of ['colorRuns','fontRuns']){let end=0;if(!Array.isArray(s[field]??[])||(s[field]??[]).length>10000)fail('invalid');for(const r of s[field]??[]){if(!Number.isInteger(r.location)||!Number.isInteger(r.length)||r.location<end||r.length<1||r.location+r.length>s.content.length)fail('invalid');end=r.location+r.length;if(field==='colorRuns'&&!['red','green','blue'].every(c=>finite(r[c],0,1)))fail('invalid');if(field==='fontRuns'&&(typeof r.fontName!=='string'||r.fontName.length>200||/[\r\n]/.test(r.fontName)))fail('invalid');}}
+    if(!supportsTextStyle(s)||!s.content.length||!s.boxSize)fail('invalid');
   }else if(!['Rectangle','Ellipse','Line'].includes(s.kind)||!finite(s.cornerRadius,0,30000)||!finite(s.lineWidth,0,2000)||!pair(s.start)||!pair(s.end)||[...s.start,...s.end].some(n=>n<0||n>1))fail('invalid');
 }
 // Shared operations construct a local candidate. No mutation reaches the live
@@ -133,13 +133,19 @@ export function editorOperation(data,m,resources,target,op,codecs,descendants) {
       if(op.sourcePathID){checkPermission(data,{kind:'appearance',id:op.sourcePathID});const source=m.layers.find(l=>l.id===op.sourcePathID);if(!source?.shape?.vector||source===target)fail('invalid');source.isVisible=false;}
       target.maskFile??=`${target.id}.mask.png`;target.maskEnabled??=true;target.vectorMask=structuredClone(op.style);resources.set(`images/${target.maskFile}`,image);m.activeLayerID=target.id;m.version=Math.max(m.version,13);return true;
     }
+    case 'textOutlines':{
+      if(!target.text||!target.imageFile||!supportsVectorPath(op.style))fail('unsupported');
+      const resource=codecs.validatePNG(op.png),before=resources.get(layerFile(target));if(resource.width!==before.width||resource.height!==before.height)fail('invalid');
+      let ancestor=target;for(let n=0;ancestor&&n<65;n++,ancestor=m.layers.find(l=>l.id.toUpperCase()===ancestor.parentID?.toUpperCase()))if(data.locks?.[ancestor.id]?.alpha)fail('locked');
+      target.shape={kind:'Path',red:target.text.red,green:target.text.green,blue:target.text.blue,cornerRadius:0,vector:structuredClone(op.style)};delete target.text;delete target.fill;delete target.editableFilters;resources.set(layerFile(target),resource);m.version=Math.max(m.version,13);return true;
+    }
     case 'styled':{
       if(!['text','shape'].includes(op.type)||!pair(op.origin))fail('invalid');validateStyle(op.type,op.style);
       const image=codecs.validatePNG(op.png);let l=target;
       if(l){let row=l;for(let n=0;row&&n<65;n++,row=m.layers.find(value=>value.id===row.parentID))if(data.locks?.[row.id]?.alpha){const before=codecs.decodePNG(resources.get(layerFile(l))),after=codecs.decodePNG(image);if(before.width!==after.width||before.height!==after.height||after.data.some((value,index)=>index%4===3&&value!==before.data[index]))fail('locked');}}
       if(!l){const id=randomUUID().toUpperCase();l={id,name:String(op.name??op.type).slice(0,256),isVisible:true,transform:place(image.width,image.height),imageFile:id+'.png'};if(op.parentID){if(!m.layers.some(p=>p.id===op.parentID&&p.isGroup))fail('invalid');l.parentID=op.parentID;}m.layers.push(l);}else if(!l.imageFile||l.isGroup||l.adjustment)fail('unsupported');
       if(op.preserveSize!==undefined&&typeof op.preserveSize!=='boolean')fail('invalid');const originalSize=[...l.transform.size];
-      const old=resources.get(layerFile(l)),scale=op.type==='text'&&l.text&&old?[l.transform.size[0]/old.width,l.transform.size[1]/old.height]:[1,1];l.transform.origin=op.origin;l.transform.size=op.preserveSize?originalSize:[image.width*scale[0],image.height*scale[1]];l[op.type]=structuredClone(op.style);delete l[op.type==='text'?'shape':'text'];delete l.fill;delete l.editableFilters;resources.set(layerFile(l),image);m.activeLayerID=l.id;return true;
+      const previousTransform=structuredClone(l.transform),old=resources.get(layerFile(l)),scale=op.type==='text'&&l.text&&old?[l.transform.size[0]/old.width,l.transform.size[1]/old.height]:[1,1];l.transform.origin=op.origin;l.transform.size=op.preserveSize?originalSize:[image.width*scale[0],image.height*scale[1]];if(op.resetTransform!==undefined&&typeof op.resetTransform!=='boolean')fail('invalid');if(op.resetTransform){if(l.maskFile&&!l.maskPlacement)l.maskPlacement=previousTransform;l.transform=place(image.width,image.height);l.transform.origin=op.origin;}if(op.type==='text')m.version=Math.max(m.version,op.style.pathLayout||op.style.warp?13:op.style.vertical||op.style.alignment==='Justified'?12:11);const stored=structuredClone(op.style);if(op.type==='text'){for(const key of ['fontRuns','colorRuns'])if(!stored[key]?.length)delete stored[key];for(const key of ['pathLayout','warp'])if(stored[key]==null)delete stored[key];}l[op.type]=stored;delete l[op.type==='text'?'shape':'text'];delete l.fill;delete l.editableFilters;resources.set(layerFile(l),image);m.activeLayerID=l.id;return true;
     }
     case 'transformLayers':{
       operationTargets(m,op);if(!['origin','size','rotation','flipX','flipY','sampling'].includes(op.field))fail('invalid');const layers=operationTargets(m,op),members=layers.filter(l=>l.imageFile);if(!members.length)fail('unsupported');const box=union(members.map(l=>bounds(l.transform))),old={...place(Math.max(1,box.w),Math.max(1,box.h)),origin:[box.x,box.y]},next={...old,[op.field]:structuredClone(op.value)};

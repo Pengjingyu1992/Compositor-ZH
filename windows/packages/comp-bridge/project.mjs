@@ -2,6 +2,7 @@ import { open, lstat, readdir, realpath, mkdir, writeFile } from 'node:fs/promis
 import { constants } from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
+import { supportsTextStyle } from './text-layout.mjs';
 import { supportsAdjustment, supportsEffects } from './capabilities.mjs';
 import { validateFilterRecord, validateProjectFilters } from './editable-filters.mjs';
 import { supportsFillStyle, supportsVectorPath } from './layer-styles.mjs';
@@ -192,7 +193,7 @@ export function analyze(manifest, sourcePixels = 0, maskPixels = 0) {
       const shown = visible && l.isVisible, alpha = opacity * (l.opacity ?? 1);
       const unknown = Object.keys(l).some(k => !KNOWN_LAYER.has(k)) || Object.keys(l.transform).some(k => !KNOWN_TRANSFORM.has(k)) || Object.keys(l.maskPlacement ?? {}).some(k => !KNOWN_TRANSFORM.has(k));
       const reasons = [];
-      if (unknown || l.text?.vertical === true || l.text?.alignment === 'Justified' || l.shape?.vector && !supportsVectorPath(l.shape.vector) || l.fill && !supportsFillStyle(l.fill) || l.vectorMask && !supportsVectorPath(l.vectorMask) || l.text?.pathLayout || l.text?.warp) reasons.push('unknown');
+      if (unknown || l.text && !supportsTextStyle(l.text) || l.shape?.vector && !supportsVectorPath(l.shape.vector) || l.fill && !supportsFillStyle(l.fill) || l.vectorMask && !supportsVectorPath(l.vectorMask)) reasons.push('unknown');
       if (l.adjustment && !supportsAdjustment(l.adjustment)) reasons.push('adjustment');
       if (l.effects && (!supportsEffects(l.effects) || l.isGroup || l.adjustment)) reasons.push('effects');
       // Adjustments and effects are now explicitly evaluated by the adapter.

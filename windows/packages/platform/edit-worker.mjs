@@ -12,7 +12,9 @@ try {
       for(const operation of op.operations)data=await execute(data,operation);
       return data;
     }
-    return editProject(data,await prepareStructuredOperation(data,op),codecs);
+    const needsTypography=op.kind==='textOutlines'||op.kind==='styled'&&op.type==='text'&&(op.style?.pathLayout||op.style?.warp);
+    const typography=needsTypography?createRequire(import.meta.url)(workerData.typographyPath):undefined;
+    return editProject(data,await prepareStructuredOperation(data,op,typography),codecs);
   }
   parentPort.postMessage({data:await execute(data,workerData.op)});
 } catch(error) { parentPort.postMessage({error:error.code??(['limit','source','selection'].includes(error.message)?error.message:'invalid')}); }

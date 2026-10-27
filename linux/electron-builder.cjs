@@ -30,7 +30,7 @@ module.exports = {
     } }
   },
   deb: {
-    depends: ['libgtk-3-0 | libgtk-3-0t64', 'libnss3', 'libxss1', 'libxtst6', 'xdg-utils', 'libatspi2.0-0', 'libuuid1', 'libasound2 | libasound2t64', 'libgbm1'],
+    depends: ['libgtk-3-0 | libgtk-3-0t64', 'libnss3', 'libxss1', 'libxtst6', 'xdg-utils', 'libatspi2.0-0', 'libuuid1', 'fontconfig', 'libasound2 | libasound2t64', 'libgbm1'],
     recommends: ['libsecret-1-0', 'fonts-noto-cjk']
   }
 };

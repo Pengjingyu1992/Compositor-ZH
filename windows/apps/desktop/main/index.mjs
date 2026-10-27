@@ -287,7 +287,8 @@ handler('editor:importPSD', async () => {
   if (!(await canLeave())) return { canceled: true }; session.pending = true; const own = session.generation;
   try {
     const choice = await dialog.showOpenDialog(win, { properties: ['openFile'], filters: [{ name: 'Photoshop', extensions: ['psd'] }] }); if (choice.canceled) return { canceled: true };
-    await safeDirectory(path.dirname(choice.filePaths[0])); const b = await safeRead(choice.filePaths[0], LIMITS.asset);
+    const imageDirectory = await safeDirectory(path.dirname(choice.filePaths[0]));
+    const b = await safeRead(path.join(imageDirectory, path.basename(choice.filePaths[0])), LIMITS.asset);
     let result;
     try { result = codecs.importPSD(new Uint8Array(b)); }
     catch (e) {

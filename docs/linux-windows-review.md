@@ -15,7 +15,7 @@
 
 ## 建议后续顺序
 
-1. **完成 Windows 原生 CI 和桌面验收，再发布两端新预发布。** 公开 Windows 包仍为 `0.3.0-alpha.1`，Linux 为 `0.4.0-alpha.1`。目前分支修复不会自动更新这些安装包。Windows 两次历史 CI（[39720751485](https://github.com/Pengjingyu1992/Compositor-ZH/actions/runs/39720751485)、[39409687571](https://github.com/Pengjingyu1992/Compositor-ZH/actions/runs/39409687571)）的源码、单测和 EXE/ZIP 构建通过，均在 Electron GUI 步骤失败；公开日志不足以确定具体用例，不能据此认定是同一个应用 Bug。
+1. **完成真实桌面验收，再发布两端新预发布。** 本轮 Windows/Linux CI 均已通过。公开 Windows 包仍为 `0.3.0-alpha.1`，Linux 为 `0.4.0-alpha.1`，修复分支和 CI 候选包不会自动更新这些发行版。发布时使用新版本标签，保持既有 Windows/macOS 发布及全局 Latest。
 2. **补齐 macOS v17 项目互通。** `main` 的 v17 允许原始 PNG、16 位样本和色彩配置，编辑使用经方向/色彩管理处理的 8 位 sRGB 代理。当前 Linux/Windows 正确拒绝高于 v16 的项目。需要原始资源与代理分离，验证变换无损保留、像素编辑替换、保存/恢复往返及色彩样本；不能只提高版本上限。
 3. **补真实桌面矩阵。** Windows 10/11、GNOME/KDE、Wayland/X11；重点验证中文输入法、125%/150%/200% 缩放、多屏、压感板、硬件 GPU、安装升级及权限。云端程序化组合事件不等于真实输入法验收。
 4. **统一 Windows 候选包上传校验。** 当前草稿上传仅接受 `windows-verify.yml` 的 push 构建，标签构建的工作流路径为 `windows-release.yml`，会被拒绝。调整前应校验候选构建 SHA、标签 SHA、草稿目标 SHA 一致；继续保持 Windows/Linux 独立预发布，不移动既有标签或全局 Latest。
@@ -29,6 +29,8 @@
 - Deb 依赖修复通过实际包正反检查；该检查使用已有应用字节，不等于新应用的完整包验收。
 - Linux 新构建完整 GUI：55 项执行，54 通过、1 失败。唯一失败为新增测试在撤销重绘完成前发送重做，被忙碌保护拒绝；补齐等待后原构建的原生历史模块 2/2 通过。55 个不同用例均有通过记录，但没有把原始完整运行改写为全通过。
 - 完整及复测 JSON 分别保留在 `linux/test-results/linux-windows-hardening/full-gui.json`、`native-history-recheck.json`（本地测试产物，不提交到源码）。复测只修改测试，应用构建未变。
-- `c16cbb7` 的 [Linux CI](https://github.com/Pengjingyu1992/Compositor-ZH/actions/runs/40488916237) 已通过完整 GUI、AppImage 启动器和全部包审查。对应 [Windows CI](https://github.com/Pengjingyu1992/Compositor-ZH/actions/runs/40488916216) 为 46 通过、6 失败、3 项 Linux 用例跳过；6 项均卡在首次 PNG/GIF 导入，恢复和原生历史回归通过。已修正导入时忽略规范父路径的问题，等待后续 Windows 构建确认。
+- 最终应用提交 `c8e5bd5` 的 [Windows CI](https://github.com/Pengjingyu1992/Compositor-ZH/actions/runs/40490517731) 全部通过：52 项 GUI 通过，3 项 Linux 专用测试按平台跳过，EXE/ZIP 构建和包审查通过。
+- 同一提交的 [Linux CI](https://github.com/Pengjingyu1992/Compositor-ZH/actions/runs/40490517722) 全部通过：完整 GUI、解压 AppImage 启动器回归、Deb/AppImage/tar.gz 构建、依赖/许可证/内容审查及候选产物上传成功。
+- 排查记录：[首次 Windows CI](https://github.com/Pengjingyu1992/Compositor-ZH/actions/runs/40488916216) 为 46 通过、6 失败、3 项 Linux 用例跳过；6 项均卡在首次 PNG/GIF 导入。修正普通图像及 PSD 导入忽略规范父路径的问题后，这些用例全部通过。真实 Win10/11、输入法、硬件 GPU 和高 DPI 验收仍待完成。
 
 已有隐私边界保持：基础编辑离线，可选 AI 使用配置的接口，Linux 拒绝 `basic_text` 密钥保存。参见 [隐私审查](linux-privacy-review.md)。发行构建继续保留 Chromium 沙箱；仅隔离测试容器使用测试开关。

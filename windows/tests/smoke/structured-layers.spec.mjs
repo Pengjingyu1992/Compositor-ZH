@@ -1,3 +1,4 @@
+import{waitForSaved}from'./save-check.mjs';
 import { test, expect, _electron } from '@playwright/test';
 import { mkdtemp, rm, readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -37,7 +38,7 @@ test('editable fill and pen dialogs cancel cleanly, save and reopen geometry, an
     await expect(page.getByTestId('undo')).toBeEnabled();await page.getByTestId('undo').click();
     await page.getByTestId('redo').click();await expect(page.getByTestId('save-project')).toBeEnabled();
     await instance.evaluate(({dialog},output)=>{dialog.showSaveDialog=async()=>({canceled:false,filePath:output});},output);
-    await menu('file-save-as');await expect(page.locator('.badge')).toContainText('Saved');
+    await menu('file-save-as');await waitForSaved(page);
     const manifest=JSON.parse(await readFile(path.join(output,'manifest.json'),'utf8'));
     const fill=manifest.layers.find(layer=>layer.fill),vector=manifest.layers.find(layer=>layer.shape?.vector);
     expect(fill.fill.kind).toBe('Linear');expect(fill.vectorMask.contours[0].anchors).toHaveLength(4);

@@ -1,4 +1,9 @@
 <script setup lang="ts">
+import NavigatorPanel from './NavigatorPanel.vue';
+import Rulers from './Rulers.vue';
+import PalettePanel from './PalettePanel.vue';
+import ViewSettingsDialog from './ViewSettingsDialog.vue';
+import {DEFAULT_VIEW_SETTINGS,VIEW_OPTION_KEYS,validateViewSettings}from'../../../packages/comp-bridge/view-settings.mjs';
 import CommandDialog from './CommandDialog.vue';
 import HistoryDialog from './HistoryDialog.vue';
 import {commandCatalog}from'./command-catalog';
@@ -38,13 +43,14 @@ const overlay=ref<HTMLCanvasElement>(),artboard=ref<HTMLDivElement>();
 const inspectorTab=ref('properties'), detailsDialog=ref(false), searchOpen=ref(false);
 const stackLiquify=ref(false);
 function openFilterStack(liquify=false){const row=selected.value;if(!editable.value||!row?.imageFile||!liquify&&(row.text||row.shape||row.fill)||row.isGroup||row.adjustment){error.value='unsupported';return;}structuredLayer.value=row;stackLiquify.value=liquify;structuredDialog.value='stack';}
+const swatches=ref<string[]>([...DEFAULT_VIEW_SETTINGS.swatches]),navigationViewport=ref({x:0,y:0,w:0,h:0});
 const commandActions=ref<Record<string,()=>unknown>>({});
 function canCommand(id:string){
   if(busy.value||painting.value||animationPlaying.value||frameRendering.value)return false;
-  if(['new','open','recover','details'].includes(id))return true;
+  if(['new','open','recover','details','palette','viewSettings'].includes(id))return true;
   const p=project.value,row=selected.value;if(!p)return false;
   if(id==='undo')return p.canUndo;if(id==='redo')return p.canRedo;
-  if(['save','saveAs','close','fit','actual','grid','snap','historyPanel','properties'].includes(id))return true;
+  if(['save','saveAs','close','fit','actual','grid','snap','rulers','navigator','historyPanel','properties'].includes(id))return true;
   if(['exportAs','exportPSD','gif','eps','copyMerged'].includes(id))return source.value==='engine';
   if(!editable.value)return false;
   if(id==='repeatFilter')return !!row?.imageFile&&!!full.lastFilter;
@@ -104,6 +110,7 @@ let rendererOwner = '';
 let renderer: ReturnType<typeof createPreviewRenderer> | undefined, frameRenderTask: Promise<void> | undefined, epoch = 0, operation = 0, requests = 0, dragDepth = 0;
 const subscriptions: (() => void)[] = [];
 function fit() {
+  void nextTick(updateNavigation);
   if (project.value && stage.value) zoom.value = Math.min(8, Math.max(.01, Math.min((stage.value.clientWidth - 80) / project.value.manifest.width, (stage.value.clientHeight - 80) / project.value.manifest.height)));
 }
 function scale(factor: number) { zoom.value = Math.max(.01, Math.min(8, zoom.value * factor)); }
@@ -325,14 +332,25 @@ watch(() => newDialog.value || psdDialog.value || outputDialog.value || structur
   } else if (returnFocus?.isConnected) returnFocus.focus();
 });
 function cancelStroke(){full.cancel();drag=undefined;}
+let viewPreferencesReady=false,viewPreferencesTimer:ReturnType<typeof setTimeout>|undefined;
+function viewState(){return {...Object.fromEntries(VIEW_OPTION_KEYS.map(key=>[key,(full.options as Record<string,any>)[key]])),foreground:color.value,background:full.background,swatches:[...swatches.value]};}
+function applyViewSettings(value:Record<string,any>){const settings=validateViewSettings(value);for(const key of VIEW_OPTION_KEYS)(full.options as Record<string,any>)[key]=settings[key];color.value=settings.foreground;full.background=settings.background;swatches.value=[...settings.swatches];}
+function confirmViewSettings(value:Record<string,any>){applyViewSettings(value);structuredDialog.value='';}
+watch(viewState,()=>{if(!viewPreferencesReady)return;clearTimeout(viewPreferencesTimer);viewPreferencesTimer=setTimeout(()=>{void window.viewer.viewSettings(ipcData(viewState())).then(result=>{if(result.error)settingError.value=true;}).catch(()=>{settingError.value=true;});},150);},{deep:true});
+const gridStyle=computed(()=>{const spacing=Math.max(1,full.options.gridSpacing*zoom.value),minor=Math.max(.5,spacing/full.options.gridSubdivisions),rgb=[1,3,5].map(index=>parseInt(full.options.gridColor.slice(index,index+2),16)),line=(opacity:number)=>'rgba('+rgb.join(',')+','+opacity+')',major=line(full.options.gridOpacity/100),faint=line(full.options.gridOpacity/300);return {backgroundImage:`linear-gradient(to right,${major} 1px,transparent 1px),linear-gradient(to bottom,${major} 1px,transparent 1px),linear-gradient(to right,${faint} 1px,transparent 1px),linear-gradient(to bottom,${faint} 1px,transparent 1px)`,backgroundSize:`${spacing}px ${spacing}px,${spacing}px ${spacing}px,${minor}px ${minor}px,${minor}px ${minor}px`};});
+function updateNavigation(){const p=project.value,area=stage.value,board=artboard.value;if(!p||!area||!board)return;const bounds=area.getBoundingClientRect(),image=board.getBoundingClientRect(),x=Math.max(0,Math.min(p.manifest.width,(bounds.left-image.left)/zoom.value)),y=Math.max(0,Math.min(p.manifest.height,(bounds.top-image.top)/zoom.value));navigationViewport.value={x,y,w:Math.max(0,Math.min(p.manifest.width-x,(bounds.right-Math.max(bounds.left,image.left))/zoom.value)),h:Math.max(0,Math.min(p.manifest.height-y,(bounds.bottom-Math.max(bounds.top,image.top))/zoom.value))};}
+function navigate(point:{x:number;y:number}){const area=stage.value,board=artboard.value;if(!area||!board||busy.value||painting.value)return;const bounds=area.getBoundingClientRect(),image=board.getBoundingClientRect();area.scrollLeft+=image.left-bounds.left+point.x*zoom.value-bounds.width/2;area.scrollTop+=image.top-bounds.top+point.y*zoom.value-bounds.height/2;updateNavigation();}
+async function rulerGuide(guide:{axis:string;position:number;owner:{id:string;revision:string}}){const p=project.value;if(p)await submitEdit({kind:'guides',guides:[...(p.manifest.guides??[]),{id:crypto.randomUUID().toUpperCase(),axis:guide.axis,position:guide.position}]},guide.owner);}
+watch(()=>[project.value?.id,project.value?.revision,zoom.value,busy.value,frameRendering.value],()=>{void nextTick(updateNavigation);},{flush:'post'});
 function panStart(event:PointerEvent){if(full.start(event))return;if(!stage.value||event.button!==0||!project.value)return;drag={x:event.clientX,y:event.clientY,left:stage.value.scrollLeft,top:stage.value.scrollTop};stage.value.setPointerCapture(event.pointerId);}
 function panMove(event:PointerEvent){if(full.move(event))return;if(!stage.value||!drag)return;stage.value.scrollLeft=drag.left+drag.x-event.clientX;stage.value.scrollTop=drag.top+drag.y-event.clientY;}
 async function panEnd(event:PointerEvent){drag=undefined;await full.end(event);}
 onMounted(async () => {
   const settings = await window.viewer.settings(); language.value = settings.language; version.value = settings.version; edition.value = settings.edition;
   document.documentElement.lang = language.value;
+  try{const result=await window.viewer.viewSettings();if(result.settings)applyViewSettings(result.settings);await nextTick();}catch{settingError.value=true;}viewPreferencesReady=true;
   subscriptions.push(window.viewer.onOpen(open), window.viewer.onReload(reload), window.viewer.onClose(closeProject), window.viewer.onFit(fit), window.viewer.onActual(() => zoom.value = 1));
-  const commands: Record<string, () => unknown> = {...full.commands,commandFinder:openCommands,historyPanel:showHistoryPanel,textOutlines:()=>edit({kind:'textOutlines'}),filterStack:()=>openFilterStack(),advancedLiquify:()=>openFilterStack(true),newFill:()=>openStructured('fill'),editFill:()=>openStructured('fill',true),newPath:()=>openStructured('path'),editPath:()=>openStructured('path',true),newVectorMask:()=>openStructured('mask'),editVectorMask:()=>openStructured('mask',true),vectorMaskFromPath:maskFromPath,exportAs:()=>{outputDialog.value=true;},new:()=>{newDialog.value=true;},image:importImage,importPSD,save:()=>save(),saveAs:()=>save(true),png:()=>exportImage('png'),gif:()=>exportImage('gif'),eps:()=>exportImage('eps'),exportPSD:()=>{psdDialog.value=true;},recover,undo:()=>history('undo'),redo:()=>history('redo'),addPixels:()=>add('pixels'),addGroup:()=>add('group'),addMask:()=>{if(selected.value)edit({kind:'mask',action:'add'});},details:showDetails,properties:()=>{inspectorTab.value='properties';},effects:showEffects};
+  const commands: Record<string, () => unknown> = {...full.commands,navigator:()=>{full.options.navigator=!full.options.navigator;},rulers:()=>{full.options.rulers=!full.options.rulers;},palette:()=>{full.options.palette=!full.options.palette;},viewSettings:()=>{structuredDialog.value='viewSettings';},commandFinder:openCommands,historyPanel:showHistoryPanel,textOutlines:()=>edit({kind:'textOutlines'}),filterStack:()=>openFilterStack(),advancedLiquify:()=>openFilterStack(true),newFill:()=>openStructured('fill'),editFill:()=>openStructured('fill',true),newPath:()=>openStructured('path'),editPath:()=>openStructured('path',true),newVectorMask:()=>openStructured('mask'),editVectorMask:()=>openStructured('mask',true),vectorMaskFromPath:maskFromPath,exportAs:()=>{outputDialog.value=true;},new:()=>{newDialog.value=true;},image:importImage,importPSD,save:()=>save(),saveAs:()=>save(true),png:()=>exportImage('png'),gif:()=>exportImage('gif'),eps:()=>exportImage('eps'),exportPSD:()=>{psdDialog.value=true;},recover,undo:()=>history('undo'),redo:()=>history('redo'),addPixels:()=>add('pixels'),addGroup:()=>add('group'),addMask:()=>{if(selected.value)edit({kind:'mask',action:'add'});},details:showDetails,properties:()=>{inspectorTab.value='properties';},effects:showEffects};
   commandActions.value={...commands,open,close:closeProject,fit,actual:()=>{zoom.value=1;}};
   for(const [name,action] of Object.entries(commands))subscriptions.push(window.editor.onCommand(name,()=>{
     if(composing)return;
@@ -345,7 +363,7 @@ onMounted(async () => {
   window.addEventListener('compositionstart', compositionStart); window.addEventListener('compositionend', compositionEnd);
   window.addEventListener('keydown', onKey); window.addEventListener('resize', fit);
 });
-onUnmounted(() => { stopPlayback(); operation++; epoch++; cancelStroke();renderer?.dispose(); full.closeModal(); subscriptions.forEach(stop => stop()); window.removeEventListener('compositionstart', compositionStart); window.removeEventListener('compositionend', compositionEnd); window.removeEventListener('keydown', onKey); window.removeEventListener('resize', fit); });
+onUnmounted(() => { stopPlayback();clearTimeout(viewPreferencesTimer); operation++; epoch++; cancelStroke();renderer?.dispose(); full.closeModal(); subscriptions.forEach(stop => stop()); window.removeEventListener('compositionstart', compositionStart); window.removeEventListener('compositionend', compositionEnd); window.removeEventListener('keydown', onKey); window.removeEventListener('resize', fit); });
 </script>
 
 <template>
@@ -398,9 +416,9 @@ onUnmounted(() => { stopPlayback(); operation++; epoch++; cancelStroke();rendere
         <button class="icon-button" :title="full.labels.swap+' (X)'" :aria-label="full.labels.swap" @click="[color,full.background]=[full.background,color]"><Icon name="swap"/></button>
         <button class="icon-button" :title="full.labels.defaults+' (D)'" :aria-label="full.labels.defaults" @click="color='#000000';full.background='#ffffff'"><Icon name="defaults"/></button>
       </nav>
-      <section class="workarea">
+      <section class="workarea navigation-workarea">
         <div v-if="issues.length" class="notice">{{ source==='saved' ? t.fallback : t.detailsOnly }} {{ issues.map(labelIssue).join(' · ') }}</div>
-        <div ref="stage" class="stage" @wheel="wheel" @pointerdown="panStart" @pointermove="panMove" @pointerup="panEnd" @pointercancel="cancelStroke">
+        <div ref="stage" class="stage" @scroll="updateNavigation" @wheel="wheel" @pointerdown="panStart" @pointermove="panMove" @pointerup="panEnd" @pointercancel="cancelStroke">
           <div v-if="!project" class="welcome">
             <form @submit.prevent="create">
               <h1>{{ t.editor.newCanvas }}</h1><p>{{ ui.transparent }}</p>
@@ -413,7 +431,7 @@ onUnmounted(() => { stopPlayback(); operation++; epoch++; cancelStroke();rendere
             <div ref="artboard" class="artboard" :class="'tool-'+tool" :style="{width:project.manifest.width * zoom + 'px',height:project.manifest.height * zoom + 'px'}">
               <canvas v-if="source==='engine'" ref="canvas" data-testid="rendered-canvas"></canvas>
               <canvas v-if="source==='engine'" ref="overlay" class="paint-overlay"></canvas>
-              <div v-if="source==='engine' && full.options.grid" class="grid-overlay" :style="{backgroundSize:10*zoom+'px '+10*zoom+'px'}"></div>
+              <div v-if="source==='engine' && full.options.grid" class="grid-overlay" :style="gridStyle"></div>
               <svg v-if="source==='engine'" class="geometry-overlay" :viewBox="'0 0 '+project.manifest.width+' '+project.manifest.height" :style="{width:'100%',height:'100%'}">
                 <line v-for="g in project.manifest.guides??[]" :key="g.id" :x1="g.axis==='vertical'?g.position:0" :x2="g.axis==='vertical'?g.position:project.manifest.width" :y1="g.axis==='horizontal'?g.position:0" :y2="g.axis==='horizontal'?g.position:project.manifest.height" stroke="#71dfed" :stroke-width="1/zoom"/>
                 <g v-if="tool==='move' && selected && full.selectionTransform" :transform="'translate('+((full.selectionTransform??selected.transform).origin[0]+(full.selectionTransform??selected.transform).size[0]/2)+','+((full.selectionTransform??selected.transform).origin[1]+(full.selectionTransform??selected.transform).size[1]/2)+') rotate('+(full.selectionTransform??selected.transform).rotation+') translate('+(-(full.selectionTransform??selected.transform).size[0]/2)+','+(-(full.selectionTransform??selected.transform).size[1]/2)+')'">
@@ -423,9 +441,14 @@ onUnmounted(() => { stopPlayback(); operation++; epoch++; cancelStroke();rendere
                 </g>
               </svg>
               <img v-else :key="project.id" :src="previewURL" :alt="t.saved" draggable="false" data-testid="saved-preview" @error="savedPreviewFailed">
+              <Rulers v-if="source==='engine'&&full.options.rulers" :language="language" :width="project.manifest.width" :height="project.manifest.height" :zoom="zoom" :resolution="project.manifest.resolution??72" :unit="full.options.rulerUnit" :viewport="navigationViewport" :disabled="!editable" :owner="{id:project.id,revision:project.revision}" @gesture="painting=$event" @guide="rulerGuide"/>
             </div>
           </div>
           <p v-else class="no-preview">{{ t.noPreview }}</p>
+        </div>
+        <div class="floating-widgets" @pointerdown.stop @wheel.stop>
+          <NavigatorPanel v-if="project&&source==='engine'&&full.options.navigator" :language="language" :source="canvas" :width="project.manifest.width" :height="project.manifest.height" :zoom="zoom" :revision="project.revision" :busy="busy||painting||frameRendering||animationPlaying" :viewport="navigationViewport" @close="full.options.navigator=false" @navigate="navigate" @zoom="zoom=$event"/>
+          <PalettePanel v-if="full.options.palette" :language="language" :color="color" :background="full.background" :swatches="swatches" :disabled="painting||busy||animationPlaying" @color="color=$event" @background="full.background=$event" @swatches="swatches=$event" @close="full.options.palette=false"/>
         </div>
       </section>
       <aside>
@@ -501,6 +524,7 @@ onUnmounted(() => { stopPlayback(); operation++; epoch++; cancelStroke();rendere
     <AiPanel :language="language" :project="project" :busy="busy" :editable="editable" :edit="submitEdit" :history="history"/>
     <CompleteControls :e="full" mode="dialogs" :tool="tool" :disabled="!editable" :selected="selected" :color="color" :size="brushSize" :opacity="brushOpacity" :target="paintTarget"/>
     <OutputDialog v-if="outputDialog && project" :language="language" :project="project" :get-composite="outputComposite" :export-file="(type,options)=>exportImage(type,false,options)" @close="outputDialog=false"/>
+    <ViewSettingsDialog v-if="structuredDialog==='viewSettings'" :language="language" :settings="viewState()" @close="structuredDialog=''" @apply="confirmViewSettings"/>
     <CommandDialog v-if="structuredDialog==='commands'" :language="language" :commands="finderCommands" @close="structuredDialog=''" @run="runCommand"/>
     <HistoryDialog v-if="structuredDialog==='history' && project" :language="language" :project="project" :busy="busy" @close="structuredDialog=''" @jump="jumpHistory"/>
     <FilterStackDialog v-if="structuredDialog==='stack' && project && structuredLayer" :language="language" :project="project" :layer="structuredLayer" :initial-liquify="stackLiquify" :commit="submitEdit" @close="structuredDialog=''"/>
@@ -511,3 +535,7 @@ onUnmounted(() => { stopPlayback(); operation++; epoch++; cancelStroke();rendere
     <div v-if="detailsDialog" class="modal-shade" @click.self="detailsDialog=false"><section class="dialog details-dialog" role="dialog" aria-modal="true" :aria-label="ui.details"><div class="dialog-heading"><h2>{{ ui.details }}</h2><button class="icon-button" :aria-label="t.close" @click="detailsDialog=false"><Icon name="close"/></button></div><p>{{ t.sourceNote }}</p><p>{{ t.readonly }} · {{ version }}</p><template v-if="project"><p>{{ ui.source }}：{{ source==='engine'?t.engine:source==='saved'?t.saved:t.metadata }}</p><section class="coverage"><h3>{{ t.coverage }}</h3><dl><div><dt>{{ t.simple }}</dt><dd>{{ project.analysis.coverage.simple }}</dd></div><div><dt>{{ t.pixels }}</dt><dd>{{ project.analysis.coverage.pixelFallback }}</dd></div><div><dt>{{ t.preview }}</dt><dd>{{ project.analysis.coverage.previewOnly }}</dd></div></dl><p>{{ t.coverageNote }}</p><button :disabled="busy" data-testid="copy-report" @click="copyReport">{{ t.copyReport }}</button><small>{{ t.reportPrivacy }}</small><small v-if="reportState!=='idle'" role="status">{{ reportState==='copied'?t.reportCopied:t.reportError }}</small></section><details v-if="selected" class="raw-properties"><summary>{{ t.properties }}</summary><pre>{{ formattedProperties }}</pre></details></template><div class="button-row"><button class="primary" @click="detailsDialog=false">{{ t.close }}</button></div></section></div>
   </div>
 </template>
+
+<style>
+.navigation-workarea{position:relative}.floating-widgets{position:absolute;z-index:7;right:12px;top:12px;max-height:calc(100% - 24px);overflow:auto;display:flex;flex-direction:column;gap:10px;pointer-events:none}.floating-panel{pointer-events:auto;background:var(--panel,#242424);border:1px solid var(--border);border-radius:6px;padding:8px;box-shadow:0 6px 20px #0005}.floating-panel>header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}.floating-panel>header .icon-button{width:22px;height:22px;min-height:22px}.ruler-guide line{stroke:#71dfed}
+</style>

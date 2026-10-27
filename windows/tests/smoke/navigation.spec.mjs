@@ -1,0 +1,23 @@
+import{test,expect,_electron}from'@playwright/test';
+import{mkdtemp,rm,readFile}from'node:fs/promises';
+import path from'node:path';
+import os from'node:os';
+import{fixture}from'../fixtures.mjs';
+import{smokeExecutable,smokeArgs,smokeEnv}from'./electron-launch.mjs';
+
+test('navigator, ruler guides, grid settings and RGB/HSV swatches keep project edits separate from local preferences',async()=>{
+  test.setTimeout(120000);const temp=await mkdtemp(path.join(os.tmpdir(),'comp-navigation-ui-')),source=path.join(temp,'source.comp');await fixture(source,m=>({...m,width:640,height:480}));let instance;const errors=[];
+  try{
+    const launch=async()=>{instance=await _electron.launch({executablePath:smokeExecutable(),args:smokeArgs(),env:smokeEnv(temp)});const page=await instance.firstWindow();page.on('pageerror',error=>errors.push(error.message));await instance.evaluate(({dialog},source)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[source]});dialog.showMessageBox=async()=>({response:1});},source);return page;};
+    let page=await launch();const command=async name=>instance.evaluate(({BrowserWindow},name)=>BrowserWindow.getAllWindows()[0].webContents.send('editor:'+name),name);
+    await page.getByTestId('language').selectOption('en');await page.getByTestId('open-project').click();await expect(page.getByTestId('save-project')).toBeEnabled();
+    await command('navigator');await expect(page.getByTestId('navigator-canvas')).toBeVisible();
+    await page.getByRole('region',{name:'Navigator',exact:true}).getByRole('slider').focus();await page.keyboard.press('End');const mini=page.getByTestId('navigator-canvas'),miniBox=await mini.boundingBox();await mini.click({position:{x:miniBox.width*.95,y:miniBox.height*.75}});await expect.poll(()=>page.locator('.stage').evaluate(el=>el.scrollLeft)).toBeGreaterThan(0);
+    await command('palette');const panel=page.getByRole('region',{name:'Color panel',exact:true});await expect(panel).toBeVisible();await page.getByTestId('palette-hex').fill('#12ab34');await page.getByTestId('palette-hex').press('Tab');await panel.getByRole('button',{name:'Add swatch',exact:true}).click();await panel.getByRole('button',{name:/^Background/}).click();await page.getByTestId('palette-hex').fill('#345678');await page.getByTestId('palette-hex').press('Tab');
+    await command('viewSettings');await page.getByTestId('grid-spacing').fill('32');await page.getByRole('dialog').getByLabel('Subdivisions',{exact:true}).fill('4');await page.getByTestId('apply-view-settings').click();await expect(page.getByRole('dialog')).toHaveCount(0);await command('grid');await expect(page.locator('.grid-overlay')).toBeVisible();await expect(page.getByTestId('undo')).toBeDisabled();
+    await command('rulers');await expect(page.getByTestId('horizontal-ruler')).toBeVisible();await page.getByRole('button',{name:'Fit to window',exact:true}).click();const ruler=await page.getByTestId('horizontal-ruler').boundingBox(),board=await page.locator('.artboard').boundingBox();await page.mouse.move(ruler.x+ruler.width*.3,ruler.y+ruler.height*.5);await page.mouse.down();await page.mouse.move(board.x+board.width*.3,board.y+board.height*.3,{steps:5});await page.mouse.up();await expect(page.getByTestId('undo')).toBeEnabled();
+    const saved=path.join(temp,'guides.comp');await instance.evaluate(({dialog},saved)=>{dialog.showSaveDialog=async()=>({canceled:false,filePath:saved});},saved);await command('saveAs');await expect(page.locator('.badge')).toContainText('Saved');const manifest=JSON.parse(await readFile(path.join(saved,'manifest.json'),'utf8'));expect(manifest.guides).toHaveLength(1);expect(manifest.guides[0].axis).toBe('horizontal');expect(manifest.guides[0].position).toBeCloseTo(144,0);
+    await expect.poll(async()=>{const result=await page.evaluate(()=>window.viewer.viewSettings());return result.settings?.gridSpacing;}).toBe(32);const settings=await page.evaluate(()=>window.viewer.viewSettings());expect(settings.settings.foreground).toBe('#12ab34');expect(settings.settings.background).toBe('#345678');expect(settings.settings.swatches).toContain('#12ab34');expect(JSON.stringify(settings)).not.toContain(temp);
+    await instance.close();instance=undefined;page=await launch();await expect(page.getByTestId('palette-hex')).toHaveValue('#12ab34');await page.getByTestId('open-project').click();await expect(page.getByTestId('save-project')).toBeEnabled();await expect(page.getByTestId('navigator-canvas')).toBeVisible();await expect(page.getByTestId('horizontal-ruler')).toBeVisible();await expect(page.getByTestId('undo')).toBeDisabled();expect(errors).toEqual([]);
+  }finally{await instance?.close();await rm(temp,{recursive:true,force:true});}
+});

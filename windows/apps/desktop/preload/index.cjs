@@ -5,6 +5,7 @@ const subscribe = (channel, callback) => {
   return () => ipcRenderer.removeListener(channel, listener);
 };
 contextBridge.exposeInMainWorld('viewer', Object.freeze({
+  viewSettings: value => ipcRenderer.invoke('viewer:viewSettings',value),
   settings: () => ipcRenderer.invoke('viewer:settings'),
   language: value => ipcRenderer.invoke('viewer:language', value),
   open: () => ipcRenderer.invoke('viewer:open'),
@@ -21,7 +22,7 @@ contextBridge.exposeInMainWorld('viewer', Object.freeze({
   onFit: callback => subscribe('viewer:fit', callback),
   onActual: callback => subscribe('viewer:actual', callback)
 }));
-const commands = new Set(['commandFinder','historyPanel','repeatFilter','textOutlines','filterStack','advancedLiquify','newFill','editFill','newPath','editPath','newVectorMask','editVectorMask','vectorMaskFromPath','exportAs', 'new', 'image', 'importPSD', 'save', 'saveAs', 'png', 'gif', 'eps', 'exportPSD', 'recover', 'undo', 'redo', 'addPixels', 'addGroup', 'addMask', 'details', 'properties', 'effects','selectAll','deselect','invertSelection','expandSelection','contractSelection','featherSelection','fill','clear','selectionMask','cropSelection','canvasSize','imageSize','trim','filter','group','ungroup','duplicate','delete','merge','flatten','rasterize','applyMask','text','shape','copy','copyMerged','cut','paste','flipCanvasH','flipCanvasV','grid','snap']);
+const commands = new Set(['navigator','rulers','palette','viewSettings','commandFinder','historyPanel','repeatFilter','textOutlines','filterStack','advancedLiquify','newFill','editFill','newPath','editPath','newVectorMask','editVectorMask','vectorMaskFromPath','exportAs', 'new', 'image', 'importPSD', 'save', 'saveAs', 'png', 'gif', 'eps', 'exportPSD', 'recover', 'undo', 'redo', 'addPixels', 'addGroup', 'addMask', 'details', 'properties', 'effects','selectAll','deselect','invertSelection','expandSelection','contractSelection','featherSelection','fill','clear','selectionMask','cropSelection','canvasSize','imageSize','trim','filter','group','ungroup','duplicate','delete','merge','flatten','rasterize','applyMask','text','shape','copy','copyMerged','cut','paste','flipCanvasH','flipCanvasV','grid','snap']);
 contextBridge.exposeInMainWorld('editor', Object.freeze({
   clipboard: (id,revision,action,png) => ipcRenderer.invoke('editor:clipboard',id,revision,action,png),
   textTools: (action,payload) => ipcRenderer.invoke('editor:textTools',action,payload),

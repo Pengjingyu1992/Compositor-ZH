@@ -5,6 +5,7 @@ import { createRequire } from 'node:module';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {ViewPreferences}from'../../../packages/platform/view-preferences.mjs';
 import { getLanguage, setLanguage } from '../../../packages/platform/preferences.mjs';
 import { ProjectSession } from '../../../packages/platform/project-session.mjs';
 import { editProject, projectData } from '../../../packages/comp-bridge/edit.mjs';
@@ -32,6 +33,7 @@ let win, language = 'zh-Hans';
 const codecs = createRequire(import.meta.url)(path.join(ROOT, 'out/codecs/index.cjs'));
 const recovery = new RecoveryStore(path.join(app.getPath('userData'), 'recovery'));
 const journalDirectory = path.join(app.getPath('userData'), 'save-journals');
+const viewPreferences=new ViewPreferences(app.getPath('userData'));
 const session = new ProjectSession(readProject, { codecs, recovery, journalDirectory });
 let closing = false, closePending = false;
 let preferenceQueue = Promise.resolve();
@@ -82,7 +84,7 @@ function nativeMenu() {
       { label: '100%', accelerator: 'Ctrl+1', click: () => win?.webContents.send('viewer:actual') },
       ...[['grid','网格','Grid'],['snap','吸附','Snap']].map(([name,cn,en])=>({label:zh?cn:en,click:()=>win?.webContents.send('editor:'+name)})),
       { label: zh ? '全屏' : 'Full screen', role: 'togglefullscreen' }
-    ] },
+    ,... [['navigator','导航缩略图','Navigator'],['rulers','标尺','Rulers'],['palette','颜色面板','Color panel'],['viewSettings','网格与标尺设置…','Grid and ruler settings…']].map(([name,cn,en])=>({id:`view-${name}`,label:zh?cn:en,click:()=>win?.webContents.send(`editor:${name}`)}))] },
     { label:zh?'选择':'Select',submenu:[['selectAll','全选','Select all','Ctrl+A'],['deselect','取消选区','Deselect','Ctrl+D'],['invertSelection','反选','Invert selection','Ctrl+Shift+I'],['expandSelection','扩展选区','Expand selection'],['contractSelection','收缩选区','Contract selection'],['featherSelection','羽化选区','Feather selection'],['fill','填充前景色','Fill foreground'],['clear','清除','Clear'],['selectionMask','选区转蒙版','Selection to mask']].map(([name,cn,en,accelerator])=>({label:zh?cn:en,accelerator,enabled:!!session.current,click:()=>win?.webContents.send('editor:'+name)})) },
     { label:zh?'图像':'Image',submenu:[['canvasSize','画布尺寸…','Canvas size…'],['imageSize','图像尺寸…','Image size…'],['cropSelection','裁剪到选区','Crop to selection'],['trim','修剪透明边缘','Trim transparent edges'],['flipCanvasH','水平翻转画布','Flip canvas horizontally'],['flipCanvasV','垂直翻转画布','Flip canvas vertically']].map(([name,cn,en])=>({label:zh?cn:en,enabled:!!session.current,click:()=>win?.webContents.send('editor:'+name)})) },
     { label: zh ? '图层' : 'Layer', submenu: [
@@ -185,6 +187,7 @@ win.on('close', event => {
 });
 win.on('closed', () => { session.close(); win = null; });
 app.on('window-all-closed', () => app.quit());
+handler('viewer:viewSettings',async value=>{try{return {settings:value===undefined?await viewPreferences.read():await viewPreferences.write(value)};}catch(error){return {error:error.code??'write'};}});
 handler('viewer:settings', () => ({ language, version: app.getVersion(), edition: edition.id }));
 handler('viewer:language', async value => {
   if (!['en', 'zh-Hans'].includes(value)) throw new Error('Invalid language');

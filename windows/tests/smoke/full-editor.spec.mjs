@@ -1,3 +1,4 @@
+import{waitForSaved}from'./save-check.mjs';
 import { smokeExecutable, smokeArgs, smokeEnv } from './electron-launch.mjs';
 import {test,expect,_electron} from '@playwright/test';
 import {mkdtemp,rm,readFile} from 'node:fs/promises';
@@ -17,7 +18,7 @@ test.afterEach(async()=>{await instance?.close();await rm(temp,{recursive:true,f
 async function ready(){await expect(page.getByTestId('layer-opacity')).toBeEnabled();await expect(page.locator('[role=alert]')).toHaveCount(0);}
 async function command(name){await instance.evaluate(({BrowserWindow},name)=>BrowserWindow.getAllWindows()[0].webContents.send('editor:'+name),name);}
 async function draw(tool,from=[.2,.2],to=[.65,.6],alt=false){await page.locator('.toolrail').getByRole('button',{name:tool,exact:true}).click();const b=await page.locator('.artboard').boundingBox();if(alt)await page.keyboard.down('Alt');await page.mouse.move(b.x+b.width*from[0],b.y+b.height*from[1]);await page.mouse.down();await page.mouse.move(b.x+b.width*to[0],b.y+b.height*to[1],{steps:8});await page.mouse.up();if(alt)await page.keyboard.up('Alt');await ready();}
-async function save(name='saved.comp'){const file=path.join(temp,name);await instance.evaluate(({dialog},file)=>{dialog.showSaveDialog=async()=>({canceled:false,filePath:file});},file);await page.getByTestId('save-project').click();await expect(page.locator('.badge')).toContainText('已保存');await ready();return file;}
+async function save(name='saved.comp'){const file=path.join(temp,name);await instance.evaluate(({dialog},file)=>{dialog.showSaveDialog=async()=>({canceled:false,filePath:file});},file);await page.getByTestId('save-project').click();await waitForSaved(page);await ready();return file;}
 test('all 17 tools and native selection/image/filter menus are reachable',async()=>{
  const labels=['移动','选框','套索','魔棒','裁剪','画笔','橡皮擦','污点修复','仿制图章','涂抹','渐变','油漆桶','形状','文字','取色','抓手','缩放'];for(const label of labels){const button=page.getByRole('button',{name:label,exact:true});await button.click();await expect(button).toHaveAttribute('aria-pressed','true');}
  const menus=await instance.evaluate(({Menu})=>Menu.getApplicationMenu().items.map(i=>i.label));expect(menus).toEqual(['文件','编辑','显示','选择','图像','图层','滤镜','帮助']);await page.screenshot({path:path.join(root,'test-results/full-tools-preview.png')});

@@ -1,0 +1,9 @@
+<script setup lang="ts">
+import{computed,ref}from'vue';
+import{parityMessages}from'./parity-labels';
+import{validateViewSettings}from'../../../packages/comp-bridge/view-settings.mjs';
+import type{Language}from'./types';
+const props=defineProps<{language:Language;settings:Record<string,any>}>(),emit=defineEmits(['close','apply']),draft=ref(JSON.parse(JSON.stringify(props.settings))),t=computed(()=>parityMessages[props.language]);
+const valid=computed(()=>{try{validateViewSettings(draft.value);return true;}catch{return false;}});
+</script>
+<template><div class="modal-shade" @click.self="emit('close')"><form class="dialog" role="dialog" aria-modal="true" :aria-label="t.viewSettings" @submit.prevent="valid&&emit('apply',draft)"><h2>{{t.viewSettings}}</h2><div class="style-fields"><label>{{t.gridSpacing}}<input v-model.number="draft.gridSpacing" type="number" min="1" max="30000" data-testid="grid-spacing"></label><label>{{t.gridSubdivisions}}<input v-model.number="draft.gridSubdivisions" type="number" min="1" max="100"></label><label>{{t.gridColor}}<input v-model="draft.gridColor" type="color"></label><label>{{t.opacity}}<input v-model.number="draft.gridOpacity" type="number" min="0" max="100"></label><label>{{t.rulerUnit}}<select v-model="draft.rulerUnit" :aria-label="t.rulerUnit"><option value="px">{{t.pixelsUnit}}</option><option value="in">{{t.inchesUnit}}</option><option value="cm">{{t.centimetersUnit}}</option></select></label></div><p>{{t.viewSettingsTip}}</p><div class="button-row dialog-actions"><button type="button" @click="emit('close')">{{t.cancel}}</button><button class="primary" type="submit" data-testid="apply-view-settings" :disabled="!valid">{{t.apply}}</button></div></form></div></template>

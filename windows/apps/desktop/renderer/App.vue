@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import CommandDialog from './CommandDialog.vue';
+import HistoryDialog from './HistoryDialog.vue';
+import {commandCatalog}from'./command-catalog';
 import AnimationTimeline from './AnimationTimeline.vue';
 import OutputDialog from './OutputDialog.vue';
 import FilterStackDialog from './FilterStackDialog.vue';
@@ -35,6 +38,30 @@ const overlay=ref<HTMLCanvasElement>(),artboard=ref<HTMLDivElement>();
 const inspectorTab=ref('properties'), detailsDialog=ref(false), searchOpen=ref(false);
 const stackLiquify=ref(false);
 function openFilterStack(liquify=false){const row=selected.value;if(!editable.value||!row?.imageFile||!liquify&&(row.text||row.shape||row.fill)||row.isGroup||row.adjustment){error.value='unsupported';return;}structuredLayer.value=row;stackLiquify.value=liquify;structuredDialog.value='stack';}
+const commandActions=ref<Record<string,()=>unknown>>({});
+function canCommand(id:string){
+  if(busy.value||painting.value||animationPlaying.value||frameRendering.value)return false;
+  if(['new','open','recover','details'].includes(id))return true;
+  const p=project.value,row=selected.value;if(!p)return false;
+  if(id==='undo')return p.canUndo;if(id==='redo')return p.canRedo;
+  if(['save','saveAs','close','fit','actual','grid','snap','historyPanel','properties'].includes(id))return true;
+  if(['exportAs','exportPSD','gif','eps','copyMerged'].includes(id))return source.value==='engine';
+  if(!editable.value)return false;
+  if(id==='repeatFilter')return !!row?.imageFile&&!!full.lastFilter;
+  if(['expandSelection','contractSelection','featherSelection','cropSelection'].includes(id))return !!p.selection;
+  if(id==='addMask')return !!row&&!row.maskFile;if(id==='applyMask')return !!row?.maskFile&&!!row.imageFile;
+  if(id==='newVectorMask')return !!row?.imageFile&&!row.maskFile;if(id==='vectorMaskFromPath')return !!row?.shape?.vector;
+  if(id==='ungroup')return !!row?.isGroup;if(id==='group')return !!full.ids.length;
+  if(id==='editFill')return !!row?.fill;if(id==='editPath')return !!row?.shape?.vector;
+  if(id==='editVectorMask')return !!row?.vectorMask;if(id==='textOutlines')return !!row?.text;
+  if(['filter','filterStack','advancedLiquify','effects','rasterize','copy','cut','duplicate','delete','applyMask','newVectorMask','vectorMaskFromPath','addMask'].includes(id))return !!row?.imageFile||['duplicate','delete'].includes(id)&&!!row?.isGroup;
+  return true;
+}
+const finderCommands=computed(()=>commandCatalog.map(([id,zh,en,...keys])=>({id,zh,en,shortcut:keys[0],enabled:canCommand(id)})));
+function openCommands(){if(newDialog.value||psdDialog.value||outputDialog.value||structuredDialog.value||detailsDialog.value||full.modal)return;structuredDialog.value='commands';}
+function showHistoryPanel(){if(project.value&&!busy.value)structuredDialog.value='history';}
+async function runCommand(id:string){structuredDialog.value='';await nextTick();if(canCommand(id))await commandActions.value[id]?.();}
+async function jumpHistory(index:number){const p=project.value;if(!p||busy.value)return;structuredDialog.value='';await request(()=>window.editor.jumpHistory(p.id,p.revision,index));}
 const structuredDialog=ref(''),structuredEditing=ref(false),structuredLayer=ref<LayerRow>();
 function openStructured(mode:string,editing=false){
   const row=selected.value;if(!editable.value)return;
@@ -277,6 +304,7 @@ function onKey(event: KeyboardEvent) {
   }
   if(event.key===' '&&!event.repeat&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&!((event.target as HTMLElement)?.closest('input,textarea,select,[contenteditable]'))&&project.value?.manifest.animation){event.preventDefault();void playAnimation();return;}
   if(event.key.toLowerCase()==='p'&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&!(event.target as HTMLElement)?.closest('input,textarea,select,[contenteditable]')){event.preventDefault();openStructured('path');return;}
+  if((event.ctrlKey||event.metaKey)&&event.shiftKey&&event.key.toLowerCase()==='p'){event.preventDefault();openCommands();return;}
   full.key(event);
   const input=(event.target as HTMLElement)?.closest('input,textarea,select,[contenteditable]');
   if(!painting.value&&!input&&!event.ctrlKey&&!event.altKey&&!event.metaKey){const k=event.key.toLowerCase();if(['b','e','v','h'].includes(k))tool.value=({b:'brush',e:'eraser',v:'move',h:'pan'} as Record<string,string>)[k];}
@@ -288,7 +316,7 @@ function onKey(event: KeyboardEvent) {
 }
 function wheel(event: WheelEvent) { if (event.ctrlKey) { event.preventDefault(); scale(event.deltaY < 0 ? 1.1 : 1 / 1.1); } }
 let drag: { x: number; y: number; left: number; top: number } | undefined;
-const full=reactive(useCompleteEditor({openPath:()=>openStructured('path',true),project,selected,tool,color,brushSize,brushOpacity,paintTarget,painting,editable,language,canvas,overlay,artboard,stage,zoom,error,execute:async(op,p=project.value)=>{await submitEdit({id:selected.value?.id,...op},p,true);},receive:result=>request(()=>Promise.resolve(result)),history,scale}));
+const full=reactive(useCompleteEditor({openPath:()=>openStructured('path',true),project,selected,tool,color,brushSize,brushOpacity,paintTarget,painting,editable,language,canvas,overlay,artboard,stage,zoom,error,execute:async(op,p=project.value)=>{return await submitEdit({id:selected.value?.id,...op},p,true);},receive:result=>request(()=>Promise.resolve(result)),history,scale}));
 watch(() => newDialog.value || psdDialog.value || outputDialog.value || structuredDialog.value || detailsDialog.value || full.modal, async visible => {
   if (visible) {
     returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -304,7 +332,8 @@ onMounted(async () => {
   const settings = await window.viewer.settings(); language.value = settings.language; version.value = settings.version; edition.value = settings.edition;
   document.documentElement.lang = language.value;
   subscriptions.push(window.viewer.onOpen(open), window.viewer.onReload(reload), window.viewer.onClose(closeProject), window.viewer.onFit(fit), window.viewer.onActual(() => zoom.value = 1));
-  const commands: Record<string, () => unknown> = {...full.commands,textOutlines:()=>edit({kind:'textOutlines'}),filterStack:()=>openFilterStack(),advancedLiquify:()=>openFilterStack(true),newFill:()=>openStructured('fill'),editFill:()=>openStructured('fill',true),newPath:()=>openStructured('path'),editPath:()=>openStructured('path',true),newVectorMask:()=>openStructured('mask'),editVectorMask:()=>openStructured('mask',true),vectorMaskFromPath:maskFromPath,exportAs:()=>{outputDialog.value=true;},new:()=>{newDialog.value=true;},image:importImage,importPSD,save:()=>save(),saveAs:()=>save(true),png:()=>exportImage('png'),gif:()=>exportImage('gif'),eps:()=>exportImage('eps'),exportPSD:()=>{psdDialog.value=true;},recover,undo:()=>history('undo'),redo:()=>history('redo'),addPixels:()=>add('pixels'),addGroup:()=>add('group'),addMask:()=>{if(selected.value)edit({kind:'mask',action:'add'});},details:showDetails,properties:()=>{inspectorTab.value='properties';},effects:showEffects};
+  const commands: Record<string, () => unknown> = {...full.commands,commandFinder:openCommands,historyPanel:showHistoryPanel,textOutlines:()=>edit({kind:'textOutlines'}),filterStack:()=>openFilterStack(),advancedLiquify:()=>openFilterStack(true),newFill:()=>openStructured('fill'),editFill:()=>openStructured('fill',true),newPath:()=>openStructured('path'),editPath:()=>openStructured('path',true),newVectorMask:()=>openStructured('mask'),editVectorMask:()=>openStructured('mask',true),vectorMaskFromPath:maskFromPath,exportAs:()=>{outputDialog.value=true;},new:()=>{newDialog.value=true;},image:importImage,importPSD,save:()=>save(),saveAs:()=>save(true),png:()=>exportImage('png'),gif:()=>exportImage('gif'),eps:()=>exportImage('eps'),exportPSD:()=>{psdDialog.value=true;},recover,undo:()=>history('undo'),redo:()=>history('redo'),addPixels:()=>add('pixels'),addGroup:()=>add('group'),addMask:()=>{if(selected.value)edit({kind:'mask',action:'add'});},details:showDetails,properties:()=>{inspectorTab.value='properties';},effects:showEffects};
+  commandActions.value={...commands,open,close:closeProject,fit,actual:()=>{zoom.value=1;}};
   for(const [name,action] of Object.entries(commands))subscriptions.push(window.editor.onCommand(name,()=>{
     if(composing)return;
     if(painting.value&&!(full.clipboardBusy&&['copy','copyMerged','cut','paste'].includes(name)))return;
@@ -472,6 +501,8 @@ onUnmounted(() => { stopPlayback(); operation++; epoch++; cancelStroke();rendere
     <AiPanel :language="language" :project="project" :busy="busy" :editable="editable" :edit="submitEdit" :history="history"/>
     <CompleteControls :e="full" mode="dialogs" :tool="tool" :disabled="!editable" :selected="selected" :color="color" :size="brushSize" :opacity="brushOpacity" :target="paintTarget"/>
     <OutputDialog v-if="outputDialog && project" :language="language" :project="project" :get-composite="outputComposite" :export-file="(type,options)=>exportImage(type,false,options)" @close="outputDialog=false"/>
+    <CommandDialog v-if="structuredDialog==='commands'" :language="language" :commands="finderCommands" @close="structuredDialog=''" @run="runCommand"/>
+    <HistoryDialog v-if="structuredDialog==='history' && project" :language="language" :project="project" :busy="busy" @close="structuredDialog=''" @jump="jumpHistory"/>
     <FilterStackDialog v-if="structuredDialog==='stack' && project && structuredLayer" :language="language" :project="project" :layer="structuredLayer" :initial-liquify="stackLiquify" :commit="submitEdit" @close="structuredDialog=''"/>
     <FillDialog v-if="structuredDialog==='fill' && project" :language="language" :project="project" :layer="structuredLayer" :editing="structuredEditing" :commit="submitEdit" @close="structuredDialog=''"/>
     <PathDialog v-if="['path','mask'].includes(structuredDialog) && project" :language="language" :project="project" :layer="structuredLayer" :editing="structuredEditing" :mode="structuredDialog==='mask'?'mask':'path'" :commit="submitEdit" @close="structuredDialog=''"/>

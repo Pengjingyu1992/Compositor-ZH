@@ -11,7 +11,7 @@ export class ProjectSession {
     this.pending = false;
     this.generation = 0;
     this.options = options;
-    this.undoStack = []; this.redoStack = [];
+    this.undoStack = []; this.redoStack = []; this.historyNames=new WeakMap();
     this.saved = null; this.revision = randomUUID();
   }
 
@@ -24,6 +24,7 @@ export class ProjectSession {
     const urls = Object.fromEntries([...data.resources.keys()].map((key, i) => [key, `compositor://app/project/${id}/${i}?revision=${this.revision}`]));
     const analysis={...data.analysis,rows:data.analysis.rows.map(row=>{const image=data.resources.get(`images/${row.imageFile}`),mask=data.resources.get(`images/${row.maskFile}`);return {...row,...(image?{pixelSize:[image.width,image.height]}:{}),...(mask?{maskPixelSize:[mask.width,mask.height]}:{})};})};
     return { project: { id, revision: this.revision, name: data.name, manifest: data.manifest, analysis, urls, preview: data.preview,
+      historyIndex:this.undoStack.length,historyEntries:[...this.undoStack,data,...this.redoStack.toReversed()].map((state,index)=>({index,...(index?this.historyNames.get(state)??{kind:'edit'}:{kind:'start'})})),
       selection: data.selection, locks: data.locks??{}, dirty: this.isDirty(), canUndo: !!this.undoStack.length, canRedo: !!this.redoStack.length, hasLocation: !!this.current.location } };
   }
 
@@ -56,11 +57,12 @@ export class ProjectSession {
     try {
       const before = this.current.data, after = editProject(before, op, this.options.codecs);
       if (before.selection===after.selection && before.locks===after.locks && before.sourceBytes.equals(after.sourceBytes) && fingerprint(before) === fingerprint(after)) return this.view();
-      return this.commit(before,after);
+      return this.commit(before,after,op);
     } catch (e) { return { error: e.code ?? (['limit','selection','source'].includes(e.message)?e.message:'invalid') }; }
   }
 
-  commit(before,after) {
+  commit(before,after,op) {
+      this.historyNames.set(after,{kind:op?.kind??'edit',...(['filter','effect'].includes(op?.kind)?{detail:op.filter??op.effect}:{})});
       this.undoStack.push(before); this.redoStack = []; this.current.data = after; this.revision = randomUUID();
       // Count unique immutable buffers shared by snapshots, not logical copies.
       while (this.undoStack.length > 80 || this.historyBytes() > 256 * 1024 ** 2) { if (!this.undoStack.length) break; this.undoStack.shift(); }
@@ -79,7 +81,7 @@ export class ProjectSession {
       if(JSON.stringify(after.locks)===JSON.stringify(before.locks))after.locks=before.locks;
       const sameContent=before.sourceBytes.equals(after.sourceBytes)&&fingerprint(before)===fingerprint(after);
       if(sameContent){after.contentSnapshot=before.contentSnapshot??before;after.manifest=before.manifest;after.sourceBytes=before.sourceBytes;after.resources=before.resources;after.analysis=before.analysis;if(after.selection===before.selection&&after.locks===before.locks)return this.view();}
-      return this.commit(before,after);
+      return this.commit(before,after,op);
     }catch(e){return {error:e.code??'invalid'};}finally{this.pending=false;}
   }
 
@@ -100,6 +102,15 @@ export class ProjectSession {
     const source = direction === 'undo' ? this.undoStack : this.redoStack, dest = direction === 'undo' ? this.redoStack : this.undoStack;
     if (source.length) { dest.push(this.current.data); this.current.data = source.pop(); this.revision = randomUUID(); this.scheduleRecovery(); }
     return this.view();
+  }
+
+  jumpHistory(id,revision,index) {
+    if(this.pending)return {error:'busy'};
+    if(!this.current||this.current.id!==id||this.revision!==revision)return {error:'stale'};
+    if(!Number.isInteger(index)||index<0||index>this.undoStack.length+this.redoStack.length)return {error:'invalid'};
+    const delta=index-this.undoStack.length;
+    for(let i=0;i<Math.abs(delta);i++){const source=delta<0?this.undoStack:this.redoStack,destination=delta<0?this.redoStack:this.undoStack;destination.push(this.current.data);this.current.data=source.pop();}
+    if(delta){this.revision=randomUUID();this.scheduleRecovery();}return this.view();
   }
 
   scheduleRecovery() {

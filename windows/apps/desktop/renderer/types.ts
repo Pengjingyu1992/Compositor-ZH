@@ -21,6 +21,7 @@ export interface ViewerProject {
   id: string; name: string; preview: boolean; urls: Record<string, string>;
   selection?: {width:number;height:number;data:Uint8Array}|null;
   locks?: Record<string,Record<string,boolean>>;
+  historyIndex?:number;historyEntries?:{index:number;kind:string;detail?:string}[];
   revision: string; dirty: boolean; canUndo: boolean; canRedo: boolean; hasLocation: boolean;
   manifest: { width: number; height: number; version: number; activeLayerID?: string; layers: LayerRow[]; animation?: AnimationTrack; resolution?: number; guides?:{id:string;axis:string;position:number}[] };
   analysis: { rows: LayerRow[]; issues: string[]; estimatedBytes: number;
@@ -57,6 +58,7 @@ declare global {
       clipboard(id:string,revision:string,action:string,png?:Uint8Array):Promise<OpenResult>;
       create(w: number, h: number): Promise<OpenResult>;
       edit(id: string, revision: string, op: Record<string, unknown>): Promise<OpenResult>;
+      jumpHistory(id:string,revision:string,index:number):Promise<OpenResult>;
       history(id: string, revision: string, direction: string): Promise<OpenResult>;
       save(id: string, revision: string, as?: boolean): Promise<OpenResult>;
       importImage(id?: string, revision?: string): Promise<OpenResult>;

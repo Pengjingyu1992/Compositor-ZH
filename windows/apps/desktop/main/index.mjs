@@ -96,8 +96,10 @@ function nativeMenu() {
       { label: zh ? '图层属性' : 'Layer properties', click: () => win?.webContents.send('editor:properties') },
       { label: zh ? '图层效果' : 'Layer effects', click: () => win?.webContents.send('editor:effects') }
     ] },
-    {label:zh?'滤镜':'Filter',submenu:[... [['filterStack','可编辑滤镜…','Editable filters…'],['advancedLiquify','高级液化…','Advanced Liquify…']].map(([name,cn,en])=>({id:`filter-${name}`,label:zh?cn:en,enabled:!!session.current&&!session.pending,click:()=>win?.webContents.send(`editor:${name}`)})),{label:zh?'滤镜图库…':'Filter gallery…',enabled:!!session.current,click:()=>win?.webContents.send('editor:filter')}]},
+    {label:zh?'滤镜':'Filter',submenu:[{id:'filter-repeat',label:zh?'重复上次滤镜':'Repeat last filter',accelerator:'Ctrl+Alt+F',enabled:!!session.current,click:()=>win?.webContents.send('editor:repeatFilter')},... [['filterStack','可编辑滤镜…','Editable filters…'],['advancedLiquify','高级液化…','Advanced Liquify…']].map(([name,cn,en])=>({id:`filter-${name}`,label:zh?cn:en,enabled:!!session.current&&!session.pending,click:()=>win?.webContents.send(`editor:${name}`)})),{label:zh?'滤镜图库…':'Filter gallery…',enabled:!!session.current,click:()=>win?.webContents.send('editor:filter')}]},
     { label: zh ? '帮助' : 'Help', submenu: [
+      {id:'command-finder',label:zh?'查找命令…':'Find a command…',accelerator:'Ctrl+Shift+P',click:()=>win?.webContents.send('editor:commandFinder')},
+      {id:'history-panel',label:zh?'历史记录…':'History…',enabled:!!session.current,click:()=>win?.webContents.send('editor:historyPanel')},
       { id: 'project-details', label: zh ? '项目详情与兼容性' : 'Project details and compatibility', click: () => win?.webContents.send('editor:details') }
     ] }
   ]));
@@ -236,6 +238,7 @@ handler('editor:textTools',async(action,payload)=>{
     if(action==='render'&&(session.current!==current||session.revision!==revision))return {error:'stale'};if(action==='fonts')installedFontNames=result.fonts;return result;
   }catch(error){return {error:error.code??'glyph'};}
 });
+handler('editor:jumpHistory',(id,revision,index)=>projectRequest(async()=>{const result=session.jumpHistory(id,revision,index);nativeMenu();return result;}));
 handler('editor:edit', (id,revision,op)=>{
   const heavy=o=>['stroke','fill','gradient','bucket','filter','imageSize','applyMask','selectionMask','fillLayer','path','vectorMask','filterStack','textOutlines','styled'].includes(o?.kind)||o?.kind==='selection'||(o?.kind==='batch'&&Array.isArray(o.operations)&&o.operations.some(heavy));
   return projectRequest(async()=>{const result=heavy(op)?await session.editAsync(id,revision,op,buildEdit):session.edit(id,revision,op);nativeMenu();return result;});

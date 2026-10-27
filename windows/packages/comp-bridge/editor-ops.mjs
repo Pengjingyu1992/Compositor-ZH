@@ -1,3 +1,4 @@
+import { readFilterNodes, renderFilterStack, validateFilterNode, capturedCoverage, copyFilterResources } from './editable-filters.mjs';
 import { randomUUID } from 'node:crypto';
 import { supportsAdjustment } from './capabilities.mjs';
 import { ProjectError, LIMITS } from './project.mjs';
@@ -95,9 +96,28 @@ export function editorOperation(data,m,resources,target,op,codecs,descendants) {
       if(output.data.every((v,i)=>v===image.data[i]))return true;
       resources.set(`images/${file}`,codecs.encodePixels(output,mask));if(!mask){delete target.text;delete target.shape;delete target.fill;delete target.editableFilters;}else delete target.vectorMask;return true;
     }
+    case 'filterStack':{
+      if(!target.imageFile||target.text||target.shape||target.fill||target.adjustment||target.isGroup)fail('unsupported');
+      let ancestor=target;for(let n=0;ancestor&&n<65;n++,ancestor=m.layers.find(l=>l.id.toUpperCase()===ancestor.parentID?.toUpperCase()))if(data.locks?.[ancestor.id]?.alpha)fail('locked');
+      if(!Array.isArray(op.nodes)||op.nodes.length>32)fail('limit');
+      const original=target.editableFilters?resources.get(`edits/${target.editableFilters.sourceFile}`):resources.get(layerFile(target)),source=codecs.decodePNG(original);
+      const previous=readFilterNodes(target,resources),ids=new Set(previous.map(node=>node.id.toUpperCase())),nodes=structuredClone(op.nodes);
+      for(const node of nodes){
+        if(!ids.has(String(node.id).toUpperCase())){const coverage=capturedCoverage(data.selection,target.transform,source.width,source.height);if(coverage!==undefined&&!Object.hasOwn(node,'coverage'))node.coverage=coverage;}
+        validateFilterNode(node,source.width,source.height);
+      }
+      const result=renderFilterStack(source,nodes);resources.set(layerFile(target),codecs.encodePixels(result));
+      if(nodes.length){
+        const sourceFile=`${target.id.toUpperCase()}.source.png`,nodeFiles=nodes.map(node=>`${target.id.toUpperCase()}.${node.id.toUpperCase()}.filter.json`);
+        resources.set(`edits/${sourceFile}`,original.proxyBytes?codecs.validatePNG(original.proxyBytes):original);
+        nodes.forEach((node,index)=>{const bytes=Buffer.from(JSON.stringify(node));if(bytes.length>192*1024**2)fail('limit');resources.set(`edits/${nodeFiles[index]}`,{bytes,mime:'application/json'});});
+        target.editableFilters={sourceFile,nodeFiles};m.version=Math.max(m.version,nodes.some(node=>node.kind==='Color Halftone'&&node.halftone.screen!=null&&node.halftone.screen!=='Legacy CMYK Print')?15:14);
+      }else delete target.editableFilters;
+      return true;
+    }
     case 'fillLayer':case 'path':{
       if(target&&(!target.imageFile||target.isGroup||target.adjustment||op.kind==='fillLayer'&&!target.fill||op.kind==='path'&&target.shape?.kind!=='Path'))fail('unsupported');
-      let ancestor=target;for(let n=0;ancestor&&n<65;n++,ancestor=m.layers.find(l=>l.id===ancestor.parentID))if(data.locks?.[ancestor.id]?.alpha)fail('locked');
+      let ancestor=target;for(let n=0;ancestor&&n<65;n++,ancestor=m.layers.find(l=>l.id.toUpperCase()===ancestor.parentID?.toUpperCase()))if(data.locks?.[ancestor.id]?.alpha)fail('locked');
       const old=target&&resources.get(layerFile(target)),width=old?.width??op.width??m.width,height=old?.height??op.height??m.height;validSurface(width,height);
       let image;if(op.kind==='fillLayer'){if(!supportsFillStyle(op.style))fail('invalid');image=codecs.encodePixels(renderFillPixels(width,height,op.style));}
       else{if(!supportsVectorPath(op.style)||!validRGB(op.color))fail('invalid');image=codecs.validatePNG(op.png);if(image.width!==width||image.height!==height)fail('invalid');}
@@ -159,7 +179,7 @@ export function editorOperation(data,m,resources,target,op,codecs,descendants) {
     case 'duplicateTree':{
       const ids=descendants(target.id),ls=m.layers.filter(l=>ids.has(l.id.toUpperCase())),map=new Map(ls.map(l=>[l.id,randomUUID().toUpperCase()]));
       const suffix=typeof op.copySuffix==='string'&&op.copySuffix.length<=32?op.copySuffix:' (copy)';
-      const copies=ls.map(l=>{const v=structuredClone(l);v.id=map.get(l.id);if(l.id===target.id)v.name=v.name.slice(0,256-suffix.length)+suffix;if(map.has(v.parentID))v.parentID=map.get(v.parentID);if(map.has(v.maskSourceID))v.maskSourceID=map.get(v.maskSourceID);for(const f of ['imageFile','maskFile'])if(v[f]){const old=v[f];v[f]=v.id+(f==='maskFile'?'.mask':'')+'.png';resources.set(`images/${v[f]}`,resources.get(`images/${old}`));}return v;});
+      const copies=ls.map(l=>{const v=structuredClone(l);v.id=map.get(l.id);if(l.id===target.id)v.name=v.name.slice(0,256-suffix.length)+suffix;if(map.has(v.parentID))v.parentID=map.get(v.parentID);if(map.has(v.maskSourceID))v.maskSourceID=map.get(v.maskSourceID);for(const f of ['imageFile','maskFile'])if(v[f]){const old=v[f];v[f]=v.id+(f==='maskFile'?'.mask':'')+'.png';resources.set(`images/${v[f]}`,resources.get(`images/${old}`));}copyFilterResources(v,resources);return v;});
       m.layers.splice(m.layers.indexOf(target)+ls.length,0,...copies);m.activeLayerID=map.get(target.id);return true;
     }
     case 'merge':{

@@ -1,3 +1,4 @@
+import { validateProjectFilters, copyFilterResources } from './editable-filters.mjs';
 import { following } from './editor-math.mjs';
 import { randomUUID } from 'node:crypto';
 import { GLOBAL_OPS, selectionEdit, editorOperation, checkPermission } from './editor-ops.mjs';
@@ -22,6 +23,7 @@ export function projectData(manifest, resources, name = 'Untitled.comp') {
     if (!r || !r.width || !r.height) fail('asset');
     if (field === 'imageFile') pixels += r.width * r.height; else masks += r.width * r.height;
   }
+  pixels+=validateProjectFilters(parsed,resources);
   if (pixels > LIMITS.pixels || masks > LIMITS.pixels) fail('limit');
   return { manifest: parsed, resources, sourceBytes, name, preview: resources.has('QuickLook/Preview.jpg'), analysis: analyze(parsed, pixels, masks) };
 }
@@ -90,7 +92,7 @@ function animationEdit(data, op, codecs) {
               const file = `${copy.id}${field === 'maskFile' ? '.mask' : ''}.png`;
               resources.set(`images/${file}`, resources.get(`images/${copy[field]}`)); copy[field] = file;
             }
-            return copy;
+            copyFilterResources(copy,resources);return copy;
           });
         } else added = blank();
         const group = added.find(l => l.isGroup && !l.parentID), insertion = m.layers.reduce((n, l, i) => ids.has(l.id) ? i + 1 : n, 0);
@@ -114,6 +116,14 @@ function animationEdit(data, op, codecs) {
 // cannot leave a partially edited document or consume redo history.
 export function editProject(data, op, codecs) {
   if (!op || typeof op !== 'object' || typeof op.kind !== 'string') fail('invalid');
+  if(op.kind==='filterStack'&&op.copy===true){
+    const original=data.manifest.layers.find(layer=>layer.id===op.id);if(!original?.imageFile)fail('unsupported');
+    checkPermission(data,{kind:'appearance',id:original.id});
+    let candidate=editProject(data,{kind:'duplicate',id:original.id},codecs);const id=candidate.manifest.activeLayerID;
+    if(original.text||original.shape||original.fill)candidate=editProject(candidate,{kind:'rasterize',id},codecs);
+    candidate=editProject(candidate,{...op,id,copy:false},codecs);
+    return editProject(candidate,{kind:'appearance',id:original.id,field:'isVisible',value:false},codecs);
+  }
   if (op.kind === 'animation') return animationEdit(data, op, codecs);
   if (data.manifest.animation && ['delete', 'duplicate', 'duplicateTree', 'parent', 'ungroup', 'group', 'merge', 'reorder'].includes(op.kind)) {
     const frames = new Set(data.manifest.animation.frames.map(f => f.groupID));
@@ -196,6 +206,7 @@ export function editProject(data, op, codecs) {
         const old = l[field]; l[field] = `${id}${field === 'maskFile' ? '.mask' : ''}.png`;
         resources.set(`images/${l[field]}`, resources.get(`images/${old}`));
       }
+      copyFilterResources(l,resources);
       m.layers.splice(m.layers.indexOf(target) + 1, 0, l); m.activeLayerID = id; break;
     }
     case 'reorder': {

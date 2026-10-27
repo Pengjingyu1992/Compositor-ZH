@@ -10,7 +10,7 @@ type Context={project:Ref<ViewerProject|undefined>;selected:Ref<LayerRow|undefin
 export const TOOL_LIST=['move','marquee','lasso','wand','crop','brush','eraser','healing','clone','smear','gradient','bucket','shape','type','eyedropper','pan','zoom'];
 export const TOOL_KEYS:Record<string,string>={move:'V',marquee:'M',lasso:'L',wand:'W',crop:'C',brush:'B',eraser:'E',healing:'J',clone:'S',smear:'R',gradient:'G',bucket:'K',shape:'U',type:'T',eyedropper:'I',pan:'H',zoom:'Z'};
 const colors=(hex:string)=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16));
-const clone=<T>(v:T):T=>JSON.parse(JSON.stringify(v));
+const clone=<T>(v:T):T=>{const result=JSON.parse(JSON.stringify(v));const selection=(v as any)?.selection;if(selection?.data)result.selection.data=new Uint8Array(selection.data);return result;};
 export function useCompleteEditor(c:Context){
   const labels=computed(()=>fullEditor[c.language.value]),ids=ref<string[]>([]),background=ref('#ffffff');
   const options=reactive({combine:'replace',marquee:'rectangle',tolerance:24,contiguous:true,sampleAll:true,hardness:100,spacing:18,pressure:true,symmetry:'none',sectors:6,smear:'blur',radial:false,reverse:false,transparent:false,shape:'Rectangle',corner:0,lineWidth:8,autoSelect:false,grid:false,snap:false,selectionAmount:4,reference:'selection',guideAxis:'vertical',guidePosition:100});

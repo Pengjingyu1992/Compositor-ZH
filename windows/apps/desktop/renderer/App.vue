@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import AnimationTimeline from './AnimationTimeline.vue';
 import OutputDialog from './OutputDialog.vue';
+import FilterStackDialog from './FilterStackDialog.vue';
 import FillDialog from './FillDialog.vue';
 import PathDialog from './PathDialog.vue';
 import { frameForLayer, projectForFrame } from '../../../packages/editor-adapter/animation';
@@ -32,6 +33,8 @@ const tool=ref('pan'),color=ref('#bae9d6'),brushSize=ref(24),brushOpacity=ref(10
 const newDialog=ref(false),newWidth=ref(1920),newHeight=ref(1080),psdDialog=ref(false),outputDialog=ref(false),status=ref(''),painting=ref(false);
 const overlay=ref<HTMLCanvasElement>(),artboard=ref<HTMLDivElement>();
 const inspectorTab=ref('properties'), detailsDialog=ref(false), searchOpen=ref(false);
+const stackLiquify=ref(false);
+function openFilterStack(liquify=false){const row=selected.value;if(!editable.value||!row?.imageFile||!liquify&&(row.text||row.shape||row.fill)||row.isGroup||row.adjustment){error.value='unsupported';return;}structuredLayer.value=row;stackLiquify.value=liquify;structuredDialog.value='stack';}
 const structuredDialog=ref(''),structuredEditing=ref(false),structuredLayer=ref<LayerRow>();
 function openStructured(mode:string,editing=false){
   const row=selected.value;if(!editable.value)return;
@@ -88,8 +91,9 @@ async function accept(result: OpenResult) {
   if (!result.project) return;
   stopPlayback();
   const same=project.value?.id===result.project.id, selectedID=selected.value?.id, previousZoom=zoom.value,oldActive=(project.value?.manifest as any)?.activeLayerID,newActive=(result.project.manifest as any).activeLayerID;
+  const reuseRenderer=same&&source.value==='engine'&&!result.project.analysis.issues.length&&project.value?.manifest.width===result.project.manifest.width&&project.value?.manifest.height===result.project.manifest.height;
   const own = ++epoch; frameRendering.value = false;
-  renderer?.dispose(); renderer = undefined;
+  if(!reuseRenderer){renderer?.dispose();renderer=undefined;}
   project.value = result.project; selected.value = result.project.analysis.rows.find(l=>l.id===(newActive!==oldActive?newActive:same?selectedID:undefined)); error.value = ''; extraIssues.value = [];
   const frames = result.project.manifest.animation?.frames;
   activeFrameID.value = frameForLayer(result.project, selected.value?.id) ?? (same && frames?.some(f => f.groupID === activeFrameID.value) ? activeFrameID.value : frames?.[0]?.groupID);
@@ -101,7 +105,7 @@ async function accept(result: OpenResult) {
   if (epoch !== own || project.value?.id !== result.project.id) return;
   if (source.value === 'engine' && canvas.value) {
     try {
-      const preview = createPreviewRenderer(); renderer = preview; rendererOwner = project.value.id + ':' + project.value.revision;
+      const preview = renderer??createPreviewRenderer(); renderer = preview; rendererOwner = project.value.id + ':' + project.value.revision;
       await preview.render(projectForFrame(project.value, activeFrameID.value), canvas.value, () => {
         if (epoch !== own) return;
         extraIssues.value = ['gpu']; fallback();
@@ -300,7 +304,7 @@ onMounted(async () => {
   const settings = await window.viewer.settings(); language.value = settings.language; version.value = settings.version; edition.value = settings.edition;
   document.documentElement.lang = language.value;
   subscriptions.push(window.viewer.onOpen(open), window.viewer.onReload(reload), window.viewer.onClose(closeProject), window.viewer.onFit(fit), window.viewer.onActual(() => zoom.value = 1));
-  const commands: Record<string, () => unknown> = {...full.commands,newFill:()=>openStructured('fill'),editFill:()=>openStructured('fill',true),newPath:()=>openStructured('path'),editPath:()=>openStructured('path',true),newVectorMask:()=>openStructured('mask'),editVectorMask:()=>openStructured('mask',true),vectorMaskFromPath:maskFromPath,exportAs:()=>{outputDialog.value=true;},new:()=>{newDialog.value=true;},image:importImage,importPSD,save:()=>save(),saveAs:()=>save(true),png:()=>exportImage('png'),gif:()=>exportImage('gif'),eps:()=>exportImage('eps'),exportPSD:()=>{psdDialog.value=true;},recover,undo:()=>history('undo'),redo:()=>history('redo'),addPixels:()=>add('pixels'),addGroup:()=>add('group'),addMask:()=>{if(selected.value)edit({kind:'mask',action:'add'});},details:showDetails,properties:()=>{inspectorTab.value='properties';},effects:showEffects};
+  const commands: Record<string, () => unknown> = {...full.commands,filterStack:()=>openFilterStack(),advancedLiquify:()=>openFilterStack(true),newFill:()=>openStructured('fill'),editFill:()=>openStructured('fill',true),newPath:()=>openStructured('path'),editPath:()=>openStructured('path',true),newVectorMask:()=>openStructured('mask'),editVectorMask:()=>openStructured('mask',true),vectorMaskFromPath:maskFromPath,exportAs:()=>{outputDialog.value=true;},new:()=>{newDialog.value=true;},image:importImage,importPSD,save:()=>save(),saveAs:()=>save(true),png:()=>exportImage('png'),gif:()=>exportImage('gif'),eps:()=>exportImage('eps'),exportPSD:()=>{psdDialog.value=true;},recover,undo:()=>history('undo'),redo:()=>history('redo'),addPixels:()=>add('pixels'),addGroup:()=>add('group'),addMask:()=>{if(selected.value)edit({kind:'mask',action:'add'});},details:showDetails,properties:()=>{inspectorTab.value='properties';},effects:showEffects};
   for(const [name,action] of Object.entries(commands))subscriptions.push(window.editor.onCommand(name,()=>{
     if(composing)return;
     if(painting.value&&!(full.clipboardBusy&&['copy','copyMerged','cut','paste'].includes(name)))return;
@@ -468,6 +472,7 @@ onUnmounted(() => { stopPlayback(); operation++; epoch++; cancelStroke();rendere
     <AiPanel :language="language" :project="project" :busy="busy" :editable="editable" :edit="submitEdit" :history="history"/>
     <CompleteControls :e="full" mode="dialogs" :tool="tool" :disabled="!editable" :selected="selected" :color="color" :size="brushSize" :opacity="brushOpacity" :target="paintTarget"/>
     <OutputDialog v-if="outputDialog && project" :language="language" :project="project" :get-composite="outputComposite" :export-file="(type,options)=>exportImage(type,false,options)" @close="outputDialog=false"/>
+    <FilterStackDialog v-if="structuredDialog==='stack' && project && structuredLayer" :language="language" :project="project" :layer="structuredLayer" :initial-liquify="stackLiquify" :commit="submitEdit" @close="structuredDialog=''"/>
     <FillDialog v-if="structuredDialog==='fill' && project" :language="language" :project="project" :layer="structuredLayer" :editing="structuredEditing" :commit="submitEdit" @close="structuredDialog=''"/>
     <PathDialog v-if="['path','mask'].includes(structuredDialog) && project" :language="language" :project="project" :layer="structuredLayer" :editing="structuredEditing" :mode="structuredDialog==='mask'?'mask':'path'" :commit="submitEdit" @close="structuredDialog=''"/>
     <div v-if="newDialog" class="modal-shade" @click.self="newDialog=false"><form class="dialog" role="dialog" aria-modal="true" :aria-label="t.editor.newCanvas" @submit.prevent="create"><h2>{{ t.editor.newCanvas }}</h2><p>{{ ui.transparent }}</p><div class="new-dimensions"><label>{{ t.editor.width }}<input type="number" v-model.number="newWidth" min="1" max="30000" required></label><button class="icon-button" type="button" :aria-label="t.editor.swap" :title="t.editor.swap" @click="[newWidth,newHeight]=[newHeight,newWidth]"><Icon name="swap"/></button><label>{{ t.editor.height }}<input type="number" v-model.number="newHeight" min="1" max="30000" required></label></div><div class="button-row"><button type="button" @click="newDialog=false">{{ t.editor.cancel }}</button><button class="primary" type="submit">{{ t.editor.create }}</button></div></form></div>

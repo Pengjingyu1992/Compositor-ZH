@@ -96,7 +96,7 @@ function nativeMenu() {
       { label: zh ? '图层属性' : 'Layer properties', click: () => win?.webContents.send('editor:properties') },
       { label: zh ? '图层效果' : 'Layer effects', click: () => win?.webContents.send('editor:effects') }
     ] },
-    {label:zh?'滤镜':'Filter',submenu:[{label:zh?'滤镜图库…':'Filter gallery…',enabled:!!session.current,click:()=>win?.webContents.send('editor:filter')}]},
+    {label:zh?'滤镜':'Filter',submenu:[... [['filterStack','可编辑滤镜…','Editable filters…'],['advancedLiquify','高级液化…','Advanced Liquify…']].map(([name,cn,en])=>({id:`filter-${name}`,label:zh?cn:en,enabled:!!session.current&&!session.pending,click:()=>win?.webContents.send(`editor:${name}`)})),{label:zh?'滤镜图库…':'Filter gallery…',enabled:!!session.current,click:()=>win?.webContents.send('editor:filter')}]},
     { label: zh ? '帮助' : 'Help', submenu: [
       { id: 'project-details', label: zh ? '项目详情与兼容性' : 'Project details and compatibility', click: () => win?.webContents.send('editor:details') }
     ] }
@@ -226,7 +226,7 @@ function imageCodec(operation, bytes, resolution) {
   });
 }
 handler('editor:edit', (id,revision,op)=>{
-  const heavy=o=>['stroke','fill','gradient','bucket','filter','imageSize','applyMask','selectionMask','fillLayer','path','vectorMask'].includes(o?.kind)||o?.kind==='selection'||(o?.kind==='batch'&&Array.isArray(o.operations)&&o.operations.some(heavy));
+  const heavy=o=>['stroke','fill','gradient','bucket','filter','imageSize','applyMask','selectionMask','fillLayer','path','vectorMask','filterStack'].includes(o?.kind)||o?.kind==='selection'||(o?.kind==='batch'&&Array.isArray(o.operations)&&o.operations.some(heavy));
   return projectRequest(async()=>{const result=heavy(op)?await session.editAsync(id,revision,op,buildEdit):session.edit(id,revision,op);nativeMenu();return result;});
 });
 handler('editor:clipboard',async(id,revision,action,png)=>{

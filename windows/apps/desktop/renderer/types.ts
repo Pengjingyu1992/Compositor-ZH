@@ -10,6 +10,7 @@ export interface LayerRow {
   maskSourceID?: string; maskLinked?: boolean; maskPlacement?: Placement;
   transform: Placement; opacity?: number; blendMode?: string;
   text?: Record<string, unknown>; shape?: Record<string, unknown>;
+  editableFilters?: {sourceFile:string;nodeFiles:string[]};
   fill?: Record<string,any>; vectorMask?: Record<string,any>;
   adjustment?: Record<string, any>; effects?: Record<string, Record<string, any>>; depth: number;
   effectiveVisible: boolean; effectiveOpacity: number;

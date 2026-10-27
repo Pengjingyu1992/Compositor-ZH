@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {newProject,editProject} from '../packages/comp-bridge/edit.mjs';
 import * as codecs from '../packages/comp-bridge/codecs.mjs';
 import {arrange,bounds,following,toLocal,toDocument,shapeMask,combineMasks,modifyMask,floodMask,symmetryPoints} from '../packages/comp-bridge/editor-math.mjs';
+import {parseColorLUT} from '../packages/comp-bridge/poster-color.mjs';
 import {fillPixels,strokePixels,resizePixels,filterPixels,FILTERS} from '../packages/comp-bridge/raster-tools.mjs';
 import {ProjectSession} from '../packages/platform/project-session.mjs';
 import {reactive,ref} from 'vue';
@@ -37,7 +38,7 @@ test('clone/healing/smear and blur return valid immutable surfaces',()=>{
 });
 test('premultiplied resize avoids hidden RGB bleeding and all filters are bounded',()=>{
   const a={width:2,height:1,data:new Uint8ClampedArray([255,0,0,0,0,0,255,255])},b=resizePixels(a,3,1);assert.equal(b.data[4],0);assert.equal(b.data[6],255);
-  for(const kind of FILTERS.filter(k=>k!=='Content-Aware Fill')){const output=filterPixels(image(),kind,{size:3,radius:1,amount:10});assert.equal(output.data.length,256);}assert.throws(()=>resizePixels(a,30000,30000),/limit/);
+  for(const kind of FILTERS.filter(k=>k!=='Content-Aware Fill')){const output=filterPixels(image(),kind,{size:3,radius:1,amount:10,...(kind==='Color Lookup'?{table:parseColorLUT('LUT_1D_SIZE 2\n0 0 0\n1 1 1')}:{})});assert.equal(output.data.length,256);}assert.throws(()=>resizePixels(a,30000,30000),/limit/);
 });
 test('selection and locks have undo but never mark unchanged file content dirty',()=>{
   const {data,id}=setup(),s=new ProjectSession(undefined,{codecs});s.install(data,null,true);const doc=s.current.id;

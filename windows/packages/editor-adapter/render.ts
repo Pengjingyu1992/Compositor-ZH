@@ -33,10 +33,10 @@ export function createPreviewRenderer() {
   const pending = new Map<number, { resolve: (v: ImageData) => void; reject: (e: Error) => void }>();
   worker.onmessage = event => { const p = pending.get(event.data.id); if (!p) return; pending.delete(event.data.id); if (event.data.error) p.reject(new Error('asset')); else { try { const r = event.data.result; p.resolve(new ImageData(r.data,r.width,r.height)); } catch { p.reject(new Error('asset')); } } };
   worker.onerror = event => { console.warn('Pixel worker failed',event.message);  for (const p of pending.values()) p.reject(new Error('asset')); pending.clear(); };
-  function process(image: ImageData, adjustment?: Record<string, unknown>, effects?: Record<string, unknown>) {
+  function process(image: ImageData, adjustment?: Record<string, unknown>, effects?: Record<string, unknown>, effectContext?:Record<string,unknown>) {
     return new Promise<ImageData>((resolve,reject) => { const id = ++requestID; pending.set(id,{resolve,reject}); // Vue wraps manifest dictionaries in proxies; worker messages require plain values.
       const plain = (v?: Record<string, unknown>) => v ? JSON.parse(JSON.stringify(v)) : undefined;
-      try { worker.postMessage({id,image:{width:image.width,height:image.height,data:image.data},adjustment:plain(adjustment),effects:plain(effects)},[image.data.buffer]); } catch { pending.delete(id); reject(new Error('asset')); } });
+      try { worker.postMessage({id,image:{width:image.width,height:image.height,data:image.data},adjustment:plain(adjustment),effects:plain(effects),effectContext:plain(effectContext)},[image.data.buffer]); } catch { pending.delete(id); reject(new Error('asset')); } });
   }
   function pixels(c: HTMLCanvasElement) { return context(c).getImageData(0,0,width,height); }
   function put(c: HTMLCanvasElement, data: ImageData) { context(c).putImageData(data,0,0); }
@@ -81,7 +81,7 @@ export function createPreviewRenderer() {
       const own=async(l:LayerRow,folders=true)=>{
         const c=l.imageFile?await placedImage(project.urls[`images/${l.imageFile}`],l.transform,width,height):makeCanvas(width,height);
         await cover(c,l,false);
-        if(l.effects&&Object.values(l.effects).some(v=>v&&typeof v==='object'&&(v as {enabled?:boolean}).enabled!==false))put(c,await process(pixels(c),undefined,l.effects));
+        if(l.effects&&Object.values(l.effects).some(v=>v&&typeof v==='object'&&(v as {enabled?:boolean}).enabled!==false))put(c,await process(pixels(c),undefined,l.effects,{placement:l.transform,pixelSize:l.pixelSize}));
         if(folders)await cover(c,{...l,maskFile:undefined},true,l.effectiveOpacity);return c;
       };
       const adjust=async(below:HTMLCanvasElement,l:LayerRow,folders=true)=>{

@@ -2,9 +2,11 @@ import { following } from './editor-math.mjs';
 import { randomUUID } from 'node:crypto';
 import { GLOBAL_OPS, selectionEdit, editorOperation, checkPermission } from './editor-ops.mjs';
 import { parseManifest, analyze, LIMITS, ProjectError } from './project.mjs';
+import { defaultFillStyle } from './layer-styles.mjs';
+import { pruneOwnedResources } from './resource-ownership.mjs';
 
 export const ADJUSTMENTS = ['Hue/Saturation', 'Levels', 'Curves', 'Exposure', 'Gradient Map', 'Grain', 'Invert', 'Black & White', 'Color Balance', 'Gaussian Blur', 'Motion Blur', 'Add Noise'];
-export const EFFECTS = ['stroke', 'shadow', 'colorOverlay', 'innerShadow', 'outerGlow', 'innerGlow'];
+export const EFFECTS = ['stroke', 'shadow', 'colorOverlay', 'innerShadow', 'outerGlow', 'innerGlow', 'gradientOverlay', 'patternOverlay', 'bevel'];
 export const placement = (w, h) => ({ origin: [0, 0], size: [w, h], rotation: 0, flipX: false, flipY: false, sampling: 'High quality' });
 const clone = v => structuredClone(v);
 const fail = code => { throw new ProjectError(code); };
@@ -101,6 +103,7 @@ function animationEdit(data, op, codecs) {
   }
   m.version = Math.max(m.version, 16);
   resources.delete('QuickLook/Preview.jpg'); resources.delete('QuickLook/Thumbnail.png');
+  pruneOwnedResources(data.manifest,m,resources);
   const result = projectData(m, resources, data.name);
   if (result.analysis.issues.length) fail(result.analysis.issues.includes('memory') ? 'limit' : 'unsupported');
   result.locks = data.locks; result.selection = data.selection;
@@ -120,7 +123,7 @@ export function editProject(data, op, codecs) {
   if(data.analysis.issues.length && op.kind==='selection' && op.action==='wand')fail('unsupported');
   if (op.kind === 'selection') return selectionEdit(data, op, codecs);
   if (op.kind === 'lock') {
-    if (!data.manifest.layers.some(l=>l.id===op.id) || !['content','position','appearance','alpha'].includes(op.field) || typeof op.value!=='boolean') fail('invalid');
+    if (!data.manifest.layers.some(l=>l.id===op.id) || !['all','content','position','appearance','alpha'].includes(op.field) || typeof op.value!=='boolean') fail('invalid');
     return {...data, locks:{...data.locks,[op.id]:{...data.locks?.[op.id],[op.field]:op.value}},contentSnapshot:data.contentSnapshot??data};
   }
   if (op.kind === 'batch') {
@@ -129,7 +132,7 @@ export function editProject(data, op, codecs) {
   }
   const m = clone(data.manifest), resources = new Map(data.resources);
   const target = m.layers.find(l => l.id === op.id);
-  const needsTarget = !['add', 'importPixels', ...GLOBAL_OPS].includes(op.kind) && !(op.kind==='styled' && !op.id);
+  const needsTarget = !['add', 'importPixels', ...GLOBAL_OPS].includes(op.kind) && !(['styled','fillLayer','path'].includes(op.kind) && !op.id);
   if (needsTarget && !target) fail('stale');
   if (data.analysis.issues.length && !['rename'].includes(op.kind)) fail('unsupported');
   const descendants = id => {
@@ -212,9 +215,9 @@ export function editProject(data, op, codecs) {
         const base = resources.get(`images/${target.imageFile}`), w = base?.width ?? m.width, h = base?.height ?? m.height;
         target.maskFile = `${target.id}.mask.png`; target.maskEnabled = true;
         resources.set(`images/${target.maskFile}`, codecs.blankPNG(w, h, true, op.black ? 0 : 255));
-      } else if (op.action === 'remove') { for (const k of ['maskFile', 'maskEnabled', 'maskPlacement', 'maskLinked']) delete target[k]; }
+      } else if (op.action === 'remove') { for (const k of ['maskFile', 'maskEnabled', 'maskPlacement', 'maskLinked', 'vectorMask']) delete target[k]; }
       else if (target.maskFile && op.action === 'toggle') target.maskEnabled = target.maskEnabled === false;
-      else if (target.maskFile && op.action === 'invert') resources.set(`images/${target.maskFile}`, codecs.invertMask(resources.get(`images/${target.maskFile}`)));
+      else if (target.maskFile && op.action === 'invert') { resources.set(`images/${target.maskFile}`, codecs.invertMask(resources.get(`images/${target.maskFile}`))); delete target.vectorMask; }
       else if (target.maskFile && op.action === 'link') {
         if (typeof op.value !== 'boolean') fail('invalid');
         target.maskLinked = op.value;
@@ -228,8 +231,11 @@ export function editProject(data, op, codecs) {
       if (!file || (!mask && (target.isGroup || target.adjustment))) fail('unsupported');
       const r = codecs.validatePNG(op.png, mask), before = resources.get(`images/${file}`);
       if (r.width !== before.width || r.height !== before.height) fail('invalid');
+      const oldPixels=codecs.decodePNG(before),nextPixels=codecs.decodePNG(r);
+      if(nextPixels.data.every((value,index)=>value===oldPixels.data[index]))break;
+      if(!mask){let row=target;for(let n=0;row&&n<65;n++,row=m.layers.find(value=>value.id===row.parentID))if(data.locks?.[row.id]?.alpha&&nextPixels.data.some((value,index)=>index%4===3&&value!==oldPixels.data[index]))fail('locked');}
       resources.set(`images/${file}`, r);
-      if (!mask) { delete target.text; delete target.shape; }
+      if (!mask) { delete target.text; delete target.shape; delete target.fill; delete target.editableFilters; } else delete target.vectorMask;
       break;
     }
     case 'adjustment': {
@@ -250,21 +256,24 @@ export function editProject(data, op, codecs) {
       target.effects ??= {};
       if (op.remove) delete target.effects[op.effect];
       else {
-        const v = target.effects[op.effect] ??= { enabled: true, red: 0, green: 0, blue: 0, opacity: .5, ...(op.effect.includes('hadow') ? { angle: 135, distance: 10, blur: 8 } : op.effect === 'colorOverlay' ? {} : { size: 8, ...(op.effect === 'stroke' ? { inside: false } : {}) }) };
-        if (op.field) { if (!['enabled', 'red', 'green', 'blue', 'opacity', 'size', 'inside', 'angle', 'distance', 'blur'].includes(op.field)) fail('invalid'); v[op.field] = clone(op.value); }
+        const v = target.effects[op.effect] ??= ['gradientOverlay','patternOverlay'].includes(op.effect) ? { enabled:true, opacity:1, fill:{...defaultFillStyle(),kind:op.effect==='gradientOverlay'?'Linear':'Pattern'} } : op.effect==='bevel' ? {enabled:true,size:8,depth:.75,angle:120} : { enabled: true, red: 0, green: 0, blue: 0, opacity: .5, ...(op.effect.includes('hadow') ? { angle: 135, distance: 10, blur: 8 } : op.effect === 'colorOverlay' ? {} : { size: 8, ...(op.effect === 'stroke' ? { inside: false } : {}) }) };
+        if (op.field) { if (!['enabled', 'red', 'green', 'blue', 'opacity', 'size', 'inside', 'angle', 'distance', 'blur', 'fill', 'depth'].includes(op.field)) fail('invalid'); v[op.field] = clone(op.value); }
+        if (['gradientOverlay','patternOverlay','bevel'].includes(op.effect)) m.version=Math.max(m.version,12);
       }
       break;
     }
     default: fail('invalid');
   }
   // An empty gesture must retain editable metadata, previews and save identity.
+  pruneOwnedResources(data.manifest,m,resources);
   if(JSON.stringify(m)===JSON.stringify(data.manifest)&&resources.size===data.resources.size&&[...resources].every(([key,value])=>data.resources.get(key)===value))return data;
   // Windows only emits fields already defined by the current macOS schema.
   m.version = Math.max(m.version, 11);
-  if (op.kind !== 'rename') { resources.delete('QuickLook/Preview.jpg'); resources.delete('QuickLook/Thumbnail.png'); }
+  const dimensionsChanged=op.kind==='imageSize'&&(m.width!==data.manifest.width||m.height!==data.manifest.height);
+  if (!['rename','resolution'].includes(op.kind) && !(op.kind==='imageSize'&&!dimensionsChanged)) { resources.delete('QuickLook/Preview.jpg'); resources.delete('QuickLook/Thumbnail.png'); }
   const result = projectData(m, resources, data.name);
   if (op.kind !== 'rename' && result.analysis.issues.length) fail(result.analysis.issues.includes('memory') ? 'limit' : 'unsupported');
   result.locks=data.locks;
-  result.selection=['canvas','imageSize'].includes(op.kind)?null:data.selection;
+  result.selection=op.kind==='canvas'||dimensionsChanged?null:data.selection;
   return result;
 }

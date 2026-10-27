@@ -3,8 +3,15 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { listPackage, extractFile } from '@electron/asar';
 
+process.on('uncaughtException', error => {
+  const message = String(error.message).replaceAll('%', '%25').replaceAll('\r', '%0D').replaceAll('\n', '%0A');
+  if (process.env.GITHUB_ACTIONS) console.error(`::error title=Package review::${message}`);
+  console.error(error); process.exitCode = 1;
+});
+
 const linux = process.argv.includes('--linux');
-const directory = path.resolve(linux ? '../linux/release' : 'release'), unpacked = path.join(directory, linux ? 'linux-unpacked' : 'win-unpacked');
+const directoryFlag = process.argv.indexOf('--directory');
+const directory = path.resolve(directoryFlag >= 0 ? process.argv[directoryFlag + 1] : linux ? '../linux/release' : 'release'), unpacked = path.join(directory, linux ? 'linux-unpacked' : 'win-unpacked');
 const asar = path.join(unpacked, 'resources/app.asar');
 const entries = listPackage(asar).map(p => p.replaceAll('\\', '/'));
 const runtimeModule = /^\/node_modules\/(?:sharp|semver|detect-libc|@img\/(?:colour|sharp-(?:libvips-)?(?:linux|win32)-x64))(?:\/|$)/;

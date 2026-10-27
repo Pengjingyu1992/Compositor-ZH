@@ -1,3 +1,5 @@
+import { fillSampler } from '../comp-bridge/layer-styles.mjs';
+import { toLocal } from '../comp-bridge/editor-math.mjs';
 // Straight sRGB pixels. Level/curve/exposure/color-balance math follows the
 // macOS reference; spatial filters still require cross-platform golden images.
 export const clamp = (v, lo = 0, hi = 1) => Math.min(hi, Math.max(lo, v));
@@ -124,23 +126,48 @@ function extreme(input,w,h,r,max) {
   for(let x=0;x<w;x++)line(h,y=>y<0||y>=h?0:temp[y*w+x],(y,v)=>out[y*w+x]=v);
   return out;
 }
-export function effectPixels(image,effects) {
-  const {width:w,height:h}=image,alpha=Float32Array.from({length:w*h},(_,i)=>image.data[i*4+3]/255),out=new Uint8ClampedArray(image.data.length);
-  function paint(plane,e,inside=false) {
-    const color=[e.red??0,e.green??0,e.blue??0],opacity=e.opacity??.5;
-    for(let i=0;i<w*h;i++){const a=clamp(plane[i])*opacity*(inside?alpha[i]:1),at=i*4,old=out[at+3]/255,next=a+old*(1-a);for(let c=0;c<3;c++)out[at+c]=next?(color[c]*a+out[at+c]/255*old*(1-a))/next*255:0;out[at+3]=next*255;}
+function blurCoverage(input,w,h,sigma) {
+  if(!sigma)return new Float32Array(input);
+  const ideal=Math.sqrt(4*sigma*sigma+1),floor=Math.floor(ideal),lower=floor%2?floor:floor-1;
+  const count=Math.round((12*sigma*sigma-3*lower*lower-12*lower-9)/(-4*lower-4));
+  let data=input;
+  for(let pass=0;pass<3;pass++){
+    const radius=Math.max(0,((pass<count?lower:lower+2)-1)/2),div=radius*2+1,temp=new Float32Array(w*h),out=new Float32Array(w*h);
+    for(let y=0;y<h;y++){let sum=0;for(let x=0;x<=Math.min(w-1,radius);x++)sum+=data[y*w+x];for(let x=0;x<w;x++){temp[y*w+x]=sum/div;if(x+radius+1<w)sum+=data[y*w+x+radius+1];if(x-radius>=0)sum-=data[y*w+x-radius];}}
+    for(let x=0;x<w;x++){let sum=0;for(let y=0;y<=Math.min(h-1,radius);y++)sum+=temp[y*w+x];for(let y=0;y<h;y++){out[y*w+x]=sum/div;if(y+radius+1<h)sum+=temp[(y+radius+1)*w+x];if(y-radius>=0)sum-=temp[(y-radius)*w+x];}}
+    data=out;
   }
-  function shifted(input,e,invert=false){const angle=(e.angle??135)*Math.PI/180,dx=Math.round(-Math.cos(angle)*(e.distance??10)),dy=Math.round(Math.sin(angle)*(e.distance??10)),plane=new Float32Array(w*h);for(let y=0;y<h;y++)for(let x=0;x<w;x++){const sx=x-dx,sy=y-dy,v=sx>=0&&sy>=0&&sx<w&&sy<h?input[sy*w+sx]:0;plane[y*w+x]=invert?1-v:v;}return blurPlane(plane,w,h,e.blur??8);}
-  const enabled=k=>effects[k]&&effects[k].enabled!==false;
+  return data;
+}
+export function effectPixels(image,effects={},effectContext={}) {
+  const {width:w,height:h}=image,alpha=Float32Array.from({length:w*h},(_,i)=>image.data[i*4+3]/255),shown=new Uint8ClampedArray(image.data),out=new Uint8ClampedArray(image.data.length);
+  const enabled=key=>effects[key]&&effects[key].enabled!==false;
+  function paint(plane,e) {
+    const color=[e.red??0,e.green??0,e.blue??0],opacity=e.opacity??.5;
+    for(let i=0;i<w*h;i++){const a=clamp(plane[i])*opacity,at=i*4,old=out[at+3]/255,next=a+old*(1-a);for(let c=0;c<3;c++)out[at+c]=next?(color[c]*a+out[at+c]/255*old*(1-a))/next*255:0;out[at+3]=next*255;}
+  }
+  function recolor(plane,e) {
+    const color=[e.red??0,e.green??0,e.blue??0],opacity=e.opacity??.5;
+    for(let i=0;i<w*h;i++)if(alpha[i]){const amount=clamp(plane?plane[i]:1)*opacity;for(let c=0;c<3;c++)shown[i*4+c]=shown[i*4+c]*(1-amount)+color[c]*255*amount;}
+  }
+  function shifted(input,e){const angle=(e.angle??135)*Math.PI/180,dx=Math.round(-Math.cos(angle)*(e.distance??10)),dy=Math.round(Math.sin(angle)*(e.distance??10)),plane=new Float32Array(w*h);for(let y=0;y<h;y++)for(let x=0;x<w;x++){const sx=x-dx,sy=y-dy;plane[y*w+x]=sx>=0&&sy>=0&&sx<w&&sy<h?input[sy*w+sx]:0;}return blurCoverage(plane,w,h,e.blur??8);}
+  const inverse=plane=>Float32Array.from(plane,value=>1-value);
   if(enabled('shadow'))paint(shifted(alpha,effects.shadow),effects.shadow);
-  if(enabled('outerGlow')){const e=effects.outerGlow,blur=blurPlane(alpha,w,h,e.size??8);paint(Float32Array.from(blur,(v,i)=>v*(1-alpha[i])),e);}
-  // The layer goes over its outer effects.
-  for(let i=0;i<w*h;i++){const at=i*4,a=alpha[i],old=out[at+3]/255,next=a+old*(1-a);for(let c=0;c<3;c++)out[at+c]=next?(image.data[at+c]/255*a+out[at+c]/255*old*(1-a))/next*255:0;out[at+3]=next*255;}
-  if(enabled('colorOverlay'))paint(new Float32Array(w*h).fill(1),effects.colorOverlay,true);
-  if(enabled('innerShadow'))paint(shifted(alpha,effects.innerShadow,true),effects.innerShadow,true);
-  if(enabled('innerGlow')){const e=effects.innerGlow,inv=Float32Array.from(alpha,v=>1-v);paint(blurPlane(inv,w,h,e.size??8),e,true);}
-  if(enabled('stroke')){const e=effects.stroke,edge=extreme(alpha,w,h,e.size??8,!e.inside);paint(Float32Array.from(edge,(v,i)=>e.inside?alpha[i]-v:v-alpha[i]),e);}
-  // Inner effects recolor coverage; they must not thicken a soft alpha edge.
-  if(!enabled('shadow')&&!enabled('outerGlow')&&(!enabled('stroke')||effects.stroke.inside))for(let i=0;i<w*h;i++)out[i*4+3]=image.data[i*4+3];
+  if(enabled('outerGlow')){const e=effects.outerGlow,blur=blurCoverage(alpha,w,h,e.size??8);paint(Float32Array.from(blur,(v,i)=>v*(1-alpha[i])),e);}
+  if(enabled('stroke')&&!effects.stroke.inside){const e=effects.stroke,edge=extreme(alpha,w,h,e.size??8,true);paint(Float32Array.from(edge,(v,i)=>v-alpha[i]),e);}
+  // Recolor the layer independently, so inner effects neither thicken soft
+  // alpha nor tint a shadow/glow underneath the layer.
+  if(enabled('colorOverlay'))recolor(null,effects.colorOverlay);
+  for(const key of ['gradientOverlay','patternOverlay'])if(enabled(key)){
+    const e=effects[key],size=effectContext.pixelSize??[w,h],sample=fillSampler(size[0],size[1],e.fill),placement=effectContext.placement;
+    const origin=placement?toLocal([0,0],placement,size[0],size[1]):[0,0],xAxis=placement?toLocal([1,0],placement,size[0],size[1]):[1,0],yAxis=placement?toLocal([0,1],placement,size[0],size[1]):[0,1];
+    const ax=xAxis[0]-origin[0],ay=xAxis[1]-origin[1],bx=yAxis[0]-origin[0],by=yAxis[1]-origin[1];
+    for(let y=0;y<h;y++)for(let x=0;x<w;x++){const index=y*w+x;if(!alpha[index])continue;const color=sample(origin[0]+ax*(x+.5)+bx*(y+.5),origin[1]+ay*(x+.5)+by*(y+.5)),amount=color.alpha*e.opacity;for(const[c,name]of ['red','green','blue'].entries())shown[index*4+c]=shown[index*4+c]*(1-amount)+color[name]*255*amount;}
+  }
+  if(enabled('bevel')&&effects.bevel.size>0&&effects.bevel.depth>0){const e=effects.bevel;for(const[angle,color]of [[e.angle,1],[e.angle-180,0]])recolor(inverse(shifted(alpha,{angle,distance:e.size,blur:e.size/2})),{red:color,green:color,blue:color,opacity:e.depth});}
+  if(enabled('innerGlow'))recolor(inverse(blurCoverage(alpha,w,h,effects.innerGlow.size??8)),effects.innerGlow);
+  if(enabled('innerShadow'))recolor(inverse(shifted(alpha,effects.innerShadow)),effects.innerShadow);
+  for(let i=0;i<w*h;i++){const at=i*4,a=alpha[i],old=out[at+3]/255,next=a+old*(1-a);for(let c=0;c<3;c++)out[at+c]=next?(shown[at+c]/255*a+out[at+c]/255*old*(1-a))/next*255:0;out[at+3]=next*255;}
+  if(enabled('stroke')&&effects.stroke.inside){const e=effects.stroke,edge=extreme(alpha,w,h,e.size??8,false);paint(Float32Array.from(edge,(v,i)=>alpha[i]-v),e);}
   return {width:w,height:h,data:out};
 }

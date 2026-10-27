@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import AnimationTimeline from './AnimationTimeline.vue';
+import OutputDialog from './OutputDialog.vue';
+import FillDialog from './FillDialog.vue';
+import PathDialog from './PathDialog.vue';
 import { frameForLayer, projectForFrame } from '../../../packages/editor-adapter/animation';
 import { computed, ref, reactive, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import { localizedMessages } from '../../../packages/locales';
@@ -26,9 +29,17 @@ const query = ref(''), collapsed = ref(new Set<string>()), dropping = ref(false)
 const stage = ref<HTMLDivElement>(), canvas = ref<HTMLCanvasElement>(), zoom = ref(1);
 const source = ref<'engine' | 'saved' | 'none'>('none'), extraIssues = ref<string[]>([]);
 const tool=ref('pan'),color=ref('#bae9d6'),brushSize=ref(24),brushOpacity=ref(100),paintTarget=ref('content');
-const newDialog=ref(false),newWidth=ref(1920),newHeight=ref(1080),psdDialog=ref(false),status=ref(''),painting=ref(false);
+const newDialog=ref(false),newWidth=ref(1920),newHeight=ref(1080),psdDialog=ref(false),outputDialog=ref(false),status=ref(''),painting=ref(false);
 const overlay=ref<HTMLCanvasElement>(),artboard=ref<HTMLDivElement>();
 const inspectorTab=ref('properties'), detailsDialog=ref(false), searchOpen=ref(false);
+const structuredDialog=ref(''),structuredEditing=ref(false),structuredLayer=ref<LayerRow>();
+function openStructured(mode:string,editing=false){
+  const row=selected.value;if(!editable.value)return;
+  if(editing&&(mode==='fill'?!row?.fill:mode==='mask'?!row?.vectorMask:!row?.shape?.vector)){error.value='unsupported';return;}
+  if(mode==='mask'&&(!row?.imageFile||!editing&&row.maskFile)){error.value='unsupported';return;}
+  structuredEditing.value=editing;structuredLayer.value=row;structuredDialog.value=mode;
+}
+async function maskFromPath(){const p=project.value,row=selected.value;if(!p||!row?.shape?.vector)return;const siblings=p.manifest.layers.filter(layer=>layer.parentID===row.parentID),index=siblings.findIndex(layer=>layer.id===row.id),target=siblings[index-1];if(!target?.imageFile||target.maskFile){error.value='unsupported';return;}await submitEdit({kind:'vectorMask',id:target.id,sourcePathID:row.id},p);}
 const tools=TOOL_LIST,toolKeys=TOOL_KEYS;
 function toolLabel(key:string){return String(full.labels[key as keyof typeof full.labels] ?? t.value.editor[key as keyof typeof t.value.editor] ?? key);}
 const ui = computed(() => t.value.workspace);
@@ -118,6 +129,7 @@ async function closeProject() {
   stopPlayback(); operation++; epoch++; renderer?.dispose(); renderer = undefined;
   drag = undefined;
   project.value = undefined; frameRendering.value=false; selected.value = undefined; source.value = 'none'; error.value = ''; extraIssues.value = [];
+  structuredDialog.value='';outputDialog.value=false;full.closeModal();
   query.value = ''; collapsed.value = new Set(); reportState.value = 'idle';
 }
 async function submitEdit(op:Record<string,unknown>,owner:Pick<ViewerProject,'id'|'revision'>|undefined=project.value,finishingStroke=false):Promise<OpenResult>{
@@ -138,12 +150,18 @@ function add(type:string,adjustment?:string){return edit({kind:'add',type,adjust
 function numberEvent(e:Event){return Number((e.target as HTMLInputElement).value);}
 function transformPair(field:'origin'|'size',index:number,e:Event){if(!selected.value)return;const value=[...(full.selectionTransform??selected.value.transform)[field]];value[index]=numberEvent(e);return edit({kind:'transform',field,value});}
 async function create(){newDialog.value=false;await request(()=>window.editor.create(newWidth.value,newHeight.value));}
-async function exportImage(type:string,flatten=false){
+async function outputComposite(){
+  const p=project.value;stopPlayback();if(frameRendering.value)await frameRenderTask;
+  if(!p||!canvas.value||project.value?.id!==p.id||project.value?.revision!==p.revision||source.value!=='engine'||painting.value)throw new Error(t.value.errorTitle);
+  return pngBytes(canvas.value);
+}
+async function exportImage(type:string,flatten=false,options:Record<string,unknown>={}):Promise<OpenResult|undefined>{
   stopPlayback();
   const p=project.value,c=canvas.value;if(!p||!c||source.value!=='engine'||painting.value)return;
   if(frameRendering.value)await frameRenderTask;
   if(project.value?.id!==p.id||project.value?.revision!==p.revision||source.value!=='engine'||frameRendering.value||painting.value)return;
   psdDialog.value=false;
+  let outputResult:OpenResult|undefined;
   try { await request(async()=>{
     const composite=await pngBytes(c),layers:{id:string;image:Uint8Array;left:number;top:number}[]=[],masks:{id:string;image:Uint8Array;left:number;top:number}[]=[],frames:{png:Uint8Array}[]=[];
     if(type==='gif'){
@@ -170,8 +188,9 @@ async function exportImage(type:string,flatten=false){
         if(l.maskFile)masks.push({id:l.id,...await exportPlaced(p.urls[`images/${l.maskFile}`],l.maskPlacement??l.transform)});
       }
     }
-    return await window.editor.export(p.id,p.revision,type,{composite,layers,masks,flatten,frames,frameID:activeFrameID.value});
+    outputResult=await window.editor.export(p.id,p.revision,type,{composite,layers,masks,flatten,frames,frameID:activeFrameID.value,options});return outputResult;
   }); } finally { if(type==='gif'&&p.manifest.animation&&project.value?.id===p.id&&project.value?.revision===p.revision)await renderAnimationFrame(); }
+  return outputResult;
 }
 function stopPlayback(){const wasPlaying=animationPlaying.value;animationPlaying.value=false;playbackEpoch++;if(wasPlaying)selectAnimationFrame(activeFrameID.value);}
 function renderAnimationFrame(){return frameRenderTask=drawAnimationFrame();}
@@ -242,21 +261,22 @@ async function changeLanguage(event: Event) {
 }
 function onKey(event: KeyboardEvent) {
   if(event.isComposing)return;
-  if (event.key==='Tab' && (newDialog.value || psdDialog.value || detailsDialog.value || full.modal)) {
+  if (event.key==='Tab' && (newDialog.value || psdDialog.value || outputDialog.value || structuredDialog.value || detailsDialog.value || full.modal)) {
     const modal=[...document.querySelectorAll<HTMLElement>('.modal-shade')].at(-1);
     const fields=[...(modal?.querySelectorAll<HTMLElement>('button:not([disabled]),input:not([disabled]),select:not([disabled]),summary') ?? [])].filter(e=>e.getClientRects().length);
     const first=fields[0],last=fields.at(-1);
     if(first && ((!event.shiftKey && (document.activeElement===last || !modal?.contains(document.activeElement))) || (event.shiftKey && (document.activeElement===first || !modal?.contains(document.activeElement))))) { event.preventDefault(); (event.shiftKey?last:first)?.focus(); }
   }
-  if(newDialog.value || psdDialog.value || detailsDialog.value || full.modal){
-    if(event.key==='Escape'){full.key(event);stopPlayback();cancelStroke();newDialog.value=false;psdDialog.value=false;detailsDialog.value=false;}
+  if(newDialog.value || psdDialog.value || outputDialog.value || structuredDialog.value || detailsDialog.value || full.modal){
+    if(event.key==='Escape'){full.key(event);stopPlayback();cancelStroke();newDialog.value=false;psdDialog.value=false;outputDialog.value=false;structuredDialog.value='';detailsDialog.value=false;}
     return;
   }
   if(event.key===' '&&!event.repeat&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&!((event.target as HTMLElement)?.closest('input,textarea,select,[contenteditable]'))&&project.value?.manifest.animation){event.preventDefault();void playAnimation();return;}
+  if(event.key.toLowerCase()==='p'&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&!(event.target as HTMLElement)?.closest('input,textarea,select,[contenteditable]')){event.preventDefault();openStructured('path');return;}
   full.key(event);
   const input=(event.target as HTMLElement)?.closest('input,textarea,select,[contenteditable]');
   if(!painting.value&&!input&&!event.ctrlKey&&!event.altKey&&!event.metaKey){const k=event.key.toLowerCase();if(['b','e','v','h'].includes(k))tool.value=({b:'brush',e:'eraser',v:'move',h:'pan'} as Record<string,string>)[k];}
-  if(event.key==='Escape'){stopPlayback();cancelStroke();newDialog.value=false;psdDialog.value=false;detailsDialog.value=false;}
+  if(event.key==='Escape'){stopPlayback();cancelStroke();newDialog.value=false;psdDialog.value=false;outputDialog.value=false;structuredDialog.value='';detailsDialog.value=false;}
   if (event.ctrlKey && event.key.toLowerCase() === 'r') { event.preventDefault(); reload(); }
   if (event.ctrlKey && event.key.toLowerCase() === 'w') { event.preventDefault(); closeProject(); }
   if (event.ctrlKey && event.key === '+') { event.preventDefault(); scale(1.25); }
@@ -265,11 +285,11 @@ function onKey(event: KeyboardEvent) {
 function wheel(event: WheelEvent) { if (event.ctrlKey) { event.preventDefault(); scale(event.deltaY < 0 ? 1.1 : 1 / 1.1); } }
 let drag: { x: number; y: number; left: number; top: number } | undefined;
 const full=reactive(useCompleteEditor({project,selected,tool,color,brushSize,brushOpacity,paintTarget,painting,editable,language,canvas,overlay,artboard,stage,zoom,error,execute:async(op,p=project.value)=>{await submitEdit({id:selected.value?.id,...op},p,true);},receive:result=>request(()=>Promise.resolve(result)),history,scale}));
-watch(() => newDialog.value || psdDialog.value || detailsDialog.value || full.modal, async visible => {
+watch(() => newDialog.value || psdDialog.value || outputDialog.value || structuredDialog.value || detailsDialog.value || full.modal, async visible => {
   if (visible) {
     returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     await nextTick();
-    if (newDialog.value || psdDialog.value || detailsDialog.value || full.modal) document.querySelector<HTMLElement>('.modal-shade:last-of-type input, .modal-shade:last-of-type button')?.focus();
+    if (newDialog.value || psdDialog.value || outputDialog.value || structuredDialog.value || detailsDialog.value || full.modal) document.querySelector<HTMLElement>('.modal-shade:last-of-type input, .modal-shade:last-of-type button')?.focus();
   } else if (returnFocus?.isConnected) returnFocus.focus();
 });
 function cancelStroke(){full.cancel();drag=undefined;}
@@ -280,12 +300,12 @@ onMounted(async () => {
   const settings = await window.viewer.settings(); language.value = settings.language; version.value = settings.version; edition.value = settings.edition;
   document.documentElement.lang = language.value;
   subscriptions.push(window.viewer.onOpen(open), window.viewer.onReload(reload), window.viewer.onClose(closeProject), window.viewer.onFit(fit), window.viewer.onActual(() => zoom.value = 1));
-  const commands: Record<string, () => unknown> = {...full.commands,new:()=>{newDialog.value=true;},image:importImage,importPSD,save:()=>save(),saveAs:()=>save(true),png:()=>exportImage('png'),gif:()=>exportImage('gif'),eps:()=>exportImage('eps'),exportPSD:()=>{psdDialog.value=true;},recover,undo:()=>history('undo'),redo:()=>history('redo'),addPixels:()=>add('pixels'),addGroup:()=>add('group'),addMask:()=>{if(selected.value)edit({kind:'mask',action:'add'});},details:showDetails,properties:()=>{inspectorTab.value='properties';},effects:showEffects};
+  const commands: Record<string, () => unknown> = {...full.commands,newFill:()=>openStructured('fill'),editFill:()=>openStructured('fill',true),newPath:()=>openStructured('path'),editPath:()=>openStructured('path',true),newVectorMask:()=>openStructured('mask'),editVectorMask:()=>openStructured('mask',true),vectorMaskFromPath:maskFromPath,exportAs:()=>{outputDialog.value=true;},new:()=>{newDialog.value=true;},image:importImage,importPSD,save:()=>save(),saveAs:()=>save(true),png:()=>exportImage('png'),gif:()=>exportImage('gif'),eps:()=>exportImage('eps'),exportPSD:()=>{psdDialog.value=true;},recover,undo:()=>history('undo'),redo:()=>history('redo'),addPixels:()=>add('pixels'),addGroup:()=>add('group'),addMask:()=>{if(selected.value)edit({kind:'mask',action:'add'});},details:showDetails,properties:()=>{inspectorTab.value='properties';},effects:showEffects};
   for(const [name,action] of Object.entries(commands))subscriptions.push(window.editor.onCommand(name,()=>{
     if(composing)return;
     if(painting.value&&!(full.clipboardBusy&&['copy','copyMerged','cut','paste'].includes(name)))return;
     if(['copy','cut','paste','selectAll','undo','redo'].includes(name)&&document.activeElement?.closest('input,textarea,[contenteditable]')){void window.editor.textClipboard(name);return;}
-    if(['undo','redo'].includes(name)&&(newDialog.value||psdDialog.value||detailsDialog.value||full.modal))return;
+    if(['undo','redo'].includes(name)&&(newDialog.value||psdDialog.value||outputDialog.value||structuredDialog.value||detailsDialog.value||full.modal))return;
     if(name==='undo'&&!project.value?.canUndo||name==='redo'&&!project.value?.canRedo)return;
     action();
   }));
@@ -339,7 +359,7 @@ onUnmounted(() => { stopPlayback(); operation++; epoch++; cancelStroke();rendere
     <main>
       <nav class="toolrail" :aria-label="ui.tools">
         <button v-for="key in tools" :key="key" class="icon-button tool-button" :class="{active:tool===key}" :aria-pressed="tool===key" :disabled="painting || (key!=='pan' && !editable)" :title="toolLabel(key) + ' (' + toolKeys[key] + ')'" :aria-label="toolLabel(key)" @click="tool=key"><Icon :name="key"/></button>
-        <div class="rail-divider"></div>
+        <button class="icon-button tool-button" :disabled="painting||!editable" :title="full.labels.pen+' (P)'" :aria-label="full.labels.pen" @click="openStructured('path')"><Icon name="pen"/></button><div class="rail-divider"></div>
         <label class="color-swatch" :title="full.labels.foreground"><span :style="{background:color}"></span><input type="color" v-model="color" :aria-label="t.editor.color" :disabled="painting"></label>
         <label class="color-swatch background-swatch" :title="full.labels.background"><span :style="{background:full.background}"></span><input type="color" v-model="full.background" :aria-label="full.labels.background" :disabled="painting"></label>
         <button class="icon-button" :title="full.labels.swap+' (X)'" :aria-label="full.labels.swap" @click="[color,full.background]=[full.background,color]"><Icon name="swap"/></button>
@@ -447,6 +467,9 @@ onUnmounted(() => { stopPlayback(); operation++; epoch++; cancelStroke();rendere
     </div>
     <AiPanel :language="language" :project="project" :busy="busy" :editable="editable" :edit="submitEdit" :history="history"/>
     <CompleteControls :e="full" mode="dialogs" :tool="tool" :disabled="!editable" :selected="selected" :color="color" :size="brushSize" :opacity="brushOpacity" :target="paintTarget"/>
+    <OutputDialog v-if="outputDialog && project" :language="language" :project="project" :get-composite="outputComposite" :export-file="(type,options)=>exportImage(type,false,options)" @close="outputDialog=false"/>
+    <FillDialog v-if="structuredDialog==='fill' && project" :language="language" :project="project" :layer="structuredLayer" :editing="structuredEditing" :commit="submitEdit" @close="structuredDialog=''"/>
+    <PathDialog v-if="['path','mask'].includes(structuredDialog) && project" :language="language" :project="project" :layer="structuredLayer" :editing="structuredEditing" :mode="structuredDialog==='mask'?'mask':'path'" :commit="submitEdit" @close="structuredDialog=''"/>
     <div v-if="newDialog" class="modal-shade" @click.self="newDialog=false"><form class="dialog" role="dialog" aria-modal="true" :aria-label="t.editor.newCanvas" @submit.prevent="create"><h2>{{ t.editor.newCanvas }}</h2><p>{{ ui.transparent }}</p><div class="new-dimensions"><label>{{ t.editor.width }}<input type="number" v-model.number="newWidth" min="1" max="30000" required></label><button class="icon-button" type="button" :aria-label="t.editor.swap" :title="t.editor.swap" @click="[newWidth,newHeight]=[newHeight,newWidth]"><Icon name="swap"/></button><label>{{ t.editor.height }}<input type="number" v-model.number="newHeight" min="1" max="30000" required></label></div><div class="button-row"><button type="button" @click="newDialog=false">{{ t.editor.cancel }}</button><button class="primary" type="submit">{{ t.editor.create }}</button></div></form></div>
     <div v-if="psdDialog" class="modal-shade" @click.self="psdDialog=false"><div class="dialog" role="dialog" aria-modal="true" :aria-label="t.editor.conversion"><h2>{{ t.editor.conversion }}</h2><p>{{ t.editor.conversionNote }}</p><p v-if="project?.manifest.animation">{{ language==='en'?'PSD keeps frame folders with current visibility. Save .comp or GIF to retain animation timing.':'PSD 保留帧文件夹和当前帧的可见性。动画时长请保存在 .comp 或 GIF 中。' }}</p><div class="button-row"><button @click="psdDialog=false">{{ t.editor.cancel }}</button><button :disabled="!layeredPSD || !editable" @click="exportImage('psd')">{{ t.editor.layered }}</button><button :disabled="!editable" class="primary" @click="exportImage('psd',true)">{{ t.editor.flattened }}</button></div></div></div>
     <div v-if="detailsDialog" class="modal-shade" @click.self="detailsDialog=false"><section class="dialog details-dialog" role="dialog" aria-modal="true" :aria-label="ui.details"><div class="dialog-heading"><h2>{{ ui.details }}</h2><button class="icon-button" :aria-label="t.close" @click="detailsDialog=false"><Icon name="close"/></button></div><p>{{ t.sourceNote }}</p><p>{{ t.readonly }} · {{ version }}</p><template v-if="project"><p>{{ ui.source }}：{{ source==='engine'?t.engine:source==='saved'?t.saved:t.metadata }}</p><section class="coverage"><h3>{{ t.coverage }}</h3><dl><div><dt>{{ t.simple }}</dt><dd>{{ project.analysis.coverage.simple }}</dd></div><div><dt>{{ t.pixels }}</dt><dd>{{ project.analysis.coverage.pixelFallback }}</dd></div><div><dt>{{ t.preview }}</dt><dd>{{ project.analysis.coverage.previewOnly }}</dd></div></dl><p>{{ t.coverageNote }}</p><button :disabled="busy" data-testid="copy-report" @click="copyReport">{{ t.copyReport }}</button><small>{{ t.reportPrivacy }}</small><small v-if="reportState!=='idle'" role="status">{{ reportState==='copied'?t.reportCopied:t.reportError }}</small></section><details v-if="selected" class="raw-properties"><summary>{{ t.properties }}</summary><pre>{{ formattedProperties }}</pre></details></template><div class="button-row"><button class="primary" @click="detailsDialog=false">{{ t.close }}</button></div></section></div>

@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ADJUSTMENT_KINDS, EFFECT_KINDS } from '../packages/comp-bridge/capabilities.mjs';
 import { adjustedPixels, effectPixels } from '../packages/editor-adapter/pixels.mjs';
+import { parseColorLUT } from '../packages/comp-bridge/poster-color.mjs';
 import { FILTERS, applySelectedFilter } from '../packages/comp-bridge/raster-tools.mjs';
 import { shapeMask } from '../packages/comp-bridge/editor-math.mjs';
 import { newProject, editProject, projectData } from '../packages/comp-bridge/edit.mjs';
@@ -42,7 +43,7 @@ test('a filter on an empty selection keeps saved identity, redo and editable sha
   assert.deepEqual(session.current.data.manifest.layers[0].shape,manifest.layers[0].shape);session.close();
 });
 for(const kind of FILTERS)test(`filter ${kind}: selection limits changes and keeps source immutable`,()=>{
-  const before=image.data.slice(),result=applySelectedFilter(image,placement,selection,kind,{size:3,radius:1,amount:25});valid(result);
+  const before=image.data.slice(),result=applySelectedFilter(image,placement,selection,kind,{size:3,radius:1,amount:25,...(kind==='Color Lookup'?{table:parseColorLUT('LUT_1D_SIZE 2\n0 0 0\n1 1 1')}:{})});valid(result);
   for(let i=0;i<selection.data.length;i++)if(!selection.data[i])assert.deepEqual(result.data.slice(i*4,i*4+4),before.slice(i*4,i*4+4));
   assert.deepEqual(image.data,before);
 });

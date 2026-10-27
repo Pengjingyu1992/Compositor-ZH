@@ -3,12 +3,13 @@ import { constants } from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { supportsAdjustment, supportsEffects } from './capabilities.mjs';
+import { supportsFillStyle, supportsVectorPath } from './layer-styles.mjs';
 
 export const CURRENT_FORMAT_VERSION = 17;
 export const LIMITS = Object.freeze({ manifest: 4 * 1024 ** 2, asset: 64 * 1024 ** 2, encoded: 256 * 1024 ** 2, pixels: 100_000_000, layers: 10_000, side: 30_000 });
 export const BLEND_MODES = Object.freeze(['Normal', 'Darken', 'Multiply', 'Color Burn', 'Linear Burn', 'Lighten', 'Screen', 'Color Dodge', 'Linear Dodge (Add)', 'Overlay', 'Soft Light', 'Hard Light', 'Vivid Light', 'Linear Light', 'Pin Light', 'Hard Mix', 'Difference', 'Exclusion', 'Subtract', 'Divide', 'Hue', 'Saturation', 'Color', 'Luminosity']);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const KNOWN_LAYER = new Set(['id', 'name', 'isVisible', 'transform', 'imageFile', 'parentID', 'isGroup', 'opacity', 'blendMode', 'maskFile', 'maskEnabled', 'maskSourceID', 'adjustment', 'maskPlacement', 'maskLinked', 'shape', 'effects', 'text']);
+const KNOWN_LAYER = new Set(['id', 'name', 'isVisible', 'transform', 'imageFile', 'parentID', 'isGroup', 'opacity', 'blendMode', 'maskFile', 'maskEnabled', 'maskSourceID', 'adjustment', 'maskPlacement', 'maskLinked', 'shape', 'effects', 'text', 'fill', 'vectorMask']);
 const KNOWN_TOP = new Set(['format', 'version', 'colorSpace', 'resolution', 'documentID', 'width', 'height', 'activeLayerID', 'layers', 'guides', 'animation']);
 const KNOWN_TRANSFORM = new Set(['origin', 'size', 'rotation', 'flipX', 'flipY', 'sampling']);
 
@@ -69,6 +70,7 @@ export function parseManifest(bytes) {
     requireValue(m.version >= 9 || !['Gaussian Blur', 'Motion Blur', 'Add Noise'].includes(l.adjustment?.kind));
     requireValue(m.version >= 10 || !l.text?.colorRuns);
     requireValue(m.version >= 11 || !l.text?.fontRuns);
+    requireValue(m.version >= 12 || (!l.fill && !l.effects?.gradientOverlay && !l.effects?.patternOverlay && !l.effects?.bevel && !l.text?.vertical && l.text?.alignment !== 'Justified'));
     requireValue(m.version >= 13 || (!l.shape?.vector && !l.vectorMask && !l.text?.pathLayout && !l.text?.warp));
     ids.set(l.id.toUpperCase(), l);
   }
@@ -188,7 +190,7 @@ export function analyze(manifest, sourcePixels = 0, maskPixels = 0) {
       const shown = visible && l.isVisible, alpha = opacity * (l.opacity ?? 1);
       const unknown = Object.keys(l).some(k => !KNOWN_LAYER.has(k)) || Object.keys(l.transform).some(k => !KNOWN_TRANSFORM.has(k)) || Object.keys(l.maskPlacement ?? {}).some(k => !KNOWN_TRANSFORM.has(k));
       const reasons = [];
-      if (unknown || l.text?.vertical === true || l.text?.alignment === 'Justified' || l.shape?.vector || l.text?.pathLayout || l.text?.warp) reasons.push('unknown');
+      if (unknown || l.text?.vertical === true || l.text?.alignment === 'Justified' || l.shape?.vector && !supportsVectorPath(l.shape.vector) || l.fill && !supportsFillStyle(l.fill) || l.vectorMask && !supportsVectorPath(l.vectorMask) || l.text?.pathLayout || l.text?.warp) reasons.push('unknown');
       if (l.adjustment && !supportsAdjustment(l.adjustment)) reasons.push('adjustment');
       if (l.effects && (!supportsEffects(l.effects) || l.isGroup || l.adjustment)) reasons.push('effects');
       // Adjustments and effects are now explicitly evaluated by the adapter.
@@ -199,7 +201,7 @@ export function analyze(manifest, sourcePixels = 0, maskPixels = 0) {
         if (!source?.imageFile || source.maskSourceID || source.parentID?.toUpperCase() !== l.parentID?.toUpperCase() || base < 0 || base >= index || siblings.slice(base + 1, index).some(s => s.maskSourceID?.toUpperCase() !== source.id.toUpperCase())) reasons.push('clipping');
       }
       if (shown && alpha > 0) reasons.forEach(r => issues.add(r));
-      const category = reasons.length ? 'preview' : l.text || l.shape ? 'pixels' : 'simple';
+      const category = reasons.length ? 'preview' : l.text || l.shape || l.fill ? 'pixels' : 'simple';
       if (category === 'preview') previewOnly++; else if (category === 'pixels') pixelFallback++; else simple++;
       rows.push({ ...l, depth, effectiveVisible: shown, effectiveOpacity: alpha, category });
       if (l.isGroup) visit(l.id.toUpperCase(), alpha, shown, depth + 1);

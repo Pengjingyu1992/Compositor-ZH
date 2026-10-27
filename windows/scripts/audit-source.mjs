@@ -23,7 +23,8 @@ const source = await readFile(path.join(root, 'windows/packages/locales/index.ts
 const { messages } = await import('../packages/locales/index.ts');
 function keys(v, prefix = '') { return Object.entries(v).flatMap(([key, value]) => typeof value === 'object' ? keys(value, `${prefix}${key}.`) : [`${prefix}${key}`]); }
 const {fullEditor}=await import('../apps/desktop/renderer/editor-labels.ts');
-const en = [...keys(messages.en),...keys(fullEditor.en,'full.')].sort(), zh = [...keys(messages['zh-Hans']),...keys(fullEditor['zh-Hans'],'full.')].sort();
+const {parityMessages}=await import('../apps/desktop/renderer/parity-labels.ts');
+const en = [...keys(messages.en),...keys(fullEditor.en,'full.'),...keys(parityMessages.en,'parity.')].sort(), zh = [...keys(messages['zh-Hans']),...keys(fullEditor['zh-Hans'],'full.'),...keys(parityMessages['zh-Hans'],'parity.')].sort();
 if (JSON.stringify(en) !== JSON.stringify(zh)) findings.push('localization-key-mismatch');
 if (!source.includes('sourceNote')) findings.push('missing-credits');
 if (findings.length) { console.error('Review failures:', findings); process.exitCode = 1; }

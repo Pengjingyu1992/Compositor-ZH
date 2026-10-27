@@ -192,7 +192,7 @@ test('merged clipboard copy, cut and native image paste retain the expected pixe
   await command('paste');await expect(page.locator('.layer-row')).toHaveCount(4);await ready();
   const restored=await save(),copy=restored.manifest.layers.at(-1);expect(PNG.sync.read(await readFile(path.join(restored.file,'images',copy.imageFile))).data).toEqual(image.data);
 });
-test('all 21 filter previews and applications retain a valid document', async () => {
+test('all supported filter previews and applications retain a valid document', async () => {
   test.setTimeout(300000); await openFixture();
   for(const kind of FILTERS)await test.step(kind,async()=>{
     await command('selectAll');await expect.poll(()=>page.locator('.paint-overlay').evaluate(c=>c.getContext('2d').getImageData(0,0,1,1).data[3])).toBeGreaterThan(0);await ready();
@@ -200,7 +200,7 @@ test('all 21 filter previews and applications retain a valid document', async ()
       await command('deselect');await expect.poll(()=>page.locator('.paint-overlay').evaluate(c=>c.getContext('2d').getImageData(0,0,1,1).data[3])).toBe(0);await ready();await page.getByRole('button',{name:'Marquee',exact:true}).click();const box=await page.locator('.artboard').boundingBox();
       await page.mouse.move(box.x+box.width*.4,box.y+box.height*.4);await page.mouse.down();await page.mouse.move(box.x+box.width*.6,box.y+box.height*.6,{steps:4});await page.mouse.up();await ready();
     }
-    await command('filter');await page.getByTestId('filter-kind').selectOption(kind);await page.getByTestId('update-preview').click();await expect(page.getByTestId('apply-editor')).toBeEnabled();
+    await command('filter');await page.getByTestId('filter-kind').selectOption(kind);if(kind==='Color Lookup')await page.getByTestId('lut-file').setInputFiles({name:'identity.cube',mimeType:'text/plain',buffer:Buffer.from('LUT_1D_SIZE 2\n0 0 0\n1 1 1')});await page.getByTestId('update-preview').click();await expect(page.getByTestId('apply-editor')).toBeEnabled();
     await expect(page.locator('.editor-preview img')).toBeVisible();await page.getByTestId('apply-editor').click();await ready();
     await expect(page.getByTestId('rendered-canvas')).toBeVisible();
     await chooseOpen(source);await page.getByTestId('open-project').click();await expect(page.getByTestId('open-project')).toBeEnabled();await expect(page.getByTestId('rendered-canvas')).toBeVisible();await page.locator('.layer-select').filter({hasText:'Mint / 薄荷'}).click();await ready();

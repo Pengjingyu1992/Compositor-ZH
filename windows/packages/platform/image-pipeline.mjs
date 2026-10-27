@@ -1,9 +1,6 @@
-import sharp from 'sharp';
+import sharp from './native-imaging.mjs';
 import { ProjectError, LIMITS } from '../comp-bridge/project.mjs';
 
-// Keep native decode caches and parallel working sets inside the document budget.
-sharp.cache(false);
-sharp.concurrency(1);
 const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 const input = value => {
   if (!(value instanceof Uint8Array) || !value.byteLength || value.byteLength > LIMITS.asset) throw new ProjectError('limit');

@@ -49,6 +49,7 @@ jobs:
           /tmp/compositor-psd/bin/pip install psd-tools==1.23.0
           /tmp/compositor-psd/bin/python tests/independent-psd.py
           /tmp/compositor-psd/bin/python tests/independent-image-codecs.py
+          /tmp/compositor-psd/bin/python tests/independent-image-output.py
       - name: Build Deb, portable archive and AppImage
         run: npm run package:linux
       - name: Packaged Electron checks with a temporary desktop keyring

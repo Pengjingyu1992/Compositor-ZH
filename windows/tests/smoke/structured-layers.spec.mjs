@@ -1,0 +1,51 @@
+import { test, expect, _electron } from '@playwright/test';
+import { mkdtemp, rm, readFile } from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+import { fixture } from '../fixtures.mjs';
+import { smokeExecutable, smokeArgs, smokeEnv } from './electron-launch.mjs';
+
+test('editable fill and pen dialogs cancel cleanly, save and reopen geometry, and undo vector masks', async () => {
+  test.setTimeout(120000);
+  const directory=await mkdtemp(path.join(os.tmpdir(),'comp-structured-ui-')),source=path.join(directory,'source.comp'),output=path.join(directory,'edited.comp');
+  await fixture(source);let instance;const errors=[];
+  try {
+    instance=await _electron.launch({executablePath:smokeExecutable(),args:smokeArgs(),env:smokeEnv(directory)});
+    const page=await instance.firstWindow();page.on('pageerror',error=>errors.push(error.message));
+    const menu=async id=>instance.evaluate(({Menu},id)=>Menu.getApplicationMenu().getMenuItemById(id).click(),id);
+    await page.getByTestId('language').selectOption('en');
+    await instance.evaluate(({dialog},source)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[source]});dialog.showMessageBox=async()=>({response:1});},source);
+    await page.getByTestId('open-project').click();await expect(page.getByTestId('rendered-canvas')).toBeVisible();
+    await expect(page.getByTestId('save-project')).toBeEnabled();
+    await menu('layer-newFill');await expect(page.getByTestId('fill-preview')).toBeVisible();
+    await page.getByTestId('fill-kind').selectOption('Radial');await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).toHaveCount(0);await expect(page.getByTestId('undo')).toBeDisabled();
+    await menu('layer-newFill');await page.getByTestId('fill-kind').selectOption('Pattern');
+    await page.getByTestId('apply-fill-layer').click();await expect(page.getByRole('dialog')).toHaveCount(0);
+    await page.locator('.layer-select').filter({hasText:'Editable fill layer'}).click();
+    await menu('layer-editFill');await expect(page.getByTestId('fill-kind')).toHaveValue('Pattern');
+    await page.getByTestId('fill-kind').selectOption('Linear');await page.getByTestId('apply-fill-layer').click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await menu('layer-newPath');const svg=page.getByTestId('path-editor');await expect(svg).toBeVisible();
+    const bounds=await svg.boundingBox();
+    for(const [x,y]of [[.25,.25],[.75,.25],[.75,.75],[.25,.75]])await svg.click({position:{x:bounds.width*x,y:bounds.height*y}});
+    await page.getByRole('button',{name:'Close path',exact:true}).click();
+    await page.getByTestId('apply-path').click();await expect(page.getByRole('dialog')).toHaveCount(0);
+    await page.locator('.layer-select').filter({hasText:'Editable path'}).click();await menu('layer-editPath');
+    await expect(svg.locator('circle')).toHaveCount(4);await page.keyboard.press('Escape');
+    await menu('layer-vectorMaskFromPath');await expect(page.locator('[role=alert]')).toHaveCount(0);
+    await expect(page.getByTestId('undo')).toBeEnabled();await page.getByTestId('undo').click();
+    await page.getByTestId('redo').click();await expect(page.getByTestId('save-project')).toBeEnabled();
+    await instance.evaluate(({dialog},output)=>{dialog.showSaveDialog=async()=>({canceled:false,filePath:output});},output);
+    await menu('file-save-as');await expect(page.locator('.badge')).toContainText('Saved');
+    const manifest=JSON.parse(await readFile(path.join(output,'manifest.json'),'utf8'));
+    const fill=manifest.layers.find(layer=>layer.fill),vector=manifest.layers.find(layer=>layer.shape?.vector);
+    expect(fill.fill.kind).toBe('Linear');expect(fill.vectorMask.contours[0].anchors).toHaveLength(4);
+    expect(vector.isVisible).toBe(false);expect(vector.shape.vector.contours[0].closed).toBe(true);
+    await instance.evaluate(({dialog},output)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[output]});},output);
+    await page.getByTestId('open-project').click();await expect(page.getByTestId('save-project')).toBeEnabled();
+    await page.locator('.layer-select').filter({hasText:'Editable fill layer'}).click();await menu('layer-editVectorMask');
+    await expect(svg.locator('circle')).toHaveCount(4);await page.keyboard.press('Escape');
+    expect(errors).toEqual([]);
+  }finally{await instance?.close();await rm(directory,{recursive:true,force:true});}
+});

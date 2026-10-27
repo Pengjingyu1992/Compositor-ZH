@@ -3,7 +3,10 @@ import { createRequire } from 'node:module';
 try {
   const codecs = createRequire(import.meta.url)(workerData.codecPath);
   let result;
-  if (workerData.operation === 'decodeSourceImage') {
+  if (['encodeOutputImage', 'printProof'].includes(workerData.operation)) {
+    const output = await import('./image-output.mjs');
+    result = await output[workerData.operation](workerData.bytes, workerData.resolution);
+  } else if (workerData.operation === 'decodeSourceImage') {
     const { decodeSourceImage } = await import('./image-pipeline.mjs');
     result = await decodeSourceImage(workerData.bytes);
   } else {

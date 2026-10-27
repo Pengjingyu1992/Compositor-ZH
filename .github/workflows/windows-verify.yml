@@ -43,6 +43,7 @@ jobs:
         run: |
           python -m pip install psd-tools==1.23.0
           python tests/independent-psd.py
+          python tests/independent-image-output.py
       - name: Build Windows installer and ZIP
         run: npm run package:win
         env:

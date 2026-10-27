@@ -3,12 +3,13 @@ import { supportsAdjustment } from './capabilities.mjs';
 import { ProjectError, LIMITS } from './project.mjs';
 import { bounds, union, arrange, shapeMask, combineMasks, modifyMask, floodMask, validSurface, toLocal, toDocument, selectionCoverage, following } from './editor-math.mjs';
 import { fillPixels, strokePixels, resizePixels, applySelectedFilter, FILTERS } from './raster-tools.mjs';
+import { supportsFillStyle, supportsVectorPath, validRGB, renderFillPixels } from './layer-styles.mjs';
 const fail = c => { throw new ProjectError(c); };
 const finite = (v,a=-300000,b=300000) => typeof v==='number' && Number.isFinite(v) && v>=a && v<=b;
 const pair = v => Array.isArray(v) && v.length===2 && v.every(n=>finite(n));
 const rgb = v => Array.isArray(v) && v.length===3 && v.every(n=>finite(n,0,255));
 const place = (w,h) => ({origin:[0,0],size:[w,h],rotation:0,flipX:false,flipY:false,sampling:'High quality'});
-export const GLOBAL_OPS = ['selection','lock','canvas','imageSize','arrange','group','merge','guides','flipCanvas','moveLayers','transformLayers'];
+export const GLOBAL_OPS = ['selection','lock','canvas','imageSize','arrange','group','merge','guides','flipCanvas','moveLayers','transformLayers','resolution'];
 export function operationTargets(m,op) {
   const all=['canvas','imageSize','flipCanvas'].includes(op.kind),ids=all?m.layers.map(l=>l.id):op.ids??(op.id?[op.id]:[]);
   if(!Array.isArray(ids)||ids.length>10000||ids.some(id=>typeof id!=='string'||!m.layers.some(l=>l.id===id)))fail('stale');
@@ -17,13 +18,15 @@ export function operationTargets(m,op) {
 }
 export function checkPermission(data,op) {
   if(op.kind==='batch'){for(const item of op.operations??[])checkPermission(data,item);return;}
-  if(['selection','lock','rename','guides'].includes(op.kind))return;
-  const inserting=['add','importPixels'].includes(op.kind)||(op.kind==='styled'&&!op.id);
-  const dimensions=['group','ungroup','reorder','parent','merge'].includes(op.kind)?['content','position']:['transform','transformMask','transformLayers','moveLayers','arrange','canvas','imageSize','flipCanvas'].includes(op.kind)?['position']:op.kind==='appearance'?['appearance']:['content'];
+  if(['selection','lock','guides','resolution'].includes(op.kind))return;
+  if(op.kind==='imageSize'&&op.width===data.manifest.width&&op.height===data.manifest.height)return;
+  if(['duplicate','duplicateTree'].includes(op.kind)){const source=data.manifest.layers.find(layer=>layer.id===op.id);if(!source)fail('stale');if(source.parentID)checkPermission(data,{kind:'add',parentID:source.parentID});return;}
+  const inserting=['add','importPixels'].includes(op.kind)||(['styled','fillLayer','path'].includes(op.kind)&&!op.id);
+  const dimensions=['delete','group','ungroup','reorder','parent','merge','imageSize'].includes(op.kind)?['content','position','appearance','alpha']:['transform','transformMask','transformLayers','moveLayers','arrange','canvas','flipCanvas'].includes(op.kind)||op.kind==='mask'&&op.action==='link'?['position']:['appearance','effect','effects'].includes(op.kind)||op.kind==='mask'&&op.action==='toggle'?['appearance']:op.kind==='rename'?[]:['content'];
   const targets=inserting?[]:operationTargets(data.manifest,op);
   if(op.parentID){const parent=data.manifest.layers.find(l=>l.id===op.parentID);if(!parent?.isGroup)fail('invalid');targets.push(parent);}
   for(const l of targets) {
-    let row=l;for(let n=0;row&&n<65;n++,row=data.manifest.layers.find(v=>v.id.toUpperCase()===row.parentID?.toUpperCase()))if(dimensions.some(d=>data.locks?.[row.id]?.[d]))fail('locked');
+    let row=l;for(let n=0;row&&n<65;n++,row=data.manifest.layers.find(v=>v.id.toUpperCase()===row.parentID?.toUpperCase()))if(data.locks?.[row.id]?.all||dimensions.some(d=>data.locks?.[row.id]?.[d]))fail('locked');
   }
 }
 export function selectionEdit(data,op,codecs) {
@@ -47,7 +50,7 @@ export function selectionEdit(data,op,codecs) {
   return {...data,selection:next?{width:w,height:h,data:next}:null,contentSnapshot:data.contentSnapshot??data};
 }
 function settings(op) {
-  if(JSON.stringify(op.settings??{}).length>1048576)fail('limit');
+  if(JSON.stringify(op.settings??{}).length>(op.filter==='Color Lookup'?32*1024**2:1048576))fail('limit');
   const s=structuredClone(op.settings??{});
   for(const [k,a,b] of [['size',1,500],['opacity',0,1],['hardness',0,1],['spacing',.01,2],['sectors',2,16],['tolerance',0,255],['radius',0,200],['amount',0,100],['distance',0,1000],['angle',-360,360],['levels',2,32],['exposure',-10,10],['contrast',-100,100],['saturation',-100,100],['temperature',-100,100],['distortion',-100,100]])if(s[k]!==undefined&&!finite(s[k],a,b))fail('invalid');
   for(const k of ['color','background'])if(s[k]!==undefined&&!rgb(s[k]))fail('invalid');
@@ -90,14 +93,33 @@ export function editorOperation(data,m,resources,target,op,codecs,descendants) {
       }
       if(s.lockAlpha)for(let i=0;i<output.data.length;i+=4){output.data[i+3]=image.data[i+3];if(!image.data[i+3])output.data.set(image.data.subarray(i,i+4),i);}
       if(output.data.every((v,i)=>v===image.data[i]))return true;
-      resources.set(`images/${file}`,codecs.encodePixels(output,mask));if(!mask){delete target.text;delete target.shape;}return true;
+      resources.set(`images/${file}`,codecs.encodePixels(output,mask));if(!mask){delete target.text;delete target.shape;delete target.fill;delete target.editableFilters;}else delete target.vectorMask;return true;
+    }
+    case 'fillLayer':case 'path':{
+      if(target&&(!target.imageFile||target.isGroup||target.adjustment||op.kind==='fillLayer'&&!target.fill||op.kind==='path'&&target.shape?.kind!=='Path'))fail('unsupported');
+      let ancestor=target;for(let n=0;ancestor&&n<65;n++,ancestor=m.layers.find(l=>l.id===ancestor.parentID))if(data.locks?.[ancestor.id]?.alpha)fail('locked');
+      const old=target&&resources.get(layerFile(target)),width=old?.width??op.width??m.width,height=old?.height??op.height??m.height;validSurface(width,height);
+      let image;if(op.kind==='fillLayer'){if(!supportsFillStyle(op.style))fail('invalid');image=codecs.encodePixels(renderFillPixels(width,height,op.style));}
+      else{if(!supportsVectorPath(op.style)||!validRGB(op.color))fail('invalid');image=codecs.validatePNG(op.png);if(image.width!==width||image.height!==height)fail('invalid');}
+      const row=target??{id:randomUUID().toUpperCase(),name:String(op.name??op.kind).slice(0,256),isVisible:true,transform:place(width,height)};
+      if(!target){row.imageFile=`${row.id}.png`;if(op.parentID)row.parentID=op.parentID;m.layers.push(row);}
+      if(op.kind==='fillLayer')row.fill=structuredClone(op.style);
+      else row.shape={kind:'Path',...structuredClone(op.color),cornerRadius:0,lineWidth:op.style.strokeWidth,start:[0,0],end:[1,1],vector:structuredClone(op.style)};
+      resources.set(layerFile(row),image);m.activeLayerID=row.id;m.version=Math.max(m.version,op.kind==='path'?13:12);return true;
+    }
+    case 'vectorMask':{
+      if(!target.imageFile||target.isGroup||target.adjustment||target.maskFile&&!target.vectorMask||!supportsVectorPath(op.style))fail('unsupported');
+      const base=resources.get(`images/${target.maskFile??target.imageFile}`),image=codecs.validatePNG(op.png,true);if(image.width!==base.width||image.height!==base.height)fail('invalid');
+      if(op.sourcePathID){checkPermission(data,{kind:'appearance',id:op.sourcePathID});const source=m.layers.find(l=>l.id===op.sourcePathID);if(!source?.shape?.vector||source===target)fail('invalid');source.isVisible=false;}
+      target.maskFile??=`${target.id}.mask.png`;target.maskEnabled??=true;target.vectorMask=structuredClone(op.style);resources.set(`images/${target.maskFile}`,image);m.activeLayerID=target.id;m.version=Math.max(m.version,13);return true;
     }
     case 'styled':{
       if(!['text','shape'].includes(op.type)||!pair(op.origin))fail('invalid');validateStyle(op.type,op.style);
       const image=codecs.validatePNG(op.png);let l=target;
+      if(l){let row=l;for(let n=0;row&&n<65;n++,row=m.layers.find(value=>value.id===row.parentID))if(data.locks?.[row.id]?.alpha){const before=codecs.decodePNG(resources.get(layerFile(l))),after=codecs.decodePNG(image);if(before.width!==after.width||before.height!==after.height||after.data.some((value,index)=>index%4===3&&value!==before.data[index]))fail('locked');}}
       if(!l){const id=randomUUID().toUpperCase();l={id,name:String(op.name??op.type).slice(0,256),isVisible:true,transform:place(image.width,image.height),imageFile:id+'.png'};if(op.parentID){if(!m.layers.some(p=>p.id===op.parentID&&p.isGroup))fail('invalid');l.parentID=op.parentID;}m.layers.push(l);}else if(!l.imageFile||l.isGroup||l.adjustment)fail('unsupported');
       if(op.preserveSize!==undefined&&typeof op.preserveSize!=='boolean')fail('invalid');const originalSize=[...l.transform.size];
-      const old=resources.get(layerFile(l)),scale=op.type==='text'&&l.text&&old?[l.transform.size[0]/old.width,l.transform.size[1]/old.height]:[1,1];l.transform.origin=op.origin;l.transform.size=op.preserveSize?originalSize:[image.width*scale[0],image.height*scale[1]];l[op.type]=structuredClone(op.style);delete l[op.type==='text'?'shape':'text'];resources.set(layerFile(l),image);m.activeLayerID=l.id;return true;
+      const old=resources.get(layerFile(l)),scale=op.type==='text'&&l.text&&old?[l.transform.size[0]/old.width,l.transform.size[1]/old.height]:[1,1];l.transform.origin=op.origin;l.transform.size=op.preserveSize?originalSize:[image.width*scale[0],image.height*scale[1]];l[op.type]=structuredClone(op.style);delete l[op.type==='text'?'shape':'text'];delete l.fill;delete l.editableFilters;resources.set(layerFile(l),image);m.activeLayerID=l.id;return true;
     }
     case 'transformLayers':{
       operationTargets(m,op);if(!['origin','size','rotation','flipX','flipY','sampling'].includes(op.field))fail('invalid');const layers=operationTargets(m,op),members=layers.filter(l=>l.imageFile);if(!members.length)fail('unsupported');const box=union(members.map(l=>bounds(l.transform))),old={...place(Math.max(1,box.w),Math.max(1,box.h)),origin:[box.x,box.y]},next={...old,[op.field]:structuredClone(op.value)};
@@ -109,17 +131,18 @@ export function editorOperation(data,m,resources,target,op,codecs,descendants) {
       if(!target.maskPlacement)target.maskPlacement=structuredClone(target.transform);target.maskLinked=false;target.maskPlacement[op.field]=structuredClone(op.value);return true;
     }
     case 'moveLayers':operationTargets(m,op);if(!pair(op.delta))fail('invalid');for(const l of roots(op.ids))shift(descendants(l.id),...op.delta);return true;
-    case 'rasterize':delete target.text;delete target.shape;return true;
+    case 'rasterize':{delete target.text;delete target.shape;delete target.fill;delete target.editableFilters;const image=resources.get(layerFile(target));if(image?.proxyBytes)resources.set(layerFile(target),codecs.validatePNG(image.proxyBytes));return true;}
+    case 'resolution':if(!finite(op.value,1,9600))fail('invalid');m.resolution=op.value;return true;
     case 'canvas':{
       validSurface(op.width,op.height);if(!finite(op.x??0)||!finite(op.y??0))fail('invalid');shift(new Set(m.layers.map(l=>l.id.toUpperCase())),-(op.x??0),-(op.y??0),true);m.width=op.width;m.height=op.height;
       for(const g of m.guides??[])g.position-=g.axis==='vertical'?(op.x??0):(op.y??0);return true;
     }
     case 'imageSize':{
-      validSurface(op.width,op.height);const sx=op.width/m.width,sy=op.height/m.height,scale=Math.sqrt(sx*sy);let total=0;
+      validSurface(op.width,op.height);if(op.resolution!==undefined){if(!finite(op.resolution,1,9600))fail('invalid');m.resolution=op.resolution;}if(op.width===m.width&&op.height===m.height)return true;const sx=op.width/m.width,sy=op.height/m.height,scale=Math.sqrt(sx*sy);let total=0;
       for(const l of m.layers)for(const f of ['imageFile','maskFile'])if(l[f]){const r=resources.get(`images/${l[f]}`),w=Math.max(1,Math.round(r.width*sx)),h=Math.max(1,Math.round(r.height*sy));validSurface(w,h);total+=w*h;}if(total>LIMITS.pixels)fail('limit');
       for(const l of m.layers){for(const t of [l.transform,l.maskPlacement].filter(Boolean)){t.origin=t.origin.map((v,i)=>v*(i?sy:sx));t.size=t.size.map((v,i)=>v*(i?sy:sx));}
         for(const f of ['imageFile','maskFile'])if(l[f]){const r=resources.get(`images/${l[f]}`);resources.set(`images/${l[f]}`,codecs.encodePixels(resizePixels(codecs.decodePNG(r),Math.max(1,Math.round(r.width*sx)),Math.max(1,Math.round(r.height*sy)),op.nearest===true),f==='maskFile'));}
-        for(const e of Object.values(l.effects??{}))for(const k of ['size','blur','distance'])if(typeof e[k]==='number')e[k]*=scale;delete l.text;delete l.shape;
+        for(const e of Object.values(l.effects??{}))for(const k of ['size','blur','distance'])if(typeof e[k]==='number')e[k]*=scale;delete l.text;delete l.shape;delete l.fill;delete l.vectorMask;delete l.editableFilters;
       }for(const g of m.guides??[])g.position*=g.axis==='vertical'?sx:sy;m.width=op.width;m.height=op.height;return true;
     }
     case 'arrange':{
@@ -148,7 +171,7 @@ export function editorOperation(data,m,resources,target,op,codecs,descendants) {
     case 'applyMask':{
       if(!target.imageFile||!target.maskFile)fail('unsupported');const image=codecs.decodePNG(resources.get(layerFile(target))),mask=codecs.decodePNG(resources.get(`images/${target.maskFile}`)),t=target.maskPlacement??target.transform;
       for(let y=0;y<image.height;y++)for(let x=0;x<image.width;x++){const p=toLocal(toDocument([x+.5,y+.5],target.transform,image.width,image.height),t,mask.width,mask.height),mx=Math.floor(p[0]),my=Math.floor(p[1]);image.data[(y*image.width+x)*4+3]*=mx<0||my<0||mx>=mask.width||my>=mask.height?0:mask.data[(my*mask.width+mx)*4]/255;}
-      resources.set(layerFile(target),codecs.encodePixels(image));for(const k of ['maskFile','maskEnabled','maskPlacement','maskLinked','text','shape'])delete target[k];return true;
+      resources.set(layerFile(target),codecs.encodePixels(image));for(const k of ['maskFile','maskEnabled','maskPlacement','maskLinked','text','shape','fill','vectorMask','editableFilters'])delete target[k];return true;
     }
     case 'selectionMask':{
       if(!data.selection||target.maskFile)fail('selection');const r=target.imageFile?resources.get(layerFile(target)):{width:m.width,height:m.height},pixels=new Uint8ClampedArray(r.width*r.height*4);

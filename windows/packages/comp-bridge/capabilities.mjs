@@ -1,5 +1,6 @@
+import { supportsFillStyle } from './layer-styles.mjs';
 export const ADJUSTMENT_KINDS = ['Hue/Saturation', 'Levels', 'Curves', 'Exposure', 'Gradient Map', 'Grain', 'Invert', 'Black & White', 'Color Balance', 'Gaussian Blur', 'Motion Blur', 'Add Noise'];
-export const EFFECT_KINDS = ['stroke', 'shadow', 'colorOverlay', 'innerShadow', 'outerGlow', 'innerGlow'];
+export const EFFECT_KINDS = ['stroke', 'shadow', 'colorOverlay', 'innerShadow', 'outerGlow', 'innerGlow', 'gradientOverlay', 'patternOverlay', 'bevel'];
 export const BLEND_MODES = ['Normal', 'Darken', 'Multiply', 'Color Burn', 'Linear Burn', 'Lighten', 'Screen', 'Color Dodge', 'Linear Dodge (Add)', 'Overlay', 'Soft Light', 'Hard Light', 'Vivid Light', 'Linear Light', 'Pin Light', 'Hard Mix', 'Difference', 'Exclusion', 'Subtract', 'Divide', 'Hue', 'Saturation', 'Color', 'Luminosity'];
 const finite = (v, lo, hi) => typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi;
 const object = v => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -27,6 +28,8 @@ export function supportsAdjustment(a) {
 export function supportsEffects(e) {
   if (!known(e, EFFECT_KINDS)) return false;
   return Object.entries(e).every(([k, v]) => {
+    if (['gradientOverlay','patternOverlay'].includes(k)) return known(v,['enabled','fill','opacity']) && flag(v.enabled) && finite(v.opacity,0,1) && supportsFillStyle(v.fill);
+    if (k==='bevel') return known(v,['enabled','size','depth','angle']) && flag(v.enabled) && finite(v.size,0,500) && finite(v.depth,0,1) && finite(v.angle,-180,180);
     if (!known(v, ['enabled', 'red', 'green', 'blue', 'opacity', ...(k.includes('hadow') ? ['angle', 'distance', 'blur'] : k === 'colorOverlay' ? [] : ['size', ...(k === 'stroke' ? ['inside'] : [])])])) return false;
     return flag(v.enabled) && flag(v.inside) && numbers(v, { red: [0, 1], green: [0, 1], blue: [0, 1], opacity: [0, 1], size: [0, 500], angle: [-360, 360], distance: [0, 5000], blur: [0, 500] });
   });

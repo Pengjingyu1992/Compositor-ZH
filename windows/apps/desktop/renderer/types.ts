@@ -6,9 +6,11 @@ export interface Placement {
 export interface LayerRow {
   id: string; name: string; isVisible: boolean; isGroup?: boolean; parentID?: string;
   imageFile?: string; maskFile?: string; maskEnabled?: boolean;
+  pixelSize?: [number,number]; maskPixelSize?: [number,number];
   maskSourceID?: string; maskLinked?: boolean; maskPlacement?: Placement;
   transform: Placement; opacity?: number; blendMode?: string;
   text?: Record<string, unknown>; shape?: Record<string, unknown>;
+  fill?: Record<string,any>; vectorMask?: Record<string,any>;
   adjustment?: Record<string, any>; effects?: Record<string, Record<string, any>>; depth: number;
   effectiveVisible: boolean; effectiveOpacity: number;
   category: 'simple' | 'pixels' | 'preview';
@@ -57,6 +59,7 @@ declare global {
       save(id: string, revision: string, as?: boolean): Promise<OpenResult>;
       importImage(id?: string, revision?: string): Promise<OpenResult>;
       importPSD(): Promise<OpenResult>;
+      outputTools(action: string, payload: Record<string, unknown>): Promise<{error?:string;canceled?:boolean;profile?:string;png?:Uint8Array}>;
       export(id: string, revision: string, type: string, payload: Record<string, unknown>): Promise<OpenResult>;
       recover(): Promise<OpenResult>;
       onCommand(name: string, callback: () => void): () => void;

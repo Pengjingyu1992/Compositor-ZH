@@ -1,6 +1,7 @@
 <script setup lang="ts">
 defineProps<{ name: string }>();
 const paths: Record<string, string[]> = {
+  pen:['m4 20 3-10L17 3l4 4-7 10Z','m4 20 7-7','m7 10 7 7','M11 13h.01'],
   marquee:['M3 3h4m3 0h4m3 0h4v4m0 3v4m0 3v4h-4m-3 0h-4m-3 0H3v-4m0-3v-4m0-3V3'],
   lasso:['M7 17c-8-4-6-13 3-14 12-1 16 10 8 14-6 3-12 3-12 0 0-2 4-3 5 0 2 5-3 6-6 5'],
   wand:['m4 20 12-12 4 4L8 24Z','M6 2v6','M3 5h6','M19 1v5','M16 3h6'],

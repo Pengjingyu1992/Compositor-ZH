@@ -1,6 +1,7 @@
 import { limit, toDocument, toLocal, symmetryPoints, selectionCoverage, floodMask, validSurface } from './editor-math.mjs';
 import { adjustedPixels, blurPlane } from '../editor-adapter/pixels.mjs';
-export const FILTERS = ['Gaussian Blur','Motion Blur','Add Noise','Sharpen','Mosaic','Dither','Vignette','Bloom / Glow','Tonal Contrast','Lens Correction','Camera Raw Filter','Remove Background','Content-Aware Fill','Curves','Exposure','Gradient Map','Grain','Black & White','Color Balance','Invert','Desaturate'];
+import { posterColorFilter } from './poster-color.mjs';
+export const FILTERS = ['Gaussian Blur','Motion Blur','Add Noise','Sharpen','Mosaic','Dither','Vignette','Bloom / Glow','Tonal Contrast','Lens Correction','Camera Raw Filter','Remove Background','Content-Aware Fill','Curves','Exposure','Gradient Map','Grain','Black & White','Color Balance','Invert','Desaturate','Color Halftone','Selective Color','Channel Mixer','Color Lookup'];
 const color = v => v.map(n=>limit(n,0,255));
 function blend(data,at,rgb,alpha,erase=false,lockAlpha=false) {
   const old=data[at+3]/255;
@@ -91,6 +92,7 @@ export function resizePixels(image,w,h,nearestNeighbor=false) {
 }
 export function filterPixels(image,kind,s={}) {
   if(!FILTERS.includes(kind))throw new Error('invalid');
+  if(['Color Halftone','Selective Color','Channel Mixer','Color Lookup'].includes(kind))return posterColorFilter(image,kind,s);
   const {width:w,height:h,data:src}=image,data=new Uint8ClampedArray(src),amount=s.amount??50,radius=s.radius??4;
   const adjustments=['Gaussian Blur','Motion Blur','Add Noise','Curves','Exposure','Gradient Map','Grain','Black & White','Color Balance','Invert'];
   if(adjustments.includes(kind))return adjustedPixels(image,{...s,kind,blurRadius:s.blurRadius??radius,motionAngle:s.motionAngle??s.angle??0,motionDistance:s.motionDistance??s.distance??10,noiseAmount:s.noiseAmount??amount,noiseSeed:s.noiseSeed??s.seed??0});

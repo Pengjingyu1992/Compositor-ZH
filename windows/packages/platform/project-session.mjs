@@ -22,7 +22,8 @@ export class ProjectSession {
     const { id, data } = this.current;
     this.current.resources = [...data.resources.values()];
     const urls = Object.fromEntries([...data.resources.keys()].map((key, i) => [key, `compositor://app/project/${id}/${i}?revision=${this.revision}`]));
-    return { project: { id, revision: this.revision, name: data.name, manifest: data.manifest, analysis: data.analysis, urls, preview: data.preview,
+    const analysis={...data.analysis,rows:data.analysis.rows.map(row=>{const image=data.resources.get(`images/${row.imageFile}`),mask=data.resources.get(`images/${row.maskFile}`);return {...row,...(image?{pixelSize:[image.width,image.height]}:{}),...(mask?{maskPixelSize:[mask.width,mask.height]}:{})};})};
+    return { project: { id, revision: this.revision, name: data.name, manifest: data.manifest, analysis, urls, preview: data.preview,
       selection: data.selection, locks: data.locks??{}, dirty: this.isDirty(), canUndo: !!this.undoStack.length, canRedo: !!this.redoStack.length, hasLocation: !!this.current.location } };
   }
 
@@ -72,7 +73,7 @@ export class ProjectSession {
     this.pending=true;const own=this.generation,current=this.current,before=current.data;
     try {const after=await build(before,op);if(own!==this.generation||this.current!==current||this.revision!==revision)return {error:'stale'};
       after.sourceBytes=Buffer.from(after.sourceBytes);for(const [key,r] of after.resources){r.bytes=Buffer.from(r.bytes);if(r.proxyBytes)r.proxyBytes=Buffer.from(r.proxyBytes);const old=before.resources.get(key);if(old?.bytes.equals(r.bytes)&&!!old.proxyBytes===!!r.proxyBytes&&(!r.proxyBytes||old.proxyBytes.equals(r.proxyBytes)))after.resources.set(key,old);}
-      const changesSelection=o=>['selection','canvas','imageSize'].includes(o.kind)||(o.kind==='batch'&&o.operations.some(changesSelection));
+      const changesSelection=o=>['selection','canvas'].includes(o.kind)||o.kind==='imageSize'&&(o.width!==before.manifest.width||o.height!==before.manifest.height)||(o.kind==='batch'&&o.operations.some(changesSelection));
       if(!changesSelection(op))after.selection=before.selection;
       if(after.selection&&before.selection&&after.selection.width===before.selection.width&&after.selection.height===before.selection.height&&after.selection.data.every((v,i)=>v===before.selection.data[i]))after.selection=before.selection;
       if(JSON.stringify(after.locks)===JSON.stringify(before.locks))after.locks=before.locks;

@@ -38,6 +38,9 @@ function showEffects() { if(selected.value?.imageFile)inspectorTab.value='effect
 function showDetails() { detailsDialog.value=true; }
 function toggleSearch() { searchOpen.value=!searchOpen.value; if(!searchOpen.value)query.value=''; }
 let returnFocus: HTMLElement | null = null;
+let composing = false;
+function compositionStart() { composing = true; }
+function compositionEnd() { composing = false; }
 
 function tabKey(event: KeyboardEvent) {
   if (!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
@@ -278,10 +281,18 @@ onMounted(async () => {
   document.documentElement.lang = language.value;
   subscriptions.push(window.viewer.onOpen(open), window.viewer.onReload(reload), window.viewer.onClose(closeProject), window.viewer.onFit(fit), window.viewer.onActual(() => zoom.value = 1));
   const commands: Record<string, () => unknown> = {...full.commands,new:()=>{newDialog.value=true;},image:importImage,importPSD,save:()=>save(),saveAs:()=>save(true),png:()=>exportImage('png'),gif:()=>exportImage('gif'),eps:()=>exportImage('eps'),exportPSD:()=>{psdDialog.value=true;},recover,undo:()=>history('undo'),redo:()=>history('redo'),addPixels:()=>add('pixels'),addGroup:()=>add('group'),addMask:()=>{if(selected.value)edit({kind:'mask',action:'add'});},details:showDetails,properties:()=>{inspectorTab.value='properties';},effects:showEffects};
-  for(const [name,action] of Object.entries(commands))subscriptions.push(window.editor.onCommand(name,()=>{if(painting.value&&!(full.clipboardBusy&&['copy','copyMerged','cut','paste'].includes(name)))return;if(['copy','cut','paste','selectAll'].includes(name)&&document.activeElement?.closest('input,textarea,[contenteditable]')){void window.editor.textClipboard(name);return;}action();}));
+  for(const [name,action] of Object.entries(commands))subscriptions.push(window.editor.onCommand(name,()=>{
+    if(composing)return;
+    if(painting.value&&!(full.clipboardBusy&&['copy','copyMerged','cut','paste'].includes(name)))return;
+    if(['copy','cut','paste','selectAll','undo','redo'].includes(name)&&document.activeElement?.closest('input,textarea,[contenteditable]')){void window.editor.textClipboard(name);return;}
+    if(['undo','redo'].includes(name)&&(newDialog.value||psdDialog.value||detailsDialog.value||full.modal))return;
+    if(name==='undo'&&!project.value?.canUndo||name==='redo'&&!project.value?.canRedo)return;
+    action();
+  }));
+  window.addEventListener('compositionstart', compositionStart); window.addEventListener('compositionend', compositionEnd);
   window.addEventListener('keydown', onKey); window.addEventListener('resize', fit);
 });
-onUnmounted(() => { stopPlayback(); operation++; epoch++; cancelStroke();renderer?.dispose(); full.closeModal(); subscriptions.forEach(stop => stop()); window.removeEventListener('keydown', onKey); window.removeEventListener('resize', fit); });
+onUnmounted(() => { stopPlayback(); operation++; epoch++; cancelStroke();renderer?.dispose(); full.closeModal(); subscriptions.forEach(stop => stop()); window.removeEventListener('compositionstart', compositionStart); window.removeEventListener('compositionend', compositionEnd); window.removeEventListener('keydown', onKey); window.removeEventListener('resize', fit); });
 </script>
 
 <template>

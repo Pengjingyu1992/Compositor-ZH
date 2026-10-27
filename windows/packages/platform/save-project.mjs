@@ -153,5 +153,10 @@ export class RecoveryStore {
     if (!/^[a-f0-9-]{73}$/.test(key)) throw new ProjectError('path');
     await rm(path.join(this.directory, `${key}.comp`), { recursive: true, force: true }); await rm(path.join(this.directory, `${key}.json`), { force: true });
   }
-  async clear(documentID) { await this.queue.catch(() => {}); for (const i of await this.list()) if (i.documentID === documentID) await this.remove(i.key); }
+  clear(documentID) {
+    this.queue = this.queue.catch(() => {}).then(async () => {
+      for (const i of await this.list()) if (i.documentID === documentID) await this.remove(i.key);
+    });
+    return this.queue;
+  }
 }

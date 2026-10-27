@@ -28,9 +28,20 @@ export class ProjectSession {
 
   install(data, location = null, saved = false) {
     clearTimeout(this.recoveryTimer); this.recoveryFailed = false;
+    const discarded = this.discardRecoveryFor;
+    this.discardRecoveryFor = null;
+    // A canceled chooser or failed read must keep the active document's recovery.
+    // Restoring an unsaved snapshot of this same document also keeps its source.
+    if (discarded && discarded.id === this.current?.id && (saved || discarded.documentID !== data.manifest.documentID)) {
+      this.options.recovery?.clear(discarded.documentID).catch(() => { this.recoveryFailed = true; });
+    }
     this.current = { id: randomUUID(), location, data, resources: [...data.resources.values()], fingerprint: location ? fingerprint(data) : null };
     this.revision = randomUUID(); this.saved = saved ? data : null;
     this.undoStack = []; this.redoStack = []; return this.view();
+  }
+
+  discardRecoveryOnReplacement() {
+    this.discardRecoveryFor = this.current ? { id: this.current.id, documentID: this.current.data.manifest.documentID } : null;
   }
 
   create(w, h, resolution) {
@@ -149,6 +160,7 @@ export class ProjectSession {
     if (this.pending && this.current && this.isDirty()) return { closed: false, error: 'busy' };
     clearTimeout(this.recoveryTimer);
     this.generation++;
+    this.discardRecoveryFor = null;
     this.current = null;
     return { closed: true };
   }

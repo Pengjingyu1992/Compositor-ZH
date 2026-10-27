@@ -31,6 +31,9 @@ export async function inspectLinuxArtifacts(directory, artifacts) {
     execFileSync('dpkg-deb', ['--extract', path.join(directory, deb), debRoot]);
     const identity = execFileSync('dpkg-deb', ['--field', path.join(directory, deb), 'Package', 'Architecture'], { encoding: 'utf8' });
     if (!identity.includes('compositor-linux') || !identity.includes('amd64')) throw new Error('Incorrect Debian package identity');
+    const dependencies = execFileSync('dpkg-deb', ['--field', path.join(directory, deb), 'Depends'], { encoding: 'utf8' });
+    // Electron links libgbm.so.1 directly; GTK's dependencies do not supply it.
+    if (!dependencies.split(',').some(entry => /^libgbm1(?:\s*\([^)]*\))?$/.test(entry.trim()))) throw new Error('Debian package must require libgbm1 for the Electron runtime');
     await checkApplication(path.join(debRoot, 'opt/Compositor Linux'));
     await checkDesktop(path.join(debRoot, 'usr/share/applications/org.compositorzh.linux.desktop'));
     const tar = artifacts.find(name => name.endsWith('.tar.gz'));

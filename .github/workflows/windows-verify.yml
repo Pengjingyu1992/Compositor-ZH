@@ -48,9 +48,10 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       - name: Electron cloud smoke checks (software GPU)
-        run: npm run smoke
+        run: npm run smoke -- --reporter=list,github,json
         env:
           DEBUG: pw:browser
+          PLAYWRIGHT_JSON_OUTPUT_NAME: playwright-report/smoke-results.json
       - name: Inspect packaged resources and write checksums
         run: node scripts/audit-package.mjs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -62,12 +63,15 @@ jobs:
             windows/release/SHA256SUMS.txt
             windows/release/PACKAGE-REVIEW.json
             windows/test-results/*-preview.png
+            windows/playwright-report/smoke-results.json
           retention-days: 14
           if-no-files-found: error
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: failure()
         with:
           name: windows-check-diagnostics
-          path: windows/test-results/
+          path: |
+            windows/test-results/
+            windows/playwright-report/smoke-results.json
           retention-days: 7
           if-no-files-found: ignore

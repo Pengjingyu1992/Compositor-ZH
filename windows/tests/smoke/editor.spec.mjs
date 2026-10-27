@@ -6,6 +6,7 @@ import os from 'node:os';
 import {fileURLToPath} from 'node:url';
 import {fixture} from '../fixtures.mjs';
 import {BLEND_MODES} from '../../packages/comp-bridge/project.mjs';
+import {RecoveryStore} from '../../packages/platform/save-project.mjs';
 const root=fileURLToPath(new URL('../../',import.meta.url));
 test.describe.configure({timeout:process.platform==='linux'?120000:60000});
 let temp,source,instance,page;
@@ -45,4 +46,27 @@ test('mask edits and PNG/PSD exports work through the shipped executable',async(
 test('painting is one undo step and new canvas has a width-height swap',async()=>{
   await selectMint();await page.getByRole('button',{name:'画笔',exact:true}).click();const board=await page.locator('.artboard').boundingBox();await page.mouse.move(board.x+20,board.y+20);await page.mouse.down();await page.waitForTimeout(300);await page.mouse.move(board.x+35,board.y+25,{steps:6});await page.mouse.up();await expect(page.getByTestId('undo')).toBeEnabled();await page.getByTestId('undo').click();await expect(page.getByTestId('redo')).toBeEnabled();
   await page.getByTestId('new-canvas').click();await page.getByRole('button',{name:'互换宽高'}).click();const numbers=page.locator('.new-dimensions input');await expect(numbers.nth(0)).toHaveValue('1080');await expect(numbers.nth(1)).toHaveValue('1920');await numbers.nth(0).fill('64');await numbers.nth(1).fill('48');await page.getByRole('button',{name:'创建',exact:true}).click();await expect(page.locator('.layer-row')).toHaveCount(0);await page.getByTestId('add-pixels').click();await expect(page.locator('.layer-row')).toHaveCount(1);
+});
+for(const canceled of [true,false])test(`discard then ${canceled?'canceled':'failed'} open retains the dirty document and recovery on disk`,async()=>{
+  const before=await readFile(path.join(source,'manifest.json'));
+  await selectMint();await page.getByTestId('layer-opacity').fill('80');await page.getByTestId('layer-opacity').press('Tab');
+  await expect(page.getByTestId('undo')).toBeEnabled();
+  const userData=await instance.evaluate(({app})=>app.getPath('userData'));
+  const store=new RecoveryStore(path.join(userData,'recovery'));
+  await expect.poll(async()=>(await store.list()).length).toBe(1);
+  const [snapshot]=await store.list();
+  expect((await store.restore(snapshot.key)).manifest.layers[1].opacity).toBe(.8);
+  await instance.evaluate(({dialog},{canceled,missing})=>{
+    globalThis.__discardPrompts=0;
+    dialog.showMessageBox=async()=>{globalThis.__discardPrompts++;return {response:1};};
+    dialog.showOpenDialog=async()=>({canceled,filePaths:canceled?[]:[missing]});
+  },{canceled,missing:path.join(temp,'missing.comp')});
+  await page.getByTestId('open-project').click();await expect(page.getByTestId('open-project')).toBeEnabled();
+  expect(await instance.evaluate(()=>globalThis.__discardPrompts)).toBe(1);
+  await expect(page.getByTestId('layer-opacity')).toHaveValue('80');
+  await expect(page.locator('.badge')).toContainText(/未保存|Unsaved/);
+  await expect(page.locator('[role=alert]')).toHaveCount(canceled?0:1);
+  expect((await store.list()).map(item=>item.key)).toEqual([snapshot.key]);
+  expect((await store.restore(snapshot.key)).manifest.layers[1].opacity).toBe(.8);
+  expect(await readFile(path.join(source,'manifest.json'))).toEqual(before);
 });

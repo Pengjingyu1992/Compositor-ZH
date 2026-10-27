@@ -69,8 +69,9 @@ function nativeMenu() {
       { type: 'separator' }, { label: zh ? '退出' : 'Quit', role: 'quit' }
     ] },
     { label: zh ? '编辑' : 'Edit', submenu: [
-      { label: zh ? '撤销' : 'Undo', accelerator: 'Ctrl+Z', enabled: !!session.undoStack.length && !session.pending, click: () => win?.webContents.send('editor:undo') },
-      { label: zh ? '重做' : 'Redo', accelerator: 'Ctrl+Shift+Z', enabled: !!session.redoStack.length && !session.pending, click: () => win?.webContents.send('editor:redo') },
+      // Text fields have their own history, even when the project has no edits.
+      { id: 'edit-undo', label: zh ? '撤销' : 'Undo', accelerator: 'Ctrl+Z', enabled: !session.pending, click: () => win?.webContents.send('editor:undo') },
+      { id: 'edit-redo', label: zh ? '重做' : 'Redo', accelerator: 'Ctrl+Shift+Z', enabled: !session.pending, click: () => win?.webContents.send('editor:redo') },
       { type: 'separator' }, ...[['cut','剪切','Cut','Ctrl+X'],['copy','复制','Copy','Ctrl+C'],['copyMerged','合并复制','Copy merged','Ctrl+Shift+C'],['paste','粘贴','Paste','Ctrl+V']].map(([name,cn,en,accelerator])=>({label:zh?cn:en,accelerator,click:()=>win?.webContents.send('editor:'+name)}))
     ] },
     { label: zh ? '显示' : 'View', submenu: [
@@ -127,7 +128,7 @@ async function canLeave() {
   try { choice = await dialog.showMessageBox(win, { type: 'warning', message: language === 'en' ? 'Save changes before leaving this project?' : '离开项目前保存修改？', buttons: language === 'en' ? ['Cancel', 'Discard', 'Save'] : ['取消', '放弃修改', '保存'], defaultId: 2, cancelId: 0 }); }
   finally { session.pending = false; }
   if (choice.response === 0) return false;
-  if (choice.response === 1) { await clearRecovery(); return true; }
+  if (choice.response === 1) { session.discardRecoveryOnReplacement(); return true; }
   const result = await session.save(session.current.id, session.revision, c => chooseSave(c, false));
   return !!result.project && !result.error;
 }
@@ -234,7 +235,7 @@ handler('editor:clipboard',async(id,revision,action,png)=>{
     return session.edit(id,revision,{kind:'importPixels',name:language==='en'?'Pasted image':'粘贴图像',png:new Uint8Array(bytes)});
   }catch(e){return {error:e.code??'invalid'};}finally{session.pending=false;nativeMenu();}
 });
-handler('editor:textClipboard',action=>{if(!['copy','cut','paste','selectAll'].includes(action))return;win.webContents[action]();});
+handler('editor:textClipboard',action=>{if(!['copy','cut','paste','selectAll','undo','redo'].includes(action))return;win.webContents[action]();});
 handler('editor:history', (id, revision, dir) => { const result = session.history(id, revision, dir); nativeMenu(); return result; });
 handler('editor:save', (id, revision, as) => projectRequest(() => session.save(id, revision, c => chooseSave(c, as === true))));
 handler('editor:image', async (id, revision) => {

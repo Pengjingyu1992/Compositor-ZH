@@ -6,7 +6,7 @@ Linux 版与 Windows 版共用 Vue/Electron 编辑器、Pentrado 合成内核和
 
 ## 安装与启动
 
-发行文件名称包含版本号，例如 `Compositor-Linux-0.4.0-alpha.1-x86_64.AppImage`、`Compositor-Linux-0.4.0-alpha.1-amd64.deb` 和 `Compositor-Linux-0.4.0-alpha.1-x64.tar.gz`。源码构建输出在 `linux/release/`；尚未发布下载发行版。
+发行文件名称包含版本号，例如 `Compositor-Linux-0.4.0-alpha.1-x86_64.AppImage`、`Compositor-Linux-0.4.0-alpha.1-amd64.deb` 和 `Compositor-Linux-0.4.0-alpha.1-x64.tar.gz`。已发布的安装包见 [Linux 0.4.0-alpha.1 预发布](https://github.com/Pengjingyu1992/Compositor-ZH/releases/tag/linux-v0.4.0-alpha.1)；源码构建输出在 `linux/release/`。工作分支上的后续修复不代表该预发布的安装包已更新。
 
 下载或复制完整候选包与 `SHA256SUMS.txt`，在同一目录校验：
 
@@ -20,6 +20,8 @@ Debian/Ubuntu 推荐 Deb 包，安装后可从应用菜单打开“叠绘 Linux�
 sudo apt install ./Compositor-Linux-0.4.0-alpha.1-amd64.deb
 compositor-linux
 ```
+
+已发布的 `0.4.0-alpha.1` Deb 漏列 `libgbm1` 依赖；如果启动提示缺少 `libgbm.so.1`，运行 `sudo apt install libgbm1`。源码已补齐该依赖及包审查，需下一次发行才会进入下载包。
 
 AppImage 可直接运行：
 
@@ -35,6 +37,7 @@ AppImage 使用静态运行时，也支持 `--appimage-extract-and-run`。在不
 ## 项目与设置
 
 - 通过“打开项目”选择整个 `.comp` 文件夹，也可拖入完整项目目录。复制作品时保留所有资源。
+- Linux/Windows 当前读取格式版本 1–16。新版 macOS 可能保存含原始 PNG 的 v17 项目，当前两版会拒绝打开；不要手动降低 manifest 版本号，16 位 PNG 与色彩配置需要完整适配。
 - 中文 / English 即时切换，偏好保存到下次启动。Linux 与 Windows 包使用不同标识与设置目录。
 - 配置默认在 `${XDG_CONFIG_HOME:-$HOME/.config}/Compositor-Linux/`，恢复副本位于其中的 `recovery/`，保存日志位于 `save-journals/`。
 - 保存使用分阶段写入、回读校验、完整备份与中断恢复；拒绝覆盖已被外部修改的项目。未知字段与未改动资源保持原样。
@@ -47,6 +50,8 @@ AppImage 使用静态运行时，也支持 `--appimage-extract-and-run`。在不
 基础编辑器完全离线，无需账号或 API 密钥。可选 AI 助手把提示词与图层元数据发送到你配置的接口；不发送图像像素或整个项目。密钥只在 Secret Service（GNOME Keyring）或 KWallet 可用时加密保存。没有可用密钥环、密钥环被锁定或 Chromium 使用 `basic_text` 回退时，程序不保存密钥，并显示系统加密不可用。先启动并解锁桌面密钥环，再使用助手。
 
 隐私检查的范围、AI 请求字段、密钥保存方式及审查限制见[Linux 隐私审查](linux-privacy-review.md)。
+
+后续修复和优先事项见 [Linux / Windows 完善记录](linux-windows-review.md)。
 
 ## 开发与验证
 
@@ -73,7 +78,7 @@ GUI 检查需要 D-Bus 与已解锁的桌面密钥环，完整准备方式见 [L
 
 `npm test` 在 `windows/playwright-report/codec-fixtures/` 生成独立 PSD/GIF/EPS 校验样本；安装 `psd-tools==1.23.0` 后运行 `python tests/independent-psd.py` 和 `python tests/independent-image-codecs.py`。前者检查分层 PSD，后者用 Pillow 检查 GIF 帧、时间和像素，并用 Ghostscript 执行 EPS 检查尺寸、颜色和透明背景白色合成。GUI JSON 报告保存在 `windows/playwright-report/smoke-results.json`，局部测试使用 `--reporter=list` 可保留完整报告。包审查检查各格式中的源码、应用标识、桌面文件、依赖许可证，并写入 `SHA256SUMS.txt` 和 `PACKAGE-REVIEW.json`。功能覆盖、已修复问题及实机限制见 [Linux 功能验证报告](linux-function-validation.md)。
 
-Linux 候选构建使用 `linux-v*` 标签，与 Windows/macOS 发行通道分开。工作流只生成候选文件，不自动发布；真实桌面验收前应作为 prerelease 发布，不能替换 macOS `/releases/latest`。
+Linux 候选构建使用 `linux-v*` 标签，与 Windows/macOS 发行通道分开。分支推送只验证并保存 CI 产物；推送 `linux-v*` 标签会触发完整验证，成功后校验包名和 SHA-256 并自动创建 prerelease（`--latest=false`）。真实桌面验收前保持预发布，不能替换 macOS `/releases/latest`。发布标签一旦对应公开安装包，就应保持不变，后续修复使用新版本标签。
 
 ## English summary
 

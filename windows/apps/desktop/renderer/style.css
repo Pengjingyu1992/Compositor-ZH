@@ -271,8 +271,8 @@ input, select, textarea { font-variant-numeric: tabular-nums; }
 .tool-heading svg { width: 17px; height: 17px; }
 .tool-hint, .optionsbar label { color: var(--muted); }
 main { min-width: 0; }
-.toolrail { width: 52px; padding: 0; gap: 0; overflow: hidden; background: var(--surface); }
-.toolrail-scroll { flex: 1; min-height: 0; width: 100%; overflow-y: auto; scrollbar-width: thin; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 9px 0; overscroll-behavior: contain; }
+.toolrail { width: 52px; padding: 0; gap: 0; overflow-x: hidden; overflow-y: auto; background: var(--surface); }
+.toolrail-scroll { flex: 1; min-height: 36px; width: 100%; overflow-y: auto; scrollbar-width: thin; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 9px 0; overscroll-behavior: contain; }
 .toolrail-footer { flex: 0 0 auto; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 0 0 8px; }
 .tool-button { width: 32px; height: 32px; min-height: 32px; padding: 6px; border-radius: 7px; flex-shrink: 0; }
 .tool-button svg { width: 19px; height: 19px; }
@@ -290,7 +290,8 @@ main { min-width: 0; }
 .welcome-actions button { min-width: 112px; min-height: 34px; border-radius: 7px; }
 .welcome-secondary { justify-content: flex-end; gap: 18px; }
 .new-dimensions label { color: var(--muted); }
-aside { width: 280px; background: var(--surface); }
+aside { width: 280px; background: var(--surface); overflow-y: auto; overscroll-behavior: contain; }
+.inspector-panel { min-height: 140px; flex-shrink: 0; }
 .panel-heading { height: 36px; padding-left: 12px; }
 .layers-panel { height: 46%; min-height: 190px; }
 .layer-appearance { padding: 8px 10px 7px; border-color: var(--border); }

@@ -48,7 +48,7 @@ const source = ref<'engine' | 'saved' | 'none'>('none'), extraIssues = ref<strin
 const tool=ref('pan'),color=ref('#bae9d6'),brushSize=ref(24),brushOpacity=ref(100),paintTarget=ref('content');
 const newDialog=ref(false),newWidth=ref(1920),newHeight=ref(1080),psdDialog=ref(false),outputDialog=ref(false),status=ref(''),painting=ref(false);
 const overlay=ref<HTMLCanvasElement>(),artboard=ref<HTMLDivElement>();
-const appearance=ref('system'),showsInspector=ref(true);
+const appearance=ref('system'),showsInspector=ref(true),assistantSettingsOpen=ref(false);
 const chrome=computed(()=>parityMessages[language.value]);
 watch(appearance,value=>{document.documentElement.dataset.appearance=value;document.documentElement.style.colorScheme=value==='system'?'light dark':value;},{immediate:true});
 function toggleInspector(){showsInspector.value=!showsInspector.value;void nextTick(updateNavigation);}
@@ -202,7 +202,7 @@ async function openRecent(id:string){structuredDialog.value='';await workspaceAc
 async function copyProject(){const p=project.value;if(p)await workspaceAction('copy',{id:p.id,revision:p.revision});}
 async function grayscaleCopy(){const p=project.value;if(p)await request(async()=>window.editor.workspace('grayscale',{id:p.id,revision:p.revision,png:await outputComposite()}));}
 let checkingExternal=false,recheckExternal=false;
-async function checkExternal(){if(checkingExternal){recheckExternal=true;return;}const p=project.value;if(!p?.hasLocation||busy.value||painting.value||frameRendering.value||animationPlaying.value||structuredDialog.value||newDialog.value||outputDialog.value||full.modal)return;checkingExternal=true;try{const result=await window.editor.workspace('external',{id:p.id,revision:p.revision});if(!result.error&&!busy.value&&project.value?.id===p.id&&project.value.revision===p.revision){if(!result.missing)ignoredMissing.delete(p.id);if(result.changed&&!(result.missing&&ignoredMissing.has(p.id)))externalNotice.value={signature:result.signature,missing:result.missing};}}catch{/* An obsolete read must not interrupt the current editor action. */}finally{checkingExternal=false;if(recheckExternal){recheckExternal=false;void checkExternal();}}}
+async function checkExternal(){if(checkingExternal){recheckExternal=true;return;}const p=project.value;if(!p?.hasLocation||busy.value||painting.value||frameRendering.value||animationPlaying.value||modalOpen.value)return;checkingExternal=true;try{const result=await window.editor.workspace('external',{id:p.id,revision:p.revision});if(!result.error&&!busy.value&&project.value?.id===p.id&&project.value.revision===p.revision){if(!result.missing)ignoredMissing.delete(p.id);if(result.changed&&!(result.missing&&ignoredMissing.has(p.id)))externalNotice.value={signature:result.signature,missing:result.missing};}}catch{/* An obsolete read must not interrupt the current editor action. */}finally{checkingExternal=false;if(recheckExternal){recheckExternal=false;void checkExternal();}}}
 
 async function ignoreExternal(){const p=project.value,notice=externalNotice.value;if(!p||!notice)return;if(notice.missing)ignoredMissing.add(p.id);await window.editor.workspace('ignoreExternal',{id:p.id,revision:p.revision,signature:notice.signature});externalNotice.value=undefined;}
 function open() { if(painting.value)return Promise.resolve();return request(() => window.viewer.open()); }
@@ -318,13 +318,14 @@ async function playAnimation(){
 }
 const layeredPSD=computed(()=>project.value&&!project.value.manifest.layers.some(l=>l.adjustment||l.effects&&Object.values(l.effects).some(e=>e.enabled!==false)));
 function dragEnter(event: DragEvent) {
+  if(modalOpen.value)return;
   if (event.dataTransfer?.types.includes('Files')) { dragDepth++; dropping.value = true; }
 }
 function dragLeave() { dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) dropping.value = false; }
-function dragOver(event: DragEvent) { if (event.dataTransfer) event.dataTransfer.dropEffect = busy.value ? 'none' : 'copy'; }
+function dragOver(event: DragEvent) { if (event.dataTransfer) event.dataTransfer.dropEffect = busy.value||modalOpen.value ? 'none' : 'copy'; }
 async function dropProject(event: DragEvent) {
   dragDepth = 0; dropping.value = false;
-  if (busy.value||painting.value||frameRendering.value||structuredDialog.value||newDialog.value||outputDialog.value||full.modal) return;
+  if (busy.value||painting.value||frameRendering.value||modalOpen.value) return;
   const files = event.dataTransfer?.files;
   if (!files?.length) return;
   if(files.length===1&&/\.comp$/i.test(files[0].name))return request(()=>window.viewer.drop(files[0]));
@@ -352,17 +353,17 @@ async function changeLanguage(event: Event) {
 }
 function onKey(event: KeyboardEvent) {
   if(event.isComposing)return;
-  if (event.key==='Tab' && (newDialog.value || psdDialog.value || outputDialog.value || structuredDialog.value || detailsDialog.value || full.modal)) {
+  if (event.key==='Tab' && modalOpen.value) {
     const modal=[...document.querySelectorAll<HTMLElement>('.modal-shade')].at(-1);
-    const fields=[...(modal?.querySelectorAll<HTMLElement>('button:not([disabled]),input:not([disabled]),select:not([disabled]),summary') ?? [])].filter(e=>e.getClientRects().length);
+    const fields=[...(modal?.querySelectorAll<HTMLElement>('button:not([disabled]),input:not([disabled]),textarea:not([disabled]),select:not([disabled]),summary,[tabindex]:not([tabindex="-1"])') ?? [])].filter(e=>!e.matches(':disabled')&&e.getClientRects().length);
     const first=fields[0],last=fields.at(-1);
     if(first && ((!event.shiftKey && (document.activeElement===last || !modal?.contains(document.activeElement))) || (event.shiftKey && (document.activeElement===first || !modal?.contains(document.activeElement))))) { event.preventDefault(); (event.shiftKey?last:first)?.focus(); }
   }
-  if(newDialog.value || psdDialog.value || outputDialog.value || structuredDialog.value || detailsDialog.value || full.modal){
-    if(event.key==='Escape'){full.key(event);stopPlayback();cancelStroke();newDialog.value=false;psdDialog.value=false;outputDialog.value=false;structuredDialog.value='';detailsDialog.value=false;}
+  if(modalOpen.value){
+    if(event.key==='Escape'){full.key(event);stopPlayback();cancelStroke();newDialog.value=false;psdDialog.value=false;outputDialog.value=false;structuredDialog.value='';detailsDialog.value=false;assistantSettingsOpen.value=false;}
     return;
   }
-  if(event.key===' '&&!event.repeat&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&!((event.target as HTMLElement)?.closest('input,textarea,select,[contenteditable]'))&&project.value?.manifest.animation){event.preventDefault();void playAnimation();return;}
+  if(event.key===' '&&!event.repeat&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&!((event.target as HTMLElement)?.closest('input,textarea,select,button,a[href],summary,[role=button],[contenteditable]'))&&project.value?.manifest.animation){event.preventDefault();void playAnimation();return;}
   if(event.key.toLowerCase()==='p'&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&!(event.target as HTMLElement)?.closest('input,textarea,select,[contenteditable]')){event.preventDefault();openStructured('path');return;}
   if((event.ctrlKey||event.metaKey)&&event.shiftKey&&event.key.toLowerCase()==='p'){event.preventDefault();openCommands();return;}
   full.key(event);
@@ -377,11 +378,14 @@ function onKey(event: KeyboardEvent) {
 function wheel(event: WheelEvent) { if (event.ctrlKey) { event.preventDefault(); scale(event.deltaY < 0 ? 1.1 : 1 / 1.1); } }
 let drag: { x: number; y: number; left: number; top: number } | undefined;
 const full=reactive(useCompleteEditor({openPath:()=>openStructured('path',true),project,selected,tool,color,brushSize,brushOpacity,paintTarget,painting,editable,language,canvas,overlay,artboard,stage,zoom,error,execute:async(op,p=project.value)=>{return await submitEdit({id:selected.value?.id,...op},p,true);},receive:result=>request(()=>Promise.resolve(result)),history,scale}));
-watch(() => newDialog.value || psdDialog.value || outputDialog.value || structuredDialog.value || detailsDialog.value || full.modal, async visible => {
+const modalOpen=computed(()=>!!(assistantSettingsOpen.value||newDialog.value||psdDialog.value||outputDialog.value||structuredDialog.value||detailsDialog.value||full.modal));
+function outsideModal(action:()=>unknown){return ()=>{if(!modalOpen.value&&!composing)return action();};}
+watch(modalOpen, async visible => {
   if (visible) {
+    stopPlayback();
     returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     await nextTick();
-    if (newDialog.value || psdDialog.value || outputDialog.value || structuredDialog.value || detailsDialog.value || full.modal) document.querySelector<HTMLElement>('.modal-shade:last-of-type input, .modal-shade:last-of-type button')?.focus();
+    if (modalOpen.value) [...document.querySelectorAll<HTMLElement>('.modal-shade')].at(-1)?.querySelector<HTMLElement>('input:not([disabled]),textarea:not([disabled]),select:not([disabled]),button:not([disabled])')?.focus();
   } else if (returnFocus?.isConnected) returnFocus.focus();
 });
 function cancelStroke(){full.cancel();drag=undefined;}
@@ -402,15 +406,15 @@ onMounted(async () => {
   const settings = await window.viewer.settings(); language.value = settings.language; version.value = settings.version; edition.value = settings.edition;
   document.documentElement.lang = language.value;
   try{const result=await window.viewer.viewSettings();if(result.settings)applyViewSettings(result.settings);await nextTick();}catch{settingError.value=true;}viewPreferencesReady=true;await refreshWorkspace();
-  subscriptions.push(window.viewer.onOpen(open), window.viewer.onReload(reload), window.viewer.onClose(closeProject), window.viewer.onFit(fit), window.viewer.onActual(() => zoom.value = 1));
+  subscriptions.push(window.viewer.onOpen(outsideModal(open)), window.viewer.onReload(outsideModal(reload)), window.viewer.onClose(outsideModal(closeProject)), window.viewer.onFit(outsideModal(fit)), window.viewer.onActual(outsideModal(() => zoom.value = 1)));
   subscriptions.push(window.viewer.onImportProgress(value=>{importProgress.value=value;}));
   const commands: Record<string, () => unknown> = {...full.commands,distort:openDistort,refineEdges:openEdgeRefinement,colorRange:openColorRange,batchExport:()=>{if(editable.value)structuredDialog.value='batch';},newTab:openNewTab,openTab:()=>workspaceAction('open'),tabNext:()=>cycleTab(1),tabPrevious:()=>cycleTab(-1),recentProjects:showRecent,unlockedCopy:copyProject,grayscaleCopy,externalCheck:checkExternal,navigator:()=>{full.options.navigator=!full.options.navigator;},rulers:()=>{full.options.rulers=!full.options.rulers;},palette:()=>{full.options.palette=!full.options.palette;},viewSettings:()=>{structuredDialog.value='viewSettings';},commandFinder:openCommands,historyPanel:showHistoryPanel,textOutlines:()=>edit({kind:'textOutlines'}),filterStack:()=>openFilterStack(),advancedLiquify:()=>openFilterStack(true),newFill:()=>openStructured('fill'),editFill:()=>openStructured('fill',true),newPath:()=>openStructured('path'),editPath:()=>openStructured('path',true),newVectorMask:()=>openStructured('mask'),editVectorMask:()=>openStructured('mask',true),vectorMaskFromPath:maskFromPath,exportAs:()=>{outputDialog.value=true;},new:()=>{newInTab.value=false;newDialog.value=true;},image:importImage,importPSD,save:()=>save(),saveAs:()=>save(true),png:()=>exportImage('png'),gif:()=>exportImage('gif'),eps:()=>exportImage('eps'),exportPSD:()=>{psdDialog.value=true;},recover,undo:()=>history('undo'),redo:()=>history('redo'),addPixels:()=>add('pixels'),addGroup:()=>add('group'),addMask:()=>{if(selected.value)edit({kind:'mask',action:'add'});},details:showDetails,properties:()=>{showsInspector.value=true;inspectorTab.value='properties';},effects:showEffects};
   commandActions.value={...commands,open,close:closeProject,fit,actual:()=>{zoom.value=1;}};
   for(const [name,action] of Object.entries(commands))subscriptions.push(window.editor.onCommand(name,()=>{
     if(composing)return;
     if(['copy','cut','paste','selectAll','undo','redo'].includes(name)&&document.activeElement?.closest('input,textarea,[contenteditable]')){void window.editor.textClipboard(name);return;}
+    if(modalOpen.value)return;
     if(painting.value&&!(full.clipboardBusy&&['copy','copyMerged','cut','paste'].includes(name)))return;
-    if(['undo','redo'].includes(name)&&(newDialog.value||psdDialog.value||outputDialog.value||structuredDialog.value||detailsDialog.value||full.modal))return;
     if(name==='undo'&&!project.value?.canUndo||name==='redo'&&!project.value?.canRedo)return;
     action();
   }));
@@ -587,7 +591,7 @@ onUnmounted(() => { stopPlayback();clearTimeout(viewPreferencesTimer); operation
       <span v-if="project?.selection">{{ full.labels.selection }}</span>
       <span class="badge">{{ t.readonly }} · {{ project?.dirty?t.editor.unsaved:t.editor.saved }} · {{ version }}</span>
     </div>
-    <AiPanel :language="language" :project="project" :busy="busy" :editable="editable" :edit="submitEdit" :history="history"/>
+    <AiPanel v-model:settings-open="assistantSettingsOpen" :language="language" :project="project" :busy="busy" :editable="editable" :edit="submitEdit" :history="history"/>
     <CompleteControls :e="full" mode="dialogs" :tool="tool" :disabled="!editable" :selected="selected" :color="color" :size="brushSize" :opacity="brushOpacity" :target="paintTarget"/>
     <ColorRangeDialog v-if="structuredDialog==='range' && rangePNG" :language="language" :png="rangePNG" :apply="applyColorRange" @running="painting=$event" @close="closeColorRange"/>
     <BatchExportDialog v-if="structuredDialog==='batch' && project" :language="language" :project="project" :selected="full.ids" @running="painting=$event" @close="structuredDialog=''"/>

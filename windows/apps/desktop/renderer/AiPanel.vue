@@ -26,7 +26,7 @@ const props = defineProps<{
   history: (direction: string) => unknown;
 }>();
 
-const HEAD = 38, MIN = 96, STORE = 'compositor.aiPanel';
+const HEAD = 38, MIN = 152, STORE = 'compositor.aiPanel';
 const t = computed(() => messages[props.language].ai);
 // The dialog reuses the editor's Save and Cancel wording rather than adding
 // duplicates to the catalog.
@@ -39,8 +39,13 @@ const prompt = ref('');
 const marked = ref('');
 const open = ref(false);
 const height = ref(216);
+const viewportHeight=ref(window.innerHeight);
+// Keep the prompt usable while reserving room for desktop chrome and tools.
+const maximumHeight=computed(()=>Math.max(MIN,Math.min(Math.floor(viewportHeight.value*.72),viewportHeight.value-390)));
+const visibleHeight=computed(()=>open.value?Math.min(height.value,maximumHeight.value):HEAD);
+function resized(){viewportHeight.value=window.innerHeight;}
 const asking = ref(false);
-const settingsOpen = ref(false);
+const settingsOpen = defineModel<boolean>('settingsOpen',{default:false});
 const settingsError = ref('');
 const testing = ref(false);
 const draft = ref({ endpoint: DEFAULT_ENDPOINT, model: DEFAULT_MODEL, key: '' });
@@ -191,12 +196,14 @@ async function testConnection() {
 onMounted(() => {
   try {
     const kept = JSON.parse(localStorage.getItem(STORE) ?? '{}');
-    if (typeof kept.height === 'number' && kept.height >= MIN) height.value = kept.height;
+    if (typeof kept.height === 'number' && Number.isFinite(kept.height) && kept.height >= 96) height.value = Math.max(MIN,kept.height);
     if (typeof kept.open === 'boolean') open.value = kept.open;
   } catch { /* a damaged value just means the defaults */ }
+  window.addEventListener('resize',resized);
   void loadSettings();
   say('note', t.value.ready);
 });
+onUnmounted(()=>window.removeEventListener('resize',resized));
 watch([height, open], () => {
   try { localStorage.setItem(STORE, JSON.stringify({ height: height.value, open: open.value })); }
   catch { /* storage full or blocked */ }
@@ -205,19 +212,20 @@ watch(() => props.project?.id, () => { marked.value = ''; });
 
 let anchor = 0;
 function grab(event: PointerEvent) {
+  height.value=visibleHeight.value;
   anchor = event.clientY;
   (event.target as HTMLElement).setPointerCapture(event.pointerId);
 }
 function move(event: PointerEvent) {
   if (!anchor) return;
-  height.value = Math.max(MIN, Math.min(Math.round(window.innerHeight * .72), height.value + anchor - event.clientY));
+  height.value = Math.max(MIN, Math.min(maximumHeight.value, height.value + anchor - event.clientY));
   anchor = event.clientY;
 }
 function release() { anchor = 0; }
 </script>
 
 <template>
-  <section class="assistant" :style="{ height: (open ? height : HEAD) + 'px' }" :aria-label="t.title">
+  <section class="assistant" :style="{ height: visibleHeight + 'px' }" :aria-label="t.title">
     <div v-if="open" class="assistant-grip" role="separator" :aria-label="t.title" @pointerdown="grab" @pointermove="move" @pointerup="release" @pointercancel="release"></div>
     <header class="assistant-head">
       <strong>{{ t.title }}</strong>

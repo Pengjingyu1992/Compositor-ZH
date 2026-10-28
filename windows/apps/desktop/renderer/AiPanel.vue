@@ -201,7 +201,6 @@ onMounted(() => {
   } catch { /* a damaged value just means the defaults */ }
   window.addEventListener('resize',resized);
   void loadSettings();
-  say('note', t.value.ready);
 });
 onUnmounted(()=>window.removeEventListener('resize',resized));
 watch([height, open], () => {
@@ -240,6 +239,7 @@ function release() { anchor = 0; }
         <button v-for="layer in layers" :key="layer.id" type="button" class="assistant-chip" :class="{ marked: marked === layer.id, off: !layer.isVisible }" :title="layer.name" data-testid="ai-layer" @click="marked = marked === layer.id ? '' : layer.id">{{ layer.name }}</button>
       </div>
       <div class="assistant-log" role="log">
+        <p class="line-note">{{ t.ready }}</p>
         <p v-for="(line, index) in lines" :key="index" :class="'line-' + line.kind"><template v-if="line.kind === 'you' || line.kind === 'reply'"><b>{{ line.kind === 'you' ? t.you : t.assistant }}</b> </template>{{ line.text }}</p>
         <p v-if="asking" class="muted">{{ t.working }}</p>
       </div>

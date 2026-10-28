@@ -34,7 +34,9 @@ jobs:
           cache-dependency-path: windows/package-lock.json
       - run: npm ci --no-audit --no-fund
       - name: Review source and localization
-        run: node scripts/audit-source.mjs
+        run: |
+          node scripts/audit-source.mjs
+          node scripts/review-controls.mjs
       - name: Type check
         run: npm run typecheck
       - name: Project validation and preservation checks
@@ -64,6 +66,8 @@ jobs:
             windows/release/SHA256SUMS.txt
             windows/release/PACKAGE-REVIEW.json
             windows/test-results/*-preview.png
+            windows/test-results/*-performance.json
+            windows/test-results/control-inventory.json
             windows/playwright-report/smoke-results.json
           retention-days: 14
           if-no-files-found: error

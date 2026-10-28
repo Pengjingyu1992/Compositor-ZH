@@ -104,7 +104,7 @@ const tools=TOOL_LIST,toolKeys=TOOL_KEYS;
 function toolLabel(key:string){return String(full.labels[key as keyof typeof full.labels] ?? t.value.editor[key as keyof typeof t.value.editor] ?? key);}
 const ui = computed(() => t.value.workspace);
 const thumbURL = (row: LayerRow, mask=false) => project.value?.urls[`images/${mask ? row.maskFile : row.imageFile}`];
-function selectLayer(row: LayerRow,event?:MouseEvent) { if(animationPlaying.value||frameRendering.value||busy.value||painting.value)return; const p = project.value, frame = p && frameForLayer(p, row.id); if (frame && frame !== activeFrameID.value) { activeFrameID.value = frame; void renderAnimationFrame(); } full.select(row,event); inspectorTab.value=row.adjustment?'adjustments':'properties'; }
+function selectLayer(row: LayerRow,event?:MouseEvent,target='content') { if(animationPlaying.value||frameRendering.value||busy.value||painting.value)return; const p = project.value, frame = p && frameForLayer(p, row.id); if (frame && frame !== activeFrameID.value) { activeFrameID.value = frame; void renderAnimationFrame(); } full.select(row,event);paintTarget.value=target; inspectorTab.value=row.adjustment?'adjustments':'properties'; }
 function showEffects() { if(selected.value?.imageFile){showsInspector.value=true;inspectorTab.value='effects';} }
 function showDetails() { detailsDialog.value=true; }
 function toggleSearch() { searchOpen.value=!searchOpen.value; if(!searchOpen.value)query.value=''; }
@@ -550,11 +550,11 @@ onUnmounted(() => { stopPlayback();clearTimeout(viewPreferencesTimer); operation
             <div v-for="row in rows" :key="row.id" class="layer-row" :class="{selected:full.ids.includes(row.id),hidden:!row.effectiveVisible}" :style="{paddingLeft:6 + row.depth * 12 + 'px'}">
               <button class="icon-button visibility-toggle" :disabled="!editable" :title="(row.isVisible ? ui.hideLayer : ui.showLayer) + ' · ' + row.name" :aria-label="(row.isVisible ? ui.hideLayer : ui.showLayer) + ' · ' + row.name" @click="edit({kind:'appearance',id:row.id,field:'isVisible',value:!row.isVisible})"><Icon :name="row.isVisible?'eye':'eyeOff'"/></button>
               <button v-if="row.isGroup" class="icon-button fold" :disabled="!!query.trim()" :aria-label="collapsed.has(row.id.toUpperCase()) && !query.trim() ? t.expand : t.collapse" :aria-expanded="!!query.trim() || !collapsed.has(row.id.toUpperCase())" @click="toggleGroup(row)"><Icon name="chevron"/></button><span v-else class="fold-spacer"></span>
-              <button class="layer-select" :disabled="painting||busy||frameRendering||animationPlaying" :aria-pressed="selected?.id===row.id" @click="selectLayer(row,$event);paintTarget='content'">
+              <button class="layer-select" :disabled="painting||busy||frameRendering||animationPlaying" :aria-pressed="selected?.id===row.id" @click="selectLayer(row,$event)">
                 <span class="thumbnail"><img v-if="row.imageFile" :src="thumbURL(row)" alt="" loading="lazy" draggable="false"><Icon v-else :name="row.isGroup?'folder':'adjustment'"/></span>
                 <span class="layer-title">{{ row.name }}<small>{{ kind(row) }}<span v-if="row.maskSourceID"> · {{ t.editor.clip }}</span></small></span>
               </button>
-              <button v-if="row.maskFile" class="mask-thumbnail thumbnail" :class="{active:selected?.id===row.id && paintTarget==='mask'}" :title="ui.maskThumbnail + ' · ' + row.name" :aria-label="ui.maskThumbnail + ' · ' + row.name" :disabled="painting" @click="selectLayer(row,$event);paintTarget='mask'"><img :src="thumbURL(row,true)" alt="" loading="lazy" draggable="false"></button>
+              <button v-if="row.maskFile" class="mask-thumbnail thumbnail" :class="{active:selected?.id===row.id && paintTarget==='mask'}" :title="ui.maskThumbnail + ' · ' + row.name" :aria-label="ui.maskThumbnail + ' · ' + row.name" :disabled="painting||busy||frameRendering||animationPlaying" @click="selectLayer(row,$event,'mask')"><img :src="thumbURL(row,true)" alt="" loading="lazy" draggable="false"></button>
             </div>
           </div>
           <div class="layer-actions">

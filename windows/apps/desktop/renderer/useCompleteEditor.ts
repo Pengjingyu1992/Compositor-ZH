@@ -1,6 +1,6 @@
 import{defaultCameraRaw,validateCameraRaw}from'../../../packages/comp-bridge/camera-raw-settings.mjs';
 import { mapVectorPath,defaultVectorPath } from '../../../packages/comp-bridge/layer-styles.mjs';
-import { computed, reactive, ref, watch, nextTick, type Ref } from 'vue';
+import { computed, reactive, ref, watch, nextTick, onUnmounted, toRaw, type Ref } from 'vue';
 import { fullEditor } from './editor-labels';
 import { bounds, union, toLocal, maskBounds, selectionCoverage } from '../../../packages/comp-bridge/editor-math.mjs';
 import { FILTERS } from '../../../packages/comp-bridge/raster-tools.mjs';
@@ -12,7 +12,7 @@ type Context={openPath?:()=>void;project:Ref<ViewerProject|undefined>;selected:R
 export const TOOL_LIST=['move','marquee','lasso','wand','crop','brush','eraser','healing','clone','smear','gradient','bucket','shape','type','eyedropper','pan','zoom'];
 export const TOOL_KEYS:Record<string,string>={move:'V',marquee:'M',lasso:'L',wand:'W',crop:'C',brush:'B',eraser:'E',healing:'J',clone:'S',smear:'R',gradient:'G',bucket:'K',shape:'U',type:'T',eyedropper:'I',pan:'H',zoom:'Z'};
 const colors=(hex:string)=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16));
-const clone=<T>(v:T):T=>{const result=JSON.parse(JSON.stringify(v));const selection=(v as any)?.selection;if(selection?.data)result.selection.data=new Uint8Array(selection.data);return result;};
+const clone=<T>(v:T):T=>{const selection=(v as any)?.selection;const snapshot=selection?.data?{...v,selection:{...selection,data:undefined}}:v;const result=JSON.parse(JSON.stringify(snapshot));if(selection?.data)result.selection.data=new Uint8Array(selection.data);return result;};
 export function useCompleteEditor(c:Context){
   const labels=computed(()=>fullEditor[c.language.value]),ids=ref<string[]>([]),background=ref('#ffffff');
   const options=reactive({combine:'replace',marquee:'rectangle',tolerance:24,contiguous:true,sampleAll:true,hardness:100,spacing:18,pressure:true,symmetry:'none',sectors:6,smear:'blur',radial:false,reverse:false,transparent:false,shape:'Rectangle',corner:0,lineWidth:8,autoSelect:false,grid:false,snap:false,rulers:false,navigator:false,palette:false,gridSpacing:10,gridSubdivisions:1,gridColor:'#ffffff',gridOpacity:25,rulerUnit:'px',selectionAmount:4,reference:'selection',guideAxis:'vertical',guidePosition:100});
@@ -37,8 +37,13 @@ export function useCompleteEditor(c:Context){
   watch(()=>c.selected.value?.id,(now,old)=>{if(now!==old)cloneSource.value=undefined;});
   function point(e:PointerEvent):[number,number]{const box=c.artboard.value!.getBoundingClientRect();return [(e.clientX-box.left)/c.zoom.value,(e.clientY-box.top)/c.zoom.value];}
   function snap(p:[number,number]):[number,number]{if(!options.snap)return p;return p.map((v,i)=>{let next=Math.round(v/options.gridSpacing)*options.gridSpacing;for(const g of c.project.value?.manifest.guides??[])if(g.axis===(i?'horizontal':'vertical')&&Math.abs(v-g.position)<6/c.zoom.value)next=g.position;return next;}) as [number,number];}
-  function drawSelection(){const canvas=c.overlay.value,p=c.project.value;if(!canvas||!p)return;canvas.width=p.manifest.width;canvas.height=p.manifest.height;const s=p.selection;if(!s)return;const ctx=canvas.getContext('2d')!,image=ctx.createImageData(s.width,s.height),w=s.width;
-    for(let y=0;y<s.height;y++)for(let x=0;x<w;x++){const i=y*w+x,v=s.data[i];if(!v)continue;const edge=x===0||y===0||x===w-1||y===s.height-1||!s.data[i-1]||!s.data[i+1]||!s.data[i-w]||!s.data[i+w];image.data[i*4]=edge?255:65;image.data[i*4+1]=edge?255:150;image.data[i*4+2]=255;image.data[i*4+3]=edge?210:Math.round(v*.1);}ctx.putImageData(image,0,0);
+  let selectionOverlay:{data:Uint8Array;width:number;height:number;image:ImageData}|undefined;
+  onUnmounted(()=>{selectionOverlay=undefined;});
+  function drawSelection(){const canvas=c.overlay.value,p=c.project.value;if(!canvas||!p){selectionOverlay=undefined;return;}if(canvas.width!==p.manifest.width)canvas.width=p.manifest.width;if(canvas.height!==p.manifest.height)canvas.height=p.manifest.height;const ctx=canvas.getContext('2d')!;ctx.clearRect(0,0,canvas.width,canvas.height);const s=p.selection;if(!s){selectionOverlay=undefined;return;}const {data,width:w,height:h}=toRaw(s);
+    // Selection bytes are immutable within a revision. Reuse their overlay during a drag.
+    if(!selectionOverlay||selectionOverlay.data!==data||selectionOverlay.width!==w||selectionOverlay.height!==h){const image=ctx.createImageData(w,h);
+      for(let y=0;y<h;y++)for(let x=0;x<w;x++){const i=y*w+x,v=data[i];if(!v)continue;const edge=x===0||y===0||x===w-1||y===h-1||!data[i-1]||!data[i+1]||!data[i-w]||!data[i+w];image.data[i*4]=edge?255:65;image.data[i*4+1]=edge?255:150;image.data[i*4+2]=255;image.data[i*4+3]=edge?210:Math.round(v*.1);}selectionOverlay={data,width:w,height:h,image};
+    }ctx.putImageData(selectionOverlay.image,0,0);
   }
   function cancel(){drag=undefined;c.painting.value=applying;cropBox.value=undefined;drawSelection();}
   function drawDrag(d:Drag){drawSelection();const ctx=c.overlay.value?.getContext('2d');if(!ctx)return;ctx.lineWidth=1/c.zoom.value;ctx.strokeStyle='#ffffff';ctx.setLineDash([5/c.zoom.value,4/c.zoom.value]);ctx.fillStyle='rgba(76,156,230,.13)';const [x,y]=d.start,[dx,dy]=d.current,w=dx-x,h=dy-y;

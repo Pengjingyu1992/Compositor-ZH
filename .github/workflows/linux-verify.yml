@@ -40,6 +40,7 @@ jobs:
       - name: Source review and type check
         run: |
           node scripts/audit-source.mjs
+          node scripts/review-controls.mjs
           npm run typecheck
       - name: Project, rendering, save and platform tests
         run: npm test
@@ -87,6 +88,8 @@ jobs:
             linux/release/SHA256SUMS.txt
             linux/release/PACKAGE-REVIEW.json
             windows/test-results/*-preview.png
+            windows/test-results/*-performance.json
+            windows/test-results/control-inventory.json
             windows/playwright-report/smoke-results.json
             windows/playwright-report/smoke-recheck-results.json
             linux/test-results/appimage-gui.log

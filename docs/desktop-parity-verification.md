@@ -48,3 +48,8 @@ Windows/Linux 构建产物可在上述成功的 GitHub Actions 运行页下载�
 ## Windows/Linux 界面更新 · `0e24e40`
 
 按用户明确选择的 macOS 原生风格完成共用 UI。251 项单元、本机完整 83/83 GUI、Linux 云端 83/83 GUI、Windows 云端 80 项 GUI（3 项 Linux 专属跳过）与两平台包审查通过；设计决策、实际截图、完整 CI 链接和保留的异常见 [UI 验证记录](desktop-ui-verification.md)。本增量没有修改 macOS，也不代表整体功能对齐的剩余项已完成。
+
+
+## 桌面交互 Bug 修复 · `5d81cb2`
+
+修复弹窗穿透背景项目操作、文字焦点循环、按钮空格误播放，以及小窗口／重启恢复后 AI 面板挤出编辑控件的问题。新增 7 个端到端场景，Windows 云端 87 项 GUI 通过（3 项 Linux 专属跳过），Linux 云端单次完整 90/90 通过，两个平台的安装包和隐私审查通过。本机中断、失败与独立复查的结果分别保留，详见 [Bug 排查记录](desktop-bug-review.md)。原生 macOS 和发行通道未改动。

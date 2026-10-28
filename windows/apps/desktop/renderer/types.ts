@@ -27,7 +27,9 @@ export interface ViewerProject {
   analysis: { rows: LayerRow[]; issues: string[]; estimatedBytes: number;
     coverage: { simple: number; pixelFallback: number; previewOnly: number; total: number } };
 }
-export interface OpenResult { copied?:boolean; project?: ViewerProject; canceled?: boolean; error?: string; backup?: boolean; exported?: boolean; warnings?: string[] }
+export interface WorkspaceState{tabs:{id:string;projectID:string;name:string;dirty:boolean;active:boolean}[];activeID:string}
+export interface RecentState{enabled:boolean;entries:{id:string;name:string;parent:string;time:number}[]}
+export interface OpenResult {didSave?:boolean;recent?:RecentState;workspace?:WorkspaceState;changed?:boolean;signature?:string;missing?:boolean;closed?:boolean; copied?:boolean; project?: ViewerProject; canceled?: boolean; error?: string; backup?: boolean; exported?: boolean; warnings?: string[] }
 // The layer fields the assistant needs. Sending these instead of whole
 // LayerRows keeps pixel data out of the IPC message.
 export interface AssistantLayer {
@@ -45,7 +47,7 @@ declare global {
       open(): Promise<OpenResult>;
       drop(file: File): Promise<OpenResult>;
       reload(id: string): Promise<OpenResult>;
-      close(): Promise<{ closed: boolean; error?: string }>;
+      close(): Promise<OpenResult>;
       copyReport(id: string, display: { source: 'engine' | 'saved' | 'none'; issues: string[] }): Promise<{ copied?: boolean; error?: string }>;
       onOpen(callback: () => void): () => void;
       onReload(callback: () => void): () => void;
@@ -54,6 +56,7 @@ declare global {
       onActual(callback: () => void): () => void;
     };
     editor: {
+      workspace(action:string,payload?:Record<string,unknown>):Promise<OpenResult>;
       textTools(action:string,payload:Record<string,unknown>):Promise<{error?:string;png?:Uint8Array;fonts?:string[]}>;
       textClipboard(action:string):Promise<void>;
       clipboard(id:string,revision:string,action:string,png?:Uint8Array):Promise<OpenResult>;

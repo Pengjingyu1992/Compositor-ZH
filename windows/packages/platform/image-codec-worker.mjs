@@ -6,6 +6,8 @@ try {
   if (['encodeOutputImage', 'printProof'].includes(workerData.operation)) {
     const output = await import('./image-output.mjs');
     result = await output[workerData.operation](workerData.bytes, workerData.resolution);
+  } else if(workerData.operation==='grayscaleImage'){
+    const {filterPixels}=await import('../comp-bridge/raster-tools.mjs');result=codecs.encodePixels(filterPixels(codecs.decodePNG(codecs.validatePNG(workerData.bytes)),'Desaturate')).bytes;
   } else if (workerData.operation === 'decodeSourceImage') {
     const { decodeSourceImage } = await import('./image-pipeline.mjs');
     result = await decodeSourceImage(workerData.bytes);

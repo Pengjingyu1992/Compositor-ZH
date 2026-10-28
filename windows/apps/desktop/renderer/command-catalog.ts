@@ -1,6 +1,7 @@
 // Stable command identifiers are shared with the native menu. Labels stay
 // bilingual so searches work in either language, regardless of UI language.
 export const commandCatalog = [
+  ['newTab','新建标签页','New tab','Ctrl+Alt+N'],['openTab','在新标签页打开项目','Open in new tab','Ctrl+Alt+O'],['recentProjects','最近项目','Recent projects'],['unlockedCopy','创建未锁定副本','Create unlocked copy'],['grayscaleCopy','创建灰度副本','Create grayscale copy'],
   ['new','新建画布','New canvas','Ctrl+N'],['open','打开项目','Open project','Ctrl+O'],['save','保存','Save','Ctrl+S'],['saveAs','另存为','Save as','Ctrl+Shift+S'],['close','关闭项目','Close project','Ctrl+W'],
   ['image','导入图像','Import image'],['importPSD','导入 PSD','Import PSD'],['exportAs','导出为及印刷预览','Export As / Print proof'],['exportPSD','导出 PSD','Export PSD'],['gif','导出动画 GIF','Export animated GIF'],['eps','导出 EPS','Export EPS'],['recover','恢复副本','Recover a snapshot'],
   ['undo','撤销','Undo','Ctrl+Z'],['redo','重做','Redo','Ctrl+Shift+Z'],['historyPanel','历史记录','History'],['copy','复制','Copy','Ctrl+C'],['copyMerged','合并复制','Copy merged','Ctrl+Shift+C'],['cut','剪切','Cut','Ctrl+X'],['paste','粘贴','Paste','Ctrl+V'],

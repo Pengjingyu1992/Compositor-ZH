@@ -134,7 +134,7 @@ test('PNG JPEG and layered PSD imports produce editable layers', async () => {
   await ready();await chooseOpen(psd);await menu('file-import-psd');await expect(page.locator('.layer-row')).toHaveCount(2);await expect(page.getByTestId('rendered-canvas')).toBeVisible();
   await page.locator('.layer-select').first().click();await ready();const saved=await save();expect(saved.manifest.layers.filter(l=>l.imageFile)).toHaveLength(2);
 });
-test('all 12 adjustment layers and all six effects render and save', async () => {
+test('all 12 adjustment layers and all supported effects render and save', async () => {
   test.setTimeout(180000); await openFixture();
   for (const kind of ADJUSTMENT_KINDS) {
     await page.getByLabel('Add adjustment', { exact: true }).selectOption(kind); await ready();

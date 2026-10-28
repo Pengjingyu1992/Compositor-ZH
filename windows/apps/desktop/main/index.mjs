@@ -7,8 +7,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {ViewPreferences}from'../../../packages/platform/view-preferences.mjs';
 import { getLanguage, setLanguage } from '../../../packages/platform/preferences.mjs';
-import { ProjectSession } from '../../../packages/platform/project-session.mjs';
-import { editProject, projectData } from '../../../packages/comp-bridge/edit.mjs';
+import {RecentProjects}from'../../../packages/platform/recent-projects.mjs';
+import { ProjectWorkspace } from '../../../packages/platform/project-workspace.mjs';
+import { editProject, projectData,newProject } from '../../../packages/comp-bridge/edit.mjs';
 import { compatibilityReport } from '../../../packages/platform/compatibility-report.mjs';
 import { RecoveryStore, recoverSaves, fingerprint } from '../../../packages/platform/save-project.mjs';
 import { safeDirectory, safeRead, readProject, jpegDimensions, pngDimensions, ProjectError, LIMITS } from '../../../packages/comp-bridge/project.mjs';
@@ -34,7 +35,8 @@ const codecs = createRequire(import.meta.url)(path.join(ROOT, 'out/codecs/index.
 const recovery = new RecoveryStore(path.join(app.getPath('userData'), 'recovery'));
 const journalDirectory = path.join(app.getPath('userData'), 'save-journals');
 const viewPreferences=new ViewPreferences(app.getPath('userData'));
-const session = new ProjectSession(readProject, { codecs, recovery, journalDirectory });
+const workspace=new ProjectWorkspace(readProject,{codecs,recovery,journalDirectory});
+let session=workspace.active;const recentProjects=new RecentProjects(app.getPath('userData'));
 let closing = false, closePending = false;
 let preferenceQueue = Promise.resolve();
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml' };
@@ -50,7 +52,10 @@ function allowedSender(event) {
 function handler(name, fn) {
   ipcMain.handle(name, async (event, ...args) => {
     if (!allowedSender(event)) throw new Error('Unauthorized caller');
-    return fn(...args);
+    const result=await fn(...args);
+    if(name==='editor:save'&&result?.didSave)workspace.seenExternal.delete(workspace.activeID);
+    if(result?.project&&['viewer:open','viewer:drop','viewer:reload','editor:save','editor:workspace'].includes(name)&&session.current?.location)await recentProjects.record(session.current.location).catch(()=>{});
+    return result;
   });
 }
 function nativeMenu() {
@@ -59,6 +64,7 @@ function nativeMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     { label: zh ? '文件' : 'File', submenu: [
       { id: 'file-new', label: zh ? '新建画布…' : 'New canvas…', accelerator: 'Ctrl+N', click: () => win?.webContents.send('editor:new') },
+      ... [['newTab','新建标签页…','New tab…','Ctrl+Alt+N'],['openTab','在新标签页打开…','Open in new tab…','Ctrl+Alt+O'],['recentProjects','最近项目…','Recent projects…'],['unlockedCopy','创建未锁定副本','Create unlocked copy'],['grayscaleCopy','创建灰度副本','Create grayscale copy']].map(([name,cn,en,accelerator])=>({id:`file-${name}`,label:zh?cn:en,accelerator,enabled:!session.pending,click:()=>win?.webContents.send(`editor:${name}`)})),
       { id: 'file-open', label: zh ? '打开项目…' : 'Open project…', accelerator: 'Ctrl+O', click: () => win?.webContents.send('viewer:open') },
       { id: 'file-image', label: zh ? '导入图像…' : 'Import image…', click: () => win?.webContents.send('editor:image') },
       { id: 'file-import-psd', label: zh ? '导入 PSD…' : 'Import PSD…', click: () => win?.webContents.send('editor:importPSD') },
@@ -101,6 +107,7 @@ function nativeMenu() {
     {label:zh?'滤镜':'Filter',submenu:[{id:'filter-repeat',label:zh?'重复上次滤镜':'Repeat last filter',accelerator:'Ctrl+Alt+F',enabled:!!session.current,click:()=>win?.webContents.send('editor:repeatFilter')},... [['filterStack','可编辑滤镜…','Editable filters…'],['advancedLiquify','高级液化…','Advanced Liquify…']].map(([name,cn,en])=>({id:`filter-${name}`,label:zh?cn:en,enabled:!!session.current&&!session.pending,click:()=>win?.webContents.send(`editor:${name}`)})),{label:zh?'滤镜图库…':'Filter gallery…',enabled:!!session.current,click:()=>win?.webContents.send('editor:filter')}]},
     { label: zh ? '帮助' : 'Help', submenu: [
       {id:'command-finder',label:zh?'查找命令…':'Find a command…',accelerator:'Ctrl+Shift+P',click:()=>win?.webContents.send('editor:commandFinder')},
+      {label:zh?'下一个标签页':'Next tab',accelerator:'Ctrl+Tab',click:()=>win?.webContents.send('editor:tabNext')},{label:zh?'上一个标签页':'Previous tab',accelerator:'Ctrl+Shift+Tab',click:()=>win?.webContents.send('editor:tabPrevious')},
       {id:'history-panel',label:zh?'历史记录…':'History…',enabled:!!session.current,click:()=>win?.webContents.send('editor:historyPanel')},
       { id: 'project-details', label: zh ? '项目详情与兼容性' : 'Project details and compatibility', click: () => win?.webContents.send('editor:details') }
     ] }
@@ -124,20 +131,20 @@ async function chooseSave(current, as) {
   } catch (e) { if (e.code !== 'ENOENT') throw e; }
   return { location: selected.filePath, expected };
 }
-async function clearRecovery() {
-  clearTimeout(session.recoveryTimer);
-  if (session.current) try { await recovery.clear(session.current.data.manifest.documentID); } catch { /* Keep the snapshot if cleanup fails; this must not block quitting. */ }
+async function clearRecovery(target=session) {
+  clearTimeout(target.recoveryTimer);
+  if (target.current) try { await recovery.clear(target.current.data.manifest.documentID); } catch { /* Keep the snapshot if cleanup fails; this must not block quitting. */ }
 }
-async function canLeave() {
-  if (session.pending) return false;
-  if (!session.isDirty()) return true;
-  session.pending = true;
+async function canLeave(target=session) {
+  if (target.pending) return false;
+  if (!target.isDirty()) return true;
+  target.pending = true;
   let choice;
   try { choice = await dialog.showMessageBox(win, { type: 'warning', message: language === 'en' ? 'Save changes before leaving this project?' : '离开项目前保存修改？', buttons: language === 'en' ? ['Cancel', 'Discard', 'Save'] : ['取消', '放弃修改', '保存'], defaultId: 2, cancelId: 0 }); }
-  finally { session.pending = false; }
+  finally { target.pending = false; }
   if (choice.response === 0) return false;
-  if (choice.response === 1) { session.discardRecoveryOnReplacement(); return true; }
-  const result = await session.save(session.current.id, session.revision, c => chooseSave(c, false));
+  if (choice.response === 1) { target.discardRecoveryOnReplacement(); return true; }
+  const result = await target.save(target.current.id, target.revision, c => chooseSave(c, false));
   return !!result.project && !result.error;
 }
 async function writeExport(destination, bytes) {
@@ -150,7 +157,7 @@ async function writeExport(destination, bytes) {
 // Return from the ESM entry point before waiting for readiness. In particular,
 // Playwright's loader delays ready until the bootstrap has finished importing.
 app.whenReady().then(async () => {
-language = await getLanguage(app.getPath('userData'));
+language = await getLanguage(app.getPath('userData'));await recentProjects.load();
 const recoveredSaves = await recoverSaves(journalDirectory);
 protocol.handle('compositor', async request => {
   try {
@@ -179,13 +186,14 @@ win = new BrowserWindow({
 win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 win.webContents.on('will-navigate', (event, url) => { if (url !== HOME) event.preventDefault(); });
 win.webContents.on('will-attach-webview', event => event.preventDefault());
+win.on('focus',()=>{if(!workspace.busy)win.webContents.send('editor:externalCheck');});
 win.on('close', event => {
   if (closing) return;
   event.preventDefault(); if (closePending) return; closePending = true;
-  const waitForIdle = async () => { while (session.pending) await new Promise(resolve => setTimeout(resolve, 100)); return canLeave(); };
-  waitForIdle().then(async ok => { if (ok) { await clearRecovery(); closing = true; win.close(); } }).catch(() => {}).finally(() => closePending = false);
+  const waitForIdle = async () => {while(workspace.busy)await new Promise(resolve=>setTimeout(resolve,100));for(const target of workspace.sessions)if(!(await canLeave(target)))return false;return true;};
+  waitForIdle().then(async ok => { if (ok) { for(const target of workspace.sessions)await clearRecovery(target);await viewPreferences.queue.catch(()=>{});await recentProjects.queue.catch(()=>{});closing = true; win.close(); } }).catch(() => {}).finally(() => closePending = false);
 });
-win.on('closed', () => { session.close(); win = null; });
+win.on('closed', () => {for(const target of workspace.sessions)target.close(); win = null; });
 app.on('window-all-closed', () => app.quit());
 handler('viewer:viewSettings',async value=>{try{return {settings:value===undefined?await viewPreferences.read():await viewPreferences.write(value)};}catch(error){return {error:error.code??'write'};}});
 handler('viewer:settings', () => ({ language, version: app.getVersion(), edition: edition.id }));
@@ -204,8 +212,45 @@ handler('viewer:drop', async location => {
   if (!(await canLeave())) return { canceled: true }; return projectRequest(() => session.open(() => location));
 });
 handler('viewer:reload', async id => { if (!(await canLeave())) return { canceled: true }; return projectRequest(() => session.reload(id)); });
-handler('viewer:close', async () => { if (!(await canLeave())) return { closed: false }; await clearRecovery(); const result = session.close(); nativeMenu(); return result; });
+handler('viewer:close',async()=>{if(!session.current)return{closed:true,workspace:workspace.state()};if(!(await canLeave()))return{closed:false};await clearRecovery();const result=workspace.close(workspace.activeID,true);session=workspace.active;nativeMenu();return{...result,workspace:workspace.state()};});
 handler('editor:new', async (w, h) => { if (!(await canLeave())) return { canceled: true }; return projectRequest(() => Promise.resolve(session.create(w, h))); });
+handler('editor:workspace',async(action,payload={})=>{
+  if(action==='list')return {workspace:workspace.state()};
+  if(action==='recent')return {recent:recentProjects.view()};
+  if(['rememberRecent','clearRecent'].includes(action)){try{if(action==='rememberRecent')await recentProjects.setEnabled(payload.enabled);else await recentProjects.clear();return {recent:recentProjects.view()};}catch(error){return {error:error.code??'write'};}}
+  if(!['create','open','recentOpen','switch','close','external','ignoreExternal','copy','grayscale'].includes(action))return {error:'invalid'};
+  try{return await projectRequest(async()=>{
+    let result;
+    if(action==='create'){result=workspace.create(payload.width,payload.height);workspace.active.scheduleRecovery();}
+    else if(action==='open'||action==='recentOpen'){
+      workspace.guard();let location;
+      if(action==='recentOpen')location=recentProjects.resolve(payload.id);
+      else{const previous=session;previous.pending=true;nativeMenu();let choice;
+        try{choice=await dialog.showOpenDialog(win,{title:language==='en'?'Open project in a new tab':'在新标签页打开项目',properties:['openDirectory']});}finally{previous.pending=false;}
+        if(choice.canceled)return {canceled:true};location=choice.filePaths[0];
+      }
+      result=await workspace.open(location);
+    }else if(action==='switch')result=workspace.switch(payload.tabID);
+    else if(action==='close'){
+      workspace.guard();const entry=workspace.entries.find(entry=>entry.id===payload.tabID);if(!entry?.session.current)return {error:'stale'};
+      if(!(await canLeave(entry.session)))return {canceled:true};await clearRecovery(entry.session);result=workspace.close(payload.tabID,true);
+    }else if(action==='external')return workspace.external(payload.id,payload.revision);
+    else if(action==='ignoreExternal'){
+      if(!session.current||session.current.id!==payload.id||session.revision!==payload.revision)return {error:'stale'};workspace.ignoreExternal(payload.signature);return {};
+    }else{
+      workspace.guard();if(!session.current||session.current.id!==payload.id||session.revision!==payload.revision)return {error:'stale'};
+      const owner=session,current=owner.current,revision=owner.revision;let data;
+      if(action==='copy'){
+        const manifest=structuredClone(current.data.manifest);manifest.documentID=randomUUID().toUpperCase();data=projectData(manifest,new Map(current.data.resources),current.data.name.replace(/\.comp$/i,'')+' - Copy.comp');data.locks={};
+      }else{
+        owner.pending=true;nativeMenu();try{const resource=codecs.validatePNG(payload.png);if(resource.width!==current.data.manifest.width||resource.height!==current.data.manifest.height)throw new ProjectError('invalid');const png=await imageCodec('grayscaleImage',resource.bytes);if(owner.current!==current||owner.revision!==revision)throw new ProjectError('stale');data=editProject(newProject(resource.width,resource.height,current.data.manifest.resolution),{kind:'importPixels',name:language==='en'?'Grayscale copy':'灰度副本',png},codecs);data.name=current.data.name.replace(/\.comp$/i,'')+' - Gray.comp';}finally{owner.pending=false;}
+      }
+      result=workspace.add(data);workspace.active.scheduleRecovery();
+    }
+    session=workspace.active;nativeMenu();return {...result,workspace:workspace.state()};
+  });}catch(error){session=workspace.active;return {error:error.code??'read'};}
+});
+
 function buildEdit(data,op) {
   return new Promise((resolve,reject)=>{
     const worker=new Worker(new URL('../../../packages/platform/edit-worker.mjs',import.meta.url),{workerData:{data:{manifest:data.manifest,resources:data.resources,sourceBytes:data.sourceBytes,name:data.name,preview:data.preview,analysis:data.analysis,selection:data.selection,locks:data.locks},op,typographyPath:path.join(ROOT,'out/typography/index.cjs'),codecPath:path.join(ROOT,'out/codecs/index.cjs')}});

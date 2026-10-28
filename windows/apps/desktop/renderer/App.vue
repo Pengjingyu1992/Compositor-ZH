@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import RecentDialog from './RecentDialog.vue';
 import NavigatorPanel from './NavigatorPanel.vue';
 import Rulers from './Rulers.vue';
 import PalettePanel from './PalettePanel.vue';
@@ -26,7 +27,7 @@ import CompleteControls from './CompleteControls.vue';
 import { useCompleteEditor, TOOL_LIST, TOOL_KEYS } from './useCompleteEditor';
 import { ipcData } from './ipc-data';
 import { visibleLayers } from '../../../packages/editor-adapter/layer-list';
-import type { Language, ViewerProject, OpenResult, LayerRow } from './types';
+import type { Language, ViewerProject, OpenResult, LayerRow,WorkspaceState,RecentState } from './types';
 
 const language = ref<Language>('zh-Hans'), version = ref(''), project = ref<ViewerProject>();
 const edition = ref<'linux' | 'windows'>('windows');
@@ -43,15 +44,17 @@ const overlay=ref<HTMLCanvasElement>(),artboard=ref<HTMLDivElement>();
 const inspectorTab=ref('properties'), detailsDialog=ref(false), searchOpen=ref(false);
 const stackLiquify=ref(false);
 function openFilterStack(liquify=false){const row=selected.value;if(!editable.value||!row?.imageFile||!liquify&&(row.text||row.shape||row.fill)||row.isGroup||row.adjustment){error.value='unsupported';return;}structuredLayer.value=row;stackLiquify.value=liquify;structuredDialog.value='stack';}
+const workspaceState=ref<WorkspaceState>({tabs:[],activeID:''}),recentState=ref<RecentState>({enabled:false,entries:[]}),newInTab=ref(false),externalNotice=ref<{signature?:string;missing?:boolean}>();
+const ignoredMissing=new Set<string>(),tabViews=new Map<string,{selectedID?:string;ids:string[];zoom:number;left:number;top:number;target:string}>();
 const swatches=ref<string[]>([...DEFAULT_VIEW_SETTINGS.swatches]),navigationViewport=ref({x:0,y:0,w:0,h:0});
 const commandActions=ref<Record<string,()=>unknown>>({});
 function canCommand(id:string){
   if(busy.value||painting.value||animationPlaying.value||frameRendering.value)return false;
-  if(['new','open','recover','details','palette','viewSettings'].includes(id))return true;
+  if(['new','open','newTab','openTab','recentProjects','recover','details','palette','viewSettings'].includes(id))return true;
   const p=project.value,row=selected.value;if(!p)return false;
   if(id==='undo')return p.canUndo;if(id==='redo')return p.canRedo;
-  if(['save','saveAs','close','fit','actual','grid','snap','rulers','navigator','historyPanel','properties'].includes(id))return true;
-  if(['exportAs','exportPSD','gif','eps','copyMerged'].includes(id))return source.value==='engine';
+  if(['save','saveAs','close','fit','actual','grid','snap','rulers','navigator','historyPanel','properties','unlockedCopy'].includes(id))return true;
+  if(['exportAs','exportPSD','gif','eps','copyMerged','grayscaleCopy'].includes(id))return source.value==='engine';
   if(!editable.value)return false;
   if(id==='repeatFilter')return !!row?.imageFile&&!!full.lastFilter;
   if(['expandSelection','contractSelection','featherSelection','cropSelection'].includes(id))return !!p.selection;
@@ -120,22 +123,27 @@ function kind(row: LayerRow) { return row.isGroup ? t.value.group : row.adjustme
 function fallback() { renderer?.dispose(); renderer = undefined; source.value = project.value?.preview ? 'saved' : 'none'; }
 async function accept(result: OpenResult) {
   if (result.error) { error.value = result.error; return; }
+  if(result.workspace)workspaceState.value=result.workspace;
   if (result.exported) status.value=t.value.editor.exported;
   if (result.warnings?.length) status.value=result.warnings.map(k=>t.value.editor[k as keyof typeof t.value.editor]??k).join(' · ');
   if (!result.project) return;
   stopPlayback();
   const same=project.value?.id===result.project.id, selectedID=selected.value?.id, previousZoom=zoom.value,oldActive=(project.value?.manifest as any)?.activeLayerID,newActive=(result.project.manifest as any).activeLayerID;
+  if(project.value&&!same)tabViews.set(project.value.id,{selectedID:selected.value?.id,ids:[...full.ids],zoom:zoom.value,left:stage.value?.scrollLeft??0,top:stage.value?.scrollTop??0,target:paintTarget.value});
+  const remembered=!same?tabViews.get(result.project.id):undefined;
+  if(!same||result.didSave)externalNotice.value=undefined;
   const reuseRenderer=same&&source.value==='engine'&&!result.project.analysis.issues.length&&project.value?.manifest.width===result.project.manifest.width&&project.value?.manifest.height===result.project.manifest.height;
   const own = ++epoch; frameRendering.value = false;
   if(!reuseRenderer){renderer?.dispose();renderer=undefined;}
-  project.value = result.project; selected.value = result.project.analysis.rows.find(l=>l.id===(newActive!==oldActive?newActive:same?selectedID:undefined)); error.value = ''; extraIssues.value = [];
+  project.value = result.project; selected.value = result.project.analysis.rows.find(l=>l.id===(remembered?.selectedID??(newActive!==oldActive?newActive:same?selectedID:undefined))); error.value = ''; extraIssues.value = [];
   const frames = result.project.manifest.animation?.frames;
   activeFrameID.value = frameForLayer(result.project, selected.value?.id) ?? (same && frames?.some(f => f.groupID === activeFrameID.value) ? activeFrameID.value : frames?.[0]?.groupID);
   if(!same){query.value = ''; searchOpen.value=false; collapsed.value = new Set(); status.value='';}
   if(newActive!==oldActive && selected.value)inspectorTab.value=selected.value.adjustment?'adjustments':'properties';reportState.value = 'idle';
   if(result.backup)status.value=t.value.editor.backup;
   source.value = project.value.analysis.issues.length ? (project.value.preview ? 'saved' : 'none') : 'engine';
-  await nextTick(); if(same)zoom.value=previousZoom;else fit();
+  await nextTick(); if(same)zoom.value=previousZoom;else if(remembered)zoom.value=remembered.zoom;else fit();
+  if(!same)paintTarget.value=remembered?.target==='mask'&&selected.value?.maskFile?'mask':'content';
   if (epoch !== own || project.value?.id !== result.project.id) return;
   if (source.value === 'engine' && canvas.value) {
     try {
@@ -150,6 +158,7 @@ async function accept(result: OpenResult) {
       extraIssues.value = [(e as Error).message === 'asset' ? 'asset' : 'gpu']; fallback();
     }
   }
+  if(remembered&&stage.value){stage.value.scrollLeft=remembered.left;stage.value.scrollTop=remembered.top;full.ids=remembered.ids.filter(id=>project.value?.analysis.rows.some(row=>row.id===id));}
 }
 async function request(action: () => Promise<OpenResult>): Promise<void> {
   if (busy.value || frameRendering.value) return;
@@ -158,12 +167,28 @@ async function request(action: () => Promise<OpenResult>): Promise<void> {
   requests++; busy.value = true; reportState.value = 'idle';
   try { const result = await action(); if (operation === own) await accept(result); }
   catch { if (operation === own) error.value = 'read'; }
-  finally { requests--; busy.value = requests > 0; }
+  finally { requests--; busy.value = requests > 0;await refreshWorkspace(); }
 }
+async function refreshWorkspace(){try{const result=await window.editor.workspace('list');if(result.workspace)workspaceState.value=result.workspace;}catch{/* Closing the application may remove the IPC endpoint. */}}
+function openNewTab(){newInTab.value=true;newDialog.value=true;}
+async function workspaceAction(action:string,payload:Record<string,unknown>={}){await request(()=>window.editor.workspace(action,payload));if(['switch','open','recentOpen'].includes(action))void checkExternal();}
+async function switchTab(id:string){if(id!==workspaceState.value.activeID&&!busy.value&&!painting.value&&!frameRendering.value)await workspaceAction('switch',{tabID:id});}
+function closeTab(id:string){if(id===workspaceState.value.activeID)void closeProject();else void workspaceAction('close',{tabID:id});}
+function cycleTab(delta:number){const tabs=workspaceState.value.tabs,index=tabs.findIndex(tab=>tab.active);if(tabs.length>1)switchTab(tabs[(index+delta+tabs.length)%tabs.length].id);}
+async function workspaceTabKey(event:KeyboardEvent){if(event.ctrlKey||event.altKey||event.metaKey||!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;event.preventDefault();event.stopPropagation();const tabs=workspaceState.value.tabs,index=tabs.findIndex(tab=>tab.active),next=tabs[event.key==='Home'?0:event.key==='End'?tabs.length-1:(index+(event.key==='ArrowLeft'?-1:1)+tabs.length)%tabs.length];if(next){await switchTab(next.id);await nextTick();document.querySelector<HTMLButtonElement>('[data-tab-id="'+next.id+'"]')?.focus();}}
+async function showRecent(){if(busy.value||painting.value)return;const result=await window.editor.workspace('recent');if(result.recent){recentState.value=result.recent;structuredDialog.value='recent';}}
+function recentSettings(action:string,payload?:Record<string,unknown>){return window.editor.workspace(action,payload);}
+async function openRecent(id:string){structuredDialog.value='';await workspaceAction('recentOpen',{id});}
+async function copyProject(){const p=project.value;if(p)await workspaceAction('copy',{id:p.id,revision:p.revision});}
+async function grayscaleCopy(){const p=project.value;if(p)await request(async()=>window.editor.workspace('grayscale',{id:p.id,revision:p.revision,png:await outputComposite()}));}
+async function checkExternal(){const p=project.value;if(!p?.hasLocation||busy.value||painting.value||frameRendering.value||animationPlaying.value||structuredDialog.value||newDialog.value||outputDialog.value||full.modal)return;await request(async()=>{const result=await window.editor.workspace('external',{id:p.id,revision:p.revision});if(project.value?.id===p.id&&project.value.revision===p.revision){if(!result.missing)ignoredMissing.delete(p.id);if(result.changed&&!(result.missing&&ignoredMissing.has(p.id)))externalNotice.value={signature:result.signature,missing:result.missing};}return {};});}
+async function ignoreExternal(){const p=project.value,notice=externalNotice.value;if(!p||!notice)return;if(notice.missing)ignoredMissing.add(p.id);await window.editor.workspace('ignoreExternal',{id:p.id,revision:p.revision,signature:notice.signature});externalNotice.value=undefined;}
 function open() { return request(() => window.viewer.open()); }
 function reload() { const id = project.value?.id; if (id) return request(() => window.viewer.reload(id)); }
 async function closeProject() {
-  const result=await window.viewer.close();if(!result.closed){if(result.error)error.value=result.error;return;}
+  if(busy.value||painting.value||frameRendering.value)return;
+  const result=await window.viewer.close();if(result.workspace)workspaceState.value=result.workspace;if(!result.closed){if(result.error)error.value=result.error;return;}
+  if(result.project){await request(()=>Promise.resolve(result));return;}
   stopPlayback(); operation++; epoch++; renderer?.dispose(); renderer = undefined;
   drag = undefined;
   project.value = undefined; frameRendering.value=false; selected.value = undefined; source.value = 'none'; error.value = ''; extraIssues.value = [];
@@ -187,7 +212,7 @@ function recover(){return request(()=>window.editor.recover());}
 function add(type:string,adjustment?:string){return edit({kind:'add',type,adjustment,name:type==='group'?t.value.editor.group:type==='adjustment'?t.value.adjustments[ADJUSTMENTS.indexOf(adjustment!)]:t.value.raster,parentID:selected.value?.isGroup?selected.value.id:selected.value?.parentID});}
 function numberEvent(e:Event){return Number((e.target as HTMLInputElement).value);}
 function transformPair(field:'origin'|'size',index:number,e:Event){if(!selected.value)return;const value=[...(full.selectionTransform??selected.value.transform)[field]];value[index]=numberEvent(e);return edit({kind:'transform',field,value});}
-async function create(){newDialog.value=false;await request(()=>window.editor.create(newWidth.value,newHeight.value));}
+async function create(){newDialog.value=false;const inTab=newInTab.value;newInTab.value=false;await request(()=>inTab?window.editor.workspace('create',{width:newWidth.value,height:newHeight.value}):window.editor.create(newWidth.value,newHeight.value));}
 async function outputComposite(){
   const p=project.value;stopPlayback();if(frameRendering.value)await frameRenderTask;
   if(!p||!canvas.value||project.value?.id!==p.id||project.value?.revision!==p.revision||source.value!=='engine'||painting.value)throw new Error(t.value.errorTitle);
@@ -348,9 +373,9 @@ async function panEnd(event:PointerEvent){drag=undefined;await full.end(event);}
 onMounted(async () => {
   const settings = await window.viewer.settings(); language.value = settings.language; version.value = settings.version; edition.value = settings.edition;
   document.documentElement.lang = language.value;
-  try{const result=await window.viewer.viewSettings();if(result.settings)applyViewSettings(result.settings);await nextTick();}catch{settingError.value=true;}viewPreferencesReady=true;
+  try{const result=await window.viewer.viewSettings();if(result.settings)applyViewSettings(result.settings);await nextTick();}catch{settingError.value=true;}viewPreferencesReady=true;await refreshWorkspace();
   subscriptions.push(window.viewer.onOpen(open), window.viewer.onReload(reload), window.viewer.onClose(closeProject), window.viewer.onFit(fit), window.viewer.onActual(() => zoom.value = 1));
-  const commands: Record<string, () => unknown> = {...full.commands,navigator:()=>{full.options.navigator=!full.options.navigator;},rulers:()=>{full.options.rulers=!full.options.rulers;},palette:()=>{full.options.palette=!full.options.palette;},viewSettings:()=>{structuredDialog.value='viewSettings';},commandFinder:openCommands,historyPanel:showHistoryPanel,textOutlines:()=>edit({kind:'textOutlines'}),filterStack:()=>openFilterStack(),advancedLiquify:()=>openFilterStack(true),newFill:()=>openStructured('fill'),editFill:()=>openStructured('fill',true),newPath:()=>openStructured('path'),editPath:()=>openStructured('path',true),newVectorMask:()=>openStructured('mask'),editVectorMask:()=>openStructured('mask',true),vectorMaskFromPath:maskFromPath,exportAs:()=>{outputDialog.value=true;},new:()=>{newDialog.value=true;},image:importImage,importPSD,save:()=>save(),saveAs:()=>save(true),png:()=>exportImage('png'),gif:()=>exportImage('gif'),eps:()=>exportImage('eps'),exportPSD:()=>{psdDialog.value=true;},recover,undo:()=>history('undo'),redo:()=>history('redo'),addPixels:()=>add('pixels'),addGroup:()=>add('group'),addMask:()=>{if(selected.value)edit({kind:'mask',action:'add'});},details:showDetails,properties:()=>{inspectorTab.value='properties';},effects:showEffects};
+  const commands: Record<string, () => unknown> = {...full.commands,newTab:openNewTab,openTab:()=>workspaceAction('open'),tabNext:()=>cycleTab(1),tabPrevious:()=>cycleTab(-1),recentProjects:showRecent,unlockedCopy:copyProject,grayscaleCopy,externalCheck:checkExternal,navigator:()=>{full.options.navigator=!full.options.navigator;},rulers:()=>{full.options.rulers=!full.options.rulers;},palette:()=>{full.options.palette=!full.options.palette;},viewSettings:()=>{structuredDialog.value='viewSettings';},commandFinder:openCommands,historyPanel:showHistoryPanel,textOutlines:()=>edit({kind:'textOutlines'}),filterStack:()=>openFilterStack(),advancedLiquify:()=>openFilterStack(true),newFill:()=>openStructured('fill'),editFill:()=>openStructured('fill',true),newPath:()=>openStructured('path'),editPath:()=>openStructured('path',true),newVectorMask:()=>openStructured('mask'),editVectorMask:()=>openStructured('mask',true),vectorMaskFromPath:maskFromPath,exportAs:()=>{outputDialog.value=true;},new:()=>{newInTab.value=false;newDialog.value=true;},image:importImage,importPSD,save:()=>save(),saveAs:()=>save(true),png:()=>exportImage('png'),gif:()=>exportImage('gif'),eps:()=>exportImage('eps'),exportPSD:()=>{psdDialog.value=true;},recover,undo:()=>history('undo'),redo:()=>history('redo'),addPixels:()=>add('pixels'),addGroup:()=>add('group'),addMask:()=>{if(selected.value)edit({kind:'mask',action:'add'});},details:showDetails,properties:()=>{inspectorTab.value='properties';},effects:showEffects};
   commandActions.value={...commands,open,close:closeProject,fit,actual:()=>{zoom.value=1;}};
   for(const [name,action] of Object.entries(commands))subscriptions.push(window.editor.onCommand(name,()=>{
     if(composing)return;
@@ -372,7 +397,7 @@ onUnmounted(() => { stopPlayback();clearTimeout(viewPreferencesTimer); operation
     <header class="toolbar documentbar">
       <div class="brand"><img :src="iconURL" alt=""><strong>{{ t.title }}</strong></div>
       <div class="document-actions">
-        <button class="icon-button" :disabled="busy || painting" :title="t.editor.newCanvas + ' · Ctrl+N'" :aria-label="t.editor.newCanvas" data-testid="new-canvas" @click="newDialog=true"><Icon name="new"/></button>
+        <button class="icon-button" :disabled="busy || painting" :title="t.editor.newCanvas + ' · Ctrl+N'" :aria-label="t.editor.newCanvas" data-testid="new-canvas" @click="newInTab=false;newDialog=true"><Icon name="new"/></button>
         <button class="icon-button" :disabled="busy || painting" :title="t.open + ' · Ctrl+O'" :aria-label="t.open" data-testid="open-project" @click="open"><Icon name="open"/></button>
         <button class="icon-button" :disabled="!project || busy || painting" :title="t.editor.save + ' · Ctrl+S'" :aria-label="t.editor.save" data-testid="save-project" @click="save()"><Icon name="save"/></button>
       </div>
@@ -394,6 +419,10 @@ onUnmounted(() => { stopPlayback();clearTimeout(viewPreferencesTimer); operation
       <select class="language-select" :aria-label="t.language" :value="language" data-testid="language" @change="changeLanguage"><option value="zh-Hans">简体中文</option><option value="en">English</option></select>
       <button class="icon-button" :aria-label="ui.details" :title="ui.details" data-testid="project-details" @click="showDetails"><Icon name="info"/></button>
     </header>
+    <div v-if="project||workspaceState.tabs.length" class="document-tabs" role="tablist" :aria-label="language==='en'?'Open projects':'打开的项目'" @keydown="workspaceTabKey">
+      <div v-for="tab in workspaceState.tabs" :key="tab.id" class="document-tab" :class="{active:tab.active}"><button role="tab" :aria-selected="tab.active" :tabindex="tab.active?0:-1" :disabled="busy||painting||frameRendering" :data-tab-id="tab.id" @click="switchTab(tab.id)">{{tab.name}}<span v-if="tab.dirty">•</span></button><button class="tab-close" :disabled="busy||painting||frameRendering" :aria-label="(language==='en'?'Close tab · ':'关闭标签页 · ')+tab.name" @click="closeTab(tab.id)">×</button></div><button class="new-tab" data-testid="new-tab" :disabled="busy||painting||frameRendering" :aria-label="language==='en'?'New tab':'新建标签页'" @click="openNewTab">+</button>
+    </div>
+    <div v-if="externalNotice" class="notice external-notice" role="status"><span>{{language==='en'?(externalNotice.missing?'The project on disk is missing or cannot be read. Current edits are still open.':'The project changed on disk. Reload to read those changes; saving checks the original file first.'):(externalNotice.missing?'磁盘上的项目已丢失或无法读取，当前编辑仍保留。':'项目已被外部修改；可重新加载查看。保存前会检查原文件，防止覆盖外部更改。')}}</span><button :disabled="busy" @click="reload">{{language==='en'?'Reload':'重新加载'}}</button><button :disabled="busy" @click="ignoreExternal">{{language==='en'?'Dismiss':'暂不处理'}}</button></div>
     <div v-if="error || settingError" class="error" role="alert">{{ settingError ? t.settingsError : t.errorTitle + ' · ' + labelError(error) }}<button class="icon-button" :aria-label="t.editor.cancel" @click="error='';settingError=false"><Icon name="close"/></button></div>
     <div class="optionsbar" data-testid="tool-options">
       <span class="tool-heading"><Icon :name="tool"/>{{ toolLabel(tool) }}</span>
@@ -465,7 +494,7 @@ onUnmounted(() => { stopPlayback();clearTimeout(viewPreferencesTimer); operation
             <div v-for="row in rows" :key="row.id" class="layer-row" :class="{selected:full.ids.includes(row.id),hidden:!row.effectiveVisible}" :style="{paddingLeft:6 + row.depth * 12 + 'px'}">
               <button class="icon-button visibility-toggle" :disabled="!editable" :title="(row.isVisible ? ui.hideLayer : ui.showLayer) + ' · ' + row.name" :aria-label="(row.isVisible ? ui.hideLayer : ui.showLayer) + ' · ' + row.name" @click="edit({kind:'appearance',id:row.id,field:'isVisible',value:!row.isVisible})"><Icon :name="row.isVisible?'eye':'eyeOff'"/></button>
               <button v-if="row.isGroup" class="icon-button fold" :disabled="!!query.trim()" :aria-label="collapsed.has(row.id.toUpperCase()) && !query.trim() ? t.expand : t.collapse" :aria-expanded="!!query.trim() || !collapsed.has(row.id.toUpperCase())" @click="toggleGroup(row)"><Icon name="chevron"/></button><span v-else class="fold-spacer"></span>
-              <button class="layer-select" :disabled="painting" :aria-pressed="selected?.id===row.id" @click="selectLayer(row,$event);paintTarget='content'">
+              <button class="layer-select" :disabled="painting||busy||frameRendering||animationPlaying" :aria-pressed="selected?.id===row.id" @click="selectLayer(row,$event);paintTarget='content'">
                 <span class="thumbnail"><img v-if="row.imageFile" :src="thumbURL(row)" alt="" loading="lazy" draggable="false"><Icon v-else :name="row.isGroup?'folder':'adjustment'"/></span>
                 <span class="layer-title">{{ row.name }}<small>{{ kind(row) }}<span v-if="row.maskSourceID"> · {{ t.editor.clip }}</span></small></span>
               </button>
@@ -524,6 +553,7 @@ onUnmounted(() => { stopPlayback();clearTimeout(viewPreferencesTimer); operation
     <AiPanel :language="language" :project="project" :busy="busy" :editable="editable" :edit="submitEdit" :history="history"/>
     <CompleteControls :e="full" mode="dialogs" :tool="tool" :disabled="!editable" :selected="selected" :color="color" :size="brushSize" :opacity="brushOpacity" :target="paintTarget"/>
     <OutputDialog v-if="outputDialog && project" :language="language" :project="project" :get-composite="outputComposite" :export-file="(type,options)=>exportImage(type,false,options)" @close="outputDialog=false"/>
+    <RecentDialog v-if="structuredDialog==='recent'" :language="language" :state="recentState" :update="recentSettings" @close="structuredDialog=''" @update="recentState=$event" @open="openRecent"/>
     <ViewSettingsDialog v-if="structuredDialog==='viewSettings'" :language="language" :settings="viewState()" @close="structuredDialog=''" @apply="confirmViewSettings"/>
     <CommandDialog v-if="structuredDialog==='commands'" :language="language" :commands="finderCommands" @close="structuredDialog=''" @run="runCommand"/>
     <HistoryDialog v-if="structuredDialog==='history' && project" :language="language" :project="project" :busy="busy" @close="structuredDialog=''" @jump="jumpHistory"/>
@@ -537,5 +567,5 @@ onUnmounted(() => { stopPlayback();clearTimeout(viewPreferencesTimer); operation
 </template>
 
 <style>
-.navigation-workarea{position:relative}.floating-widgets{position:absolute;z-index:7;right:12px;top:12px;max-height:calc(100% - 24px);overflow:auto;display:flex;flex-direction:column;gap:10px;pointer-events:none}.floating-panel{pointer-events:auto;background:var(--panel,#242424);border:1px solid var(--border);border-radius:6px;padding:8px;box-shadow:0 6px 20px #0005}.floating-panel>header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}.floating-panel>header .icon-button{width:22px;height:22px;min-height:22px}.ruler-guide line{stroke:#71dfed}
+.document-tabs{display:flex;align-items:stretch;gap:2px;background:#222;border-bottom:1px solid var(--border);overflow-x:auto;flex-shrink:0}.document-tabs .document-tab{display:flex;align-items:stretch;border-right:1px solid var(--border);max-width:260px;flex-shrink:0}.document-tabs .document-tab.active{background:var(--surface-raised)}.document-tabs .document-tab button,.document-tabs .new-tab{border:0;background:transparent;border-radius:0;min-height:30px}.document-tabs .document-tab [role=tab]{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;justify-content:start}.document-tabs .document-tab .tab-close{padding:4px 8px}.external-notice{display:flex;align-items:center;gap:8px}.external-notice>span{flex:1}.navigation-workarea{position:relative}.floating-widgets{position:absolute;z-index:7;right:12px;top:12px;max-height:calc(100% - 24px);overflow:auto;display:flex;flex-direction:column;gap:10px;pointer-events:none}.floating-panel{pointer-events:auto;background:var(--panel,#242424);border:1px solid var(--border);border-radius:6px;padding:8px;box-shadow:0 6px 20px #0005}.floating-panel>header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}.floating-panel>header .icon-button{width:22px;height:22px;min-height:22px}.ruler-guide line{stroke:#71dfed}
 </style>

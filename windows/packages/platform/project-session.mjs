@@ -29,6 +29,7 @@ export class ProjectSession {
   }
 
   install(data, location = null, saved = false) {
+    this.options.validateRetained?.(data,this,true);
     clearTimeout(this.recoveryTimer); this.recoveryFailed = false;
     const discarded = this.discardRecoveryFor;
     this.discardRecoveryFor = null;
@@ -62,6 +63,7 @@ export class ProjectSession {
   }
 
   commit(before,after,op) {
+      this.options.validateRetained?.(after,this,false);
       this.historyNames.set(after,{kind:op?.kind??'edit',...(['filter','effect'].includes(op?.kind)?{detail:op.filter??op.effect}:{})});
       this.undoStack.push(before); this.redoStack = []; this.current.data = after; this.revision = randomUUID();
       // Count unique immutable buffers shared by snapshots, not logical copies.
@@ -135,13 +137,14 @@ export class ProjectSession {
       const selected = await choose(current);
       if (own !== this.generation || this.current !== current) return { canceled: true };
       if (!selected) return { canceled: true };
+      await this.options.validateSave?.(selected.location,this);
       const result = await saveProject(data, selected.location, selected.expected, this.options.journalDirectory);
       if (own !== this.generation || this.current !== current) return { canceled: true };
       current.location = result.destination; current.fingerprint = result.fingerprint;
       data.name = path.basename(result.destination);
       this.saved = data; clearTimeout(this.recoveryTimer);
       try { await this.options.recovery?.clear(data.manifest.documentID); } catch { this.recoveryFailed = true; }
-      return { ...this.view(), backup: !!result.backup };
+      return { ...this.view(), backup: !!result.backup,didSave:true };
     } catch (e) { return { error: e.code ?? 'write' }; }
     finally { this.pending = false; }
   }

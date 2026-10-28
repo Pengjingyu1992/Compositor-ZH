@@ -55,11 +55,12 @@ export class ProjectWorkspace{
     return{closed:true,...(this.active.current?this.active.view():{})};
   }
   async external(id,revision){
-    this.guard();const entry=this.entries.find(entry=>entry.session.current?.id===id),session=entry?.session;if(!session||session!==this.active||session.revision!==revision)throw new ProjectError('stale');
-    if(!session.current.location)return{changed:false};const current=session.current;this.pending=true;session.pending=true;
-    try{const data=await this.reader(current.location);if(session.current!==current||session.revision!==revision)throw new ProjectError('stale');const digest=fingerprint(data),changed=digest!==current.fingerprint&&digest!==this.seenExternal.get(entry.id);return{changed,signature:digest};}
-    catch(error){if(error.code==='stale')throw error;return{changed:true,missing:true};}
-    finally{session.pending=false;this.pending=false;}
+    this.guard();if(this.checking)throw new ProjectError('busy');const entry=this.entries.find(entry=>entry.session.current?.id===id),session=entry?.session;if(!session||session!==this.active||session.revision!==revision)throw new ProjectError('stale');
+    if(!session.current.location)return{changed:false};const current=session.current;this.checking=true;
+    const stale=()=>session.current!==current||session!==this.active||session.revision!==revision||this.busy;
+    try{const data=await this.reader(current.location);if(stale())throw new ProjectError('stale');const digest=fingerprint(data),changed=digest!==current.fingerprint&&digest!==this.seenExternal.get(entry.id);return{changed,signature:digest};}
+    catch(error){if(error.code==='stale'||stale())throw new ProjectError('stale');return{changed:true,missing:true};}
+    finally{this.checking=false;}
   }
   ignoreExternal(signature){if(typeof signature==='string'&&/^[a-f0-9]{64}$/.test(signature))this.seenExternal.set(this.activeID,signature);}
 }

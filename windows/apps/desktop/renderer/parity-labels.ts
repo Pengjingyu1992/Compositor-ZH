@@ -1,5 +1,6 @@
 export const parityMessages = {
   en: {
+    colorRange:'Color Range',rangeTip:'Click the artwork to sample a color. Shift adds; Alt removes. White in the preview marks selected pixels; Cancel retains the original selection.',rangeSample:'Sample artwork',rangeMask:'Selection preview',rangeMode:'Eyedropper',rangeReplace:'Replace colors',rangeAdd:'Add color',rangeRemove:'Remove color',rangeFuzziness:'Fuzziness',rangeInvert:'Invert',rangeLimit:'A maximum of 32 colors is allowed in each list.',
     batchExport:'Batch Export',batchSizes:'Longest edges, separated by commas (0 = original)',batchPrefix:'Filename prefix',batchLayers:'Export selected layers separately',batchTip:'Export PNG/JPEG at up to 20 sizes per target. A new output folder appears only when the entire batch succeeds. JPEG uses a white background.',batchCanceled:'Export canceled. No output folder was created.',
     output: 'Export As / Print proof', close: 'Close', format: 'Format', quality: 'Quality', longEdge: 'Longest edge (0 = original)',
     resolution: 'Resolution (DPI)', lossless: 'Lossless WebP', export: 'Export…', proof: 'Refresh print proof',
@@ -17,6 +18,7 @@ export const parityMessages = {
     path:'Editable path',vectorMask:'Vector mask',pathTip:'Click to add anchors; drag to create handles. Click the first anchor to close; double-click to finish. Alt-drag a handle to break symmetry. Wheel to zoom; Space-drag to pan.',contours:'Contours',newContour:'New subpath',finishContour:'Finish open path',closeContour:'Close path',evenOdd:'Even-odd fill',pathFill:'Fill',pathStroke:'Stroke',strokeWidth:'Stroke width',roundCaps:'Round caps',deleteAnchor:'Delete anchor',removeHandles:'Remove handles',anchors:'Anchors',drawMode:'Draw',editMode:'Edit nodes',color:'Color',locked:'This layer or its parent is locked.',
   },
   'zh-Hans': {
+    colorRange:'色彩范围',rangeTip:'点击图像取样；Shift 增加颜色，Alt 去除颜色。预览白色表示选中，取消会保留原选区。',rangeSample:'图像取样',rangeMask:'选区预览',rangeMode:'吸管模式',rangeReplace:'替换颜色',rangeAdd:'增加颜色',rangeRemove:'去除颜色',rangeFuzziness:'容差',rangeInvert:'反选',rangeLimit:'每个颜色列表最多容纳 32 种颜色。',
     batchExport:'批量导出',batchSizes:'长边尺寸，用逗号分隔（0 为原尺寸）',batchPrefix:'文件名前缀',batchLayers:'分别导出选定图层',batchTip:'每个目标最多导出 20 种尺寸的 PNG/JPEG。整批成功后才显示新的输出文件夹；JPEG 使用白色背景。',batchCanceled:'已取消导出，没有生成输出文件夹。',
     output: '导出为 / 印刷预览', close: '关闭', format: '格式', quality: '质量', longEdge: '最长边（0 保持原尺寸）',
     resolution: '分辨率（DPI）', lossless: '无损 WebP', export: '导出…', proof: '刷新印刷预览',

@@ -6,6 +6,7 @@ import { ProjectError, LIMITS } from './project.mjs';
 import { bounds, union, arrange, shapeMask, combineMasks, modifyMask, floodMask, validSurface, toLocal, toDocument, selectionCoverage, following } from './editor-math.mjs';
 import { fillPixels, strokePixels, resizePixels, applySelectedFilter, FILTERS } from './raster-tools.mjs';
 import { supportsFillStyle, supportsVectorPath, validRGB, renderFillPixels } from './layer-styles.mjs';
+import{colorRangeMask}from'./color-range.mjs';
 const fail = c => { throw new ProjectError(c); };
 const finite = (v,a=-300000,b=300000) => typeof v==='number' && Number.isFinite(v) && v>=a && v<=b;
 const pair = v => Array.isArray(v) && v.length===2 && v.every(n=>finite(n));
@@ -39,7 +40,9 @@ export function selectionEdit(data,op,codecs) {
     if(!finite(op.amount??0,0,500))fail('invalid');next=modifyMask(data.selection?.data??new Uint8Array(w*h),w,h,op.action,op.amount??0);
   }else{
     if(!['replace','add','subtract','intersect'].includes(op.combine??'replace'))fail('invalid');
-    if(op.action==='wand'){
+    if(op.action==='colorRange'){
+      const image=codecs.decodePNG(codecs.validatePNG(op.png));if(image.width!==w||image.height!==h)fail('invalid');next=colorRangeMask(image,op.settings);
+    }else if(op.action==='wand'){
       if(!pair(op.start)||!finite(op.tolerance??24,0,255)||typeof op.contiguous!=='boolean')fail('invalid');
       const image=codecs.decodePNG(codecs.validatePNG(op.png));if(image.width!==w||image.height!==h)fail('invalid');
       next=floodMask(image,Math.floor(op.start[0]),Math.floor(op.start[1]),op.tolerance??24,op.contiguous);
@@ -48,6 +51,7 @@ export function selectionEdit(data,op,codecs) {
       next=shapeMask(w,h,op.action,op.start,op.end,op.points??[]);
     }
     next=combineMasks(data.selection?.data,next,op.combine??'replace');
+    if(op.action==='colorRange'&&!next.some(Boolean)){if(!data.selection)return data;next=null;}
   }
   return {...data,selection:next?{width:w,height:h,data:next}:null,contentSnapshot:data.contentSnapshot??data};
 }

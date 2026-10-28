@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ColorRangeDialog from './ColorRangeDialog.vue';
 import BatchExportDialog from './BatchExportDialog.vue';
 import RecentDialog from './RecentDialog.vue';
 import NavigatorPanel from './NavigatorPanel.vue';
@@ -43,7 +44,10 @@ const tool=ref('pan'),color=ref('#bae9d6'),brushSize=ref(24),brushOpacity=ref(10
 const newDialog=ref(false),newWidth=ref(1920),newHeight=ref(1080),psdDialog=ref(false),outputDialog=ref(false),status=ref(''),painting=ref(false);
 const overlay=ref<HTMLCanvasElement>(),artboard=ref<HTMLDivElement>();
 const inspectorTab=ref('properties'), detailsDialog=ref(false), searchOpen=ref(false);
-const stackLiquify=ref(false);
+const stackLiquify=ref(false),rangePNG=ref<Uint8Array>();let rangeOwner:Pick<ViewerProject,'id'|'revision'>|undefined;
+async function openColorRange(){if(!editable.value)return;await request(async()=>{const owner=project.value!;rangePNG.value=await outputComposite();rangeOwner={id:owner.id,revision:owner.revision};structuredDialog.value='range';return {};});}
+function closeColorRange(){structuredDialog.value='';rangePNG.value=undefined;rangeOwner=undefined;}
+function applyColorRange(settings:Record<string,unknown>){return submitEdit({kind:'selection',action:'colorRange',settings,png:rangePNG.value},rangeOwner,true);}
 function openFilterStack(liquify=false){const row=selected.value;if(!editable.value||!row?.imageFile||!liquify&&(row.text||row.shape||row.fill)||row.isGroup||row.adjustment){error.value='unsupported';return;}structuredLayer.value=row;stackLiquify.value=liquify;structuredDialog.value='stack';}
 const workspaceState=ref<WorkspaceState>({tabs:[],activeID:''}),recentState=ref<RecentState>({enabled:false,entries:[]}),newInTab=ref(false),externalNotice=ref<{signature?:string;missing?:boolean}>();
 const ignoredMissing=new Set<string>(),tabViews=new Map<string,{selectedID?:string;ids:string[];zoom:number;left:number;top:number;target:string}>();
@@ -182,10 +186,12 @@ function recentSettings(action:string,payload?:Record<string,unknown>){return wi
 async function openRecent(id:string){structuredDialog.value='';await workspaceAction('recentOpen',{id});}
 async function copyProject(){const p=project.value;if(p)await workspaceAction('copy',{id:p.id,revision:p.revision});}
 async function grayscaleCopy(){const p=project.value;if(p)await request(async()=>window.editor.workspace('grayscale',{id:p.id,revision:p.revision,png:await outputComposite()}));}
-async function checkExternal(){const p=project.value;if(!p?.hasLocation||busy.value||painting.value||frameRendering.value||animationPlaying.value||structuredDialog.value||newDialog.value||outputDialog.value||full.modal)return;await request(async()=>{const result=await window.editor.workspace('external',{id:p.id,revision:p.revision});if(project.value?.id===p.id&&project.value.revision===p.revision){if(!result.missing)ignoredMissing.delete(p.id);if(result.changed&&!(result.missing&&ignoredMissing.has(p.id)))externalNotice.value={signature:result.signature,missing:result.missing};}return {};});}
+let checkingExternal=false,recheckExternal=false;
+async function checkExternal(){if(checkingExternal){recheckExternal=true;return;}const p=project.value;if(!p?.hasLocation||busy.value||painting.value||frameRendering.value||animationPlaying.value||structuredDialog.value||newDialog.value||outputDialog.value||full.modal)return;checkingExternal=true;try{const result=await window.editor.workspace('external',{id:p.id,revision:p.revision});if(!result.error&&!busy.value&&project.value?.id===p.id&&project.value.revision===p.revision){if(!result.missing)ignoredMissing.delete(p.id);if(result.changed&&!(result.missing&&ignoredMissing.has(p.id)))externalNotice.value={signature:result.signature,missing:result.missing};}}catch{/* An obsolete read must not interrupt the current editor action. */}finally{checkingExternal=false;if(recheckExternal){recheckExternal=false;void checkExternal();}}}
+
 async function ignoreExternal(){const p=project.value,notice=externalNotice.value;if(!p||!notice)return;if(notice.missing)ignoredMissing.add(p.id);await window.editor.workspace('ignoreExternal',{id:p.id,revision:p.revision,signature:notice.signature});externalNotice.value=undefined;}
-function open() { return request(() => window.viewer.open()); }
-function reload() { const id = project.value?.id; if (id) return request(() => window.viewer.reload(id)); }
+function open() { if(painting.value)return Promise.resolve();return request(() => window.viewer.open()); }
+function reload() { if(painting.value)return;const id = project.value?.id; if (id) return request(() => window.viewer.reload(id)); }
 let closeTask:Promise<void>|undefined;
 function closeProject(){if(!closeTask)closeTask=closeProjectNow().finally(()=>{closeTask=undefined;});return closeTask;}
 async function closeProjectNow() {
@@ -380,7 +386,7 @@ onMounted(async () => {
   document.documentElement.lang = language.value;
   try{const result=await window.viewer.viewSettings();if(result.settings)applyViewSettings(result.settings);await nextTick();}catch{settingError.value=true;}viewPreferencesReady=true;await refreshWorkspace();
   subscriptions.push(window.viewer.onOpen(open), window.viewer.onReload(reload), window.viewer.onClose(closeProject), window.viewer.onFit(fit), window.viewer.onActual(() => zoom.value = 1));
-  const commands: Record<string, () => unknown> = {...full.commands,batchExport:()=>{if(editable.value)structuredDialog.value='batch';},newTab:openNewTab,openTab:()=>workspaceAction('open'),tabNext:()=>cycleTab(1),tabPrevious:()=>cycleTab(-1),recentProjects:showRecent,unlockedCopy:copyProject,grayscaleCopy,externalCheck:checkExternal,navigator:()=>{full.options.navigator=!full.options.navigator;},rulers:()=>{full.options.rulers=!full.options.rulers;},palette:()=>{full.options.palette=!full.options.palette;},viewSettings:()=>{structuredDialog.value='viewSettings';},commandFinder:openCommands,historyPanel:showHistoryPanel,textOutlines:()=>edit({kind:'textOutlines'}),filterStack:()=>openFilterStack(),advancedLiquify:()=>openFilterStack(true),newFill:()=>openStructured('fill'),editFill:()=>openStructured('fill',true),newPath:()=>openStructured('path'),editPath:()=>openStructured('path',true),newVectorMask:()=>openStructured('mask'),editVectorMask:()=>openStructured('mask',true),vectorMaskFromPath:maskFromPath,exportAs:()=>{outputDialog.value=true;},new:()=>{newInTab.value=false;newDialog.value=true;},image:importImage,importPSD,save:()=>save(),saveAs:()=>save(true),png:()=>exportImage('png'),gif:()=>exportImage('gif'),eps:()=>exportImage('eps'),exportPSD:()=>{psdDialog.value=true;},recover,undo:()=>history('undo'),redo:()=>history('redo'),addPixels:()=>add('pixels'),addGroup:()=>add('group'),addMask:()=>{if(selected.value)edit({kind:'mask',action:'add'});},details:showDetails,properties:()=>{inspectorTab.value='properties';},effects:showEffects};
+  const commands: Record<string, () => unknown> = {...full.commands,colorRange:openColorRange,batchExport:()=>{if(editable.value)structuredDialog.value='batch';},newTab:openNewTab,openTab:()=>workspaceAction('open'),tabNext:()=>cycleTab(1),tabPrevious:()=>cycleTab(-1),recentProjects:showRecent,unlockedCopy:copyProject,grayscaleCopy,externalCheck:checkExternal,navigator:()=>{full.options.navigator=!full.options.navigator;},rulers:()=>{full.options.rulers=!full.options.rulers;},palette:()=>{full.options.palette=!full.options.palette;},viewSettings:()=>{structuredDialog.value='viewSettings';},commandFinder:openCommands,historyPanel:showHistoryPanel,textOutlines:()=>edit({kind:'textOutlines'}),filterStack:()=>openFilterStack(),advancedLiquify:()=>openFilterStack(true),newFill:()=>openStructured('fill'),editFill:()=>openStructured('fill',true),newPath:()=>openStructured('path'),editPath:()=>openStructured('path',true),newVectorMask:()=>openStructured('mask'),editVectorMask:()=>openStructured('mask',true),vectorMaskFromPath:maskFromPath,exportAs:()=>{outputDialog.value=true;},new:()=>{newInTab.value=false;newDialog.value=true;},image:importImage,importPSD,save:()=>save(),saveAs:()=>save(true),png:()=>exportImage('png'),gif:()=>exportImage('gif'),eps:()=>exportImage('eps'),exportPSD:()=>{psdDialog.value=true;},recover,undo:()=>history('undo'),redo:()=>history('redo'),addPixels:()=>add('pixels'),addGroup:()=>add('group'),addMask:()=>{if(selected.value)edit({kind:'mask',action:'add'});},details:showDetails,properties:()=>{inspectorTab.value='properties';},effects:showEffects};
   commandActions.value={...commands,open,close:closeProject,fit,actual:()=>{zoom.value=1;}};
   for(const [name,action] of Object.entries(commands))subscriptions.push(window.editor.onCommand(name,()=>{
     if(composing)return;
@@ -557,6 +563,7 @@ onUnmounted(() => { stopPlayback();clearTimeout(viewPreferencesTimer); operation
     </div>
     <AiPanel :language="language" :project="project" :busy="busy" :editable="editable" :edit="submitEdit" :history="history"/>
     <CompleteControls :e="full" mode="dialogs" :tool="tool" :disabled="!editable" :selected="selected" :color="color" :size="brushSize" :opacity="brushOpacity" :target="paintTarget"/>
+    <ColorRangeDialog v-if="structuredDialog==='range' && rangePNG" :language="language" :png="rangePNG" :apply="applyColorRange" @running="painting=$event" @close="closeColorRange"/>
     <BatchExportDialog v-if="structuredDialog==='batch' && project" :language="language" :project="project" :selected="full.ids" @running="painting=$event" @close="structuredDialog=''"/>
     <OutputDialog v-if="outputDialog && project" :language="language" :project="project" :get-composite="outputComposite" :export-file="(type,options)=>exportImage(type,false,options)" @close="outputDialog=false"/>
     <RecentDialog v-if="structuredDialog==='recent'" :language="language" :state="recentState" :update="recentSettings" @close="structuredDialog=''" @update="recentState=$event" @open="openRecent"/>

@@ -130,7 +130,7 @@ export function editProject(data, op, codecs) {
     if ([op.id, ...(op.ids ?? [])].some(id => frames.has(id))) fail('unsupported');
   }
   checkPermission(data, op);
-  if(data.analysis.issues.length && op.kind==='selection' && op.action==='wand')fail('unsupported');
+  if(data.analysis.issues.length && op.kind==='selection' && ['wand','colorRange'].includes(op.action))fail('unsupported');
   if (op.kind === 'selection') return selectionEdit(data, op, codecs);
   if (op.kind === 'lock') {
     if (!data.manifest.layers.some(l=>l.id===op.id) || !['all','content','position','appearance','alpha'].includes(op.field) || typeof op.value!=='boolean') fail('invalid');

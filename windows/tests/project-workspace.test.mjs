@@ -7,6 +7,7 @@ import{ProjectWorkspace}from'../packages/platform/project-workspace.mjs';
 import{newProject}from'../packages/comp-bridge/edit.mjs';
 import{saveProject}from'../packages/platform/save-project.mjs';
 import * as codecs from'../packages/comp-bridge/codecs.mjs';
+import{readProject}from'../packages/comp-bridge/project.mjs';
 
 test('tabs preserve independent dirty state, history, selection and revisions without duplicating an open location',async()=>{
   const temp=await mkdtemp(path.join(os.tmpdir(),'comp-tabs-')),workspace=new ProjectWorkspace(undefined,{codecs});
@@ -21,6 +22,12 @@ test('tabs preserve independent dirty state, history, selection and revisions wi
     assert.throws(()=>workspace.close(secondTab),error=>error.code==='unsaved');workspace.close(secondTab,true);assert.equal(workspace.tabs().length,1);
     const before=workspace.active.current;await assert.rejects(()=>workspace.open(path.join(temp,'missing.comp')));assert.equal(workspace.active.current,before);assert.equal(workspace.active.pending,false);
   }finally{for(const session of workspace.sessions)session.close();await rm(temp,{recursive:true,force:true});}
+});
+
+test('background disk checks do not lock editing and discard results from superseded revisions',async()=>{
+  const temp=await mkdtemp(path.join(os.tmpdir(),'comp-external-race-'));let block=false,release,started;const waiting=new Promise(resolve=>started=resolve),gate=new Promise(resolve=>release=resolve),workspace=new ProjectWorkspace(async location=>{if(block){started();await gate;}return readProject(location);},{codecs});
+  try{const source=path.join(temp,'source.comp');await saveProject(newProject(8,8),source);const project=(await workspace.open(source)).project;block=true;const reading=workspace.external(project.id,project.revision);await waiting;assert.equal(workspace.busy,false);const edited=workspace.active.edit(project.id,project.revision,{kind:'add',type:'pixels',name:'Kept while checking'});assert.ok(edited.project);await assert.rejects(()=>workspace.external(edited.project.id,edited.project.revision),error=>error.code==='busy');release();await assert.rejects(()=>reading,error=>error.code==='stale');assert.equal(workspace.active.current.data.manifest.layers[0].name,'Kept while checking');assert.equal(workspace.active.pending,false);
+  }finally{release();for(const session of workspace.sessions)session.close();await rm(temp,{recursive:true,force:true});}
 });
 
 test('tab and retained-memory limits reject additions and edits before consuming state or recovery',()=>{

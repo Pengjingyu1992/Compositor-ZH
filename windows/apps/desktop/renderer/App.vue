@@ -44,6 +44,7 @@ const selected = ref<LayerRow>(), busy = ref(true), initialized=ref(false),error
 const importProgress=ref<{jobID:string;completed:number;total:number}>();
 const query = ref(''), collapsed = ref(new Set<string>()), dropping = ref(false), reportState = ref<'idle' | 'copied' | 'error'>('idle');
 const stage = ref<HTMLDivElement>(), canvas = ref<HTMLCanvasElement>(), zoom = ref(1);
+const fitToViewport=ref(true);
 const source = ref<'engine' | 'saved' | 'none'>('none'), extraIssues = ref<string[]>([]);
 const tool=ref('pan'),color=ref('#bae9d6'),brushSize=ref(24),brushOpacity=ref(100),paintTarget=ref('content');
 const newDialog=ref(false),newWidth=ref(1920),newHeight=ref(1080),psdDialog=ref(false),outputDialog=ref(false),status=ref(''),painting=ref(false);
@@ -63,7 +64,7 @@ const distortIDs=ref<string[]>([]),distortTarget=ref<'content'|'mask'>('content'
 function openDistort(){if(!editable.value||!selected.value)return;const target=paintTarget.value==='mask'?'mask':'content',ids=target==='mask'?[selected.value.id]:[...(full.ids.length?full.ids:[selected.value.id])];try{distortionPlan(project.value!.analysis.rows,ids,target);distortIDs.value=ids;distortTarget.value=target;structuredDialog.value='distort';}catch{error.value='unsupported';}}
 const refineCommit=(op:Record<string,unknown>,owner:{id:string;revision:string})=>submitEdit(op,owner,true);
 const workspaceState=ref<WorkspaceState>({tabs:[],activeID:''}),recentState=ref<RecentState>({enabled:false,entries:[]}),newInTab=ref(false),externalNotice=ref<{signature?:string;missing?:boolean}>();
-const ignoredMissing=new Set<string>(),tabViews=new Map<string,{selectedID?:string;ids:string[];zoom:number;left:number;top:number;target:string}>();
+const ignoredMissing=new Set<string>(),tabViews=new Map<string,{selectedID?:string;ids:string[];zoom:number;fit:boolean;left:number;top:number;target:string}>();
 const swatches=ref<string[]>([...DEFAULT_VIEW_SETTINGS.swatches]),navigationViewport=ref({x:0,y:0,w:0,h:0});
 const commandActions=ref<Record<string,()=>unknown>>({});
 function canCommand(id:string){
@@ -132,11 +133,18 @@ const formattedProperties = computed(() => {
 let rendererOwner = '';
 let renderer: ReturnType<typeof createPreviewRenderer> | undefined, frameRenderTask: Promise<void> | undefined, epoch = 0, operation = 0, requests = 0, dragDepth = 0;
 const subscriptions: (() => void)[] = [];
+let navigationObserver:ResizeObserver|undefined,navigationResizeFrame=0;
 function fit() {
+  fitToViewport.value=true;
   void nextTick(updateNavigation);
   if (project.value && stage.value) zoom.value = Math.min(8, Math.max(.01, Math.min((stage.value.clientWidth - 80) / project.value.manifest.width, (stage.value.clientHeight - 80) / project.value.manifest.height)));
 }
-function scale(factor: number) { zoom.value = Math.max(.01, Math.min(8, zoom.value * factor)); }
+function setZoom(value:number){if(!Number.isFinite(value))return;fitToViewport.value=false;zoom.value=Math.max(.01,Math.min(8,value));}
+function scale(factor: number) { setZoom(zoom.value * factor); }
+function workspaceResized(){
+  cancelAnimationFrame(navigationResizeFrame);
+  navigationResizeFrame=requestAnimationFrame(()=>{navigationResizeFrame=0;if(fitToViewport.value&&!painting.value)fit();else updateNavigation();});
+}
 function labelIssue(key: string) { return t.value.issues[key as keyof typeof t.value.issues] ?? key; }
 function labelError(key: string) { if(['locked','selection','source','limit'].includes(key))return key==='selection'?full.labels.noSelection:key==='source'?full.labels.sourceNeeded:full.labels[key as 'locked'|'limit']; return t.value.errors[key as keyof typeof t.value.errors] ?? t.value.errors.read; }
 function kind(row: LayerRow) { return row.isGroup ? t.value.group : row.adjustment ? t.value.adjustment : row.text ? t.value.text : row.shape ? t.value.shape : t.value.raster; }
@@ -149,7 +157,7 @@ async function accept(result: OpenResult) {
   if (!result.project) return;
   stopPlayback();
   const same=project.value?.id===result.project.id, selectedID=selected.value?.id, previousZoom=zoom.value,oldActive=(project.value?.manifest as any)?.activeLayerID,newActive=(result.project.manifest as any).activeLayerID;
-  if(project.value&&!same)tabViews.set(project.value.id,{selectedID:selected.value?.id,ids:[...full.ids],zoom:zoom.value,left:stage.value?.scrollLeft??0,top:stage.value?.scrollTop??0,target:paintTarget.value});
+  if(project.value&&!same)tabViews.set(project.value.id,{selectedID:selected.value?.id,ids:[...full.ids],zoom:zoom.value,fit:fitToViewport.value,left:stage.value?.scrollLeft??0,top:stage.value?.scrollTop??0,target:paintTarget.value});
   const remembered=!same?tabViews.get(result.project.id):undefined;
   if(!same||result.didSave)externalNotice.value=undefined;
   const reuseRenderer=same&&source.value==='engine'&&!result.project.analysis.issues.length&&project.value?.manifest.width===result.project.manifest.width&&project.value?.manifest.height===result.project.manifest.height;
@@ -162,7 +170,8 @@ async function accept(result: OpenResult) {
   if(newActive!==oldActive && selected.value)inspectorTab.value=selected.value.adjustment?'adjustments':'properties';reportState.value = 'idle';
   if(result.backup)status.value=t.value.editor.backup;
   source.value = project.value.analysis.issues.length ? (project.value.preview ? 'saved' : 'none') : 'engine';
-  await nextTick(); if(same)zoom.value=previousZoom;else if(remembered)zoom.value=remembered.zoom;else fit();
+  await nextTick();if(remembered)fitToViewport.value=remembered.fit;
+  if((same||remembered)&&!fitToViewport.value)zoom.value=remembered?.zoom??previousZoom;else fit();
   if(!same)paintTarget.value=remembered?.target==='mask'&&selected.value?.maskFile?'mask':'content';
   if (epoch !== own || project.value?.id !== result.project.id) return;
   if (source.value === 'engine' && canvas.value) {
@@ -395,8 +404,9 @@ function applyViewSettings(value:Record<string,any>){const settings=validateView
 function confirmViewSettings(value:Record<string,any>){applyViewSettings(value);structuredDialog.value='';}
 watch(viewState,()=>{if(!viewPreferencesReady)return;clearTimeout(viewPreferencesTimer);viewPreferencesTimer=setTimeout(()=>{void window.viewer.viewSettings(ipcData(viewState())).then(result=>{if(result.error)settingError.value=true;}).catch(()=>{settingError.value=true;});},150);},{deep:true});
 const gridStyle=computed(()=>{const spacing=Math.max(1,full.options.gridSpacing*zoom.value),minor=Math.max(.5,spacing/full.options.gridSubdivisions),rgb=[1,3,5].map(index=>parseInt(full.options.gridColor.slice(index,index+2),16)),line=(opacity:number)=>'rgba('+rgb.join(',')+','+opacity+')',major=line(full.options.gridOpacity/100),faint=line(full.options.gridOpacity/300);return {backgroundImage:`linear-gradient(to right,${major} 1px,transparent 1px),linear-gradient(to bottom,${major} 1px,transparent 1px),linear-gradient(to right,${faint} 1px,transparent 1px),linear-gradient(to bottom,${faint} 1px,transparent 1px)`,backgroundSize:`${spacing}px ${spacing}px,${spacing}px ${spacing}px,${minor}px ${minor}px,${minor}px ${minor}px`};});
-function updateNavigation(){const p=project.value,area=stage.value,board=artboard.value;if(!p||!area||!board)return;const bounds=area.getBoundingClientRect(),image=board.getBoundingClientRect(),x=Math.max(0,Math.min(p.manifest.width,(bounds.left-image.left)/zoom.value)),y=Math.max(0,Math.min(p.manifest.height,(bounds.top-image.top)/zoom.value));navigationViewport.value={x,y,w:Math.max(0,Math.min(p.manifest.width-x,(bounds.right-Math.max(bounds.left,image.left))/zoom.value)),h:Math.max(0,Math.min(p.manifest.height-y,(bounds.bottom-Math.max(bounds.top,image.top))/zoom.value))};}
-function navigate(point:{x:number;y:number}){const area=stage.value,board=artboard.value;if(!area||!board||busy.value||painting.value)return;const bounds=area.getBoundingClientRect(),image=board.getBoundingClientRect();area.scrollLeft+=image.left-bounds.left+point.x*zoom.value-bounds.width/2;area.scrollTop+=image.top-bounds.top+point.y*zoom.value-bounds.height/2;updateNavigation();}
+function stageBounds(area:HTMLElement){const box=area.getBoundingClientRect(),left=box.left+area.clientLeft,top=box.top+area.clientTop;return{left,top,right:left+area.clientWidth,bottom:top+area.clientHeight,width:area.clientWidth,height:area.clientHeight};}
+function updateNavigation(){const p=project.value,area=stage.value,board=artboard.value;if(!p||!area||!board)return;const bounds=stageBounds(area),image=board.getBoundingClientRect(),x=Math.max(0,Math.min(p.manifest.width,(bounds.left-image.left)/zoom.value)),y=Math.max(0,Math.min(p.manifest.height,(bounds.top-image.top)/zoom.value));navigationViewport.value={x,y,w:Math.max(0,Math.min(p.manifest.width-x,(bounds.right-Math.max(bounds.left,image.left))/zoom.value)),h:Math.max(0,Math.min(p.manifest.height-y,(bounds.bottom-Math.max(bounds.top,image.top))/zoom.value))};}
+function navigate(point:{x:number;y:number}){const area=stage.value,board=artboard.value;if(!area||!board||busy.value||painting.value)return;const bounds=stageBounds(area),image=board.getBoundingClientRect();area.scrollLeft+=image.left-bounds.left+point.x*zoom.value-bounds.width/2;area.scrollTop+=image.top-bounds.top+point.y*zoom.value-bounds.height/2;updateNavigation();}
 async function rulerGuide(guide:{axis:string;position:number;owner:{id:string;revision:string}}){const p=project.value;if(p)await submitEdit({kind:'guides',guides:[...(p.manifest.guides??[]),{id:crypto.randomUUID().toUpperCase(),axis:guide.axis,position:guide.position}]},guide.owner);}
 watch(()=>[project.value?.id,project.value?.revision,zoom.value,busy.value,frameRendering.value],()=>{void nextTick(updateNavigation);},{flush:'post'});
 function panStart(event:PointerEvent){if(full.start(event))return;if(!stage.value||event.button!==0||!project.value)return;drag={x:event.clientX,y:event.clientY,left:stage.value.scrollLeft,top:stage.value.scrollTop};stage.value.setPointerCapture(event.pointerId);}
@@ -406,10 +416,10 @@ onMounted(async () => {
   const settings = await window.viewer.settings(); language.value = settings.language; version.value = settings.version; edition.value = settings.edition;
   document.documentElement.lang = language.value;
   try{const result=await window.viewer.viewSettings();if(result.settings)applyViewSettings(result.settings);await nextTick();}catch{settingError.value=true;}viewPreferencesReady=true;await refreshWorkspace();
-  subscriptions.push(window.viewer.onOpen(outsideModal(open)), window.viewer.onReload(outsideModal(reload)), window.viewer.onClose(outsideModal(closeProject)), window.viewer.onFit(outsideModal(fit)), window.viewer.onActual(outsideModal(() => zoom.value = 1)));
+  subscriptions.push(window.viewer.onOpen(outsideModal(open)), window.viewer.onReload(outsideModal(reload)), window.viewer.onClose(outsideModal(closeProject)), window.viewer.onFit(outsideModal(fit)), window.viewer.onActual(outsideModal(() => setZoom(1))));
   subscriptions.push(window.viewer.onImportProgress(value=>{importProgress.value=value;}));
   const commands: Record<string, () => unknown> = {...full.commands,distort:openDistort,refineEdges:openEdgeRefinement,colorRange:openColorRange,batchExport:()=>{if(editable.value)structuredDialog.value='batch';},newTab:openNewTab,openTab:()=>workspaceAction('open'),tabNext:()=>cycleTab(1),tabPrevious:()=>cycleTab(-1),recentProjects:showRecent,unlockedCopy:copyProject,grayscaleCopy,externalCheck:checkExternal,navigator:()=>{full.options.navigator=!full.options.navigator;},rulers:()=>{full.options.rulers=!full.options.rulers;},palette:()=>{full.options.palette=!full.options.palette;},viewSettings:()=>{structuredDialog.value='viewSettings';},commandFinder:openCommands,historyPanel:showHistoryPanel,textOutlines:()=>edit({kind:'textOutlines'}),filterStack:()=>openFilterStack(),advancedLiquify:()=>openFilterStack(true),newFill:()=>openStructured('fill'),editFill:()=>openStructured('fill',true),newPath:()=>openStructured('path'),editPath:()=>openStructured('path',true),newVectorMask:()=>openStructured('mask'),editVectorMask:()=>openStructured('mask',true),vectorMaskFromPath:maskFromPath,exportAs:()=>{outputDialog.value=true;},new:()=>{newInTab.value=false;newDialog.value=true;},image:importImage,importPSD,save:()=>save(),saveAs:()=>save(true),png:()=>exportImage('png'),gif:()=>exportImage('gif'),eps:()=>exportImage('eps'),exportPSD:()=>{psdDialog.value=true;},recover,undo:()=>history('undo'),redo:()=>history('redo'),addPixels:()=>add('pixels'),addGroup:()=>add('group'),addMask:()=>{if(selected.value)edit({kind:'mask',action:'add'});},details:showDetails,properties:()=>{showsInspector.value=true;inspectorTab.value='properties';},effects:showEffects};
-  commandActions.value={...commands,open,close:closeProject,fit,actual:()=>{zoom.value=1;}};
+  commandActions.value={...commands,open,close:closeProject,fit,actual:()=>setZoom(1)};
   for(const [name,action] of Object.entries(commands))subscriptions.push(window.editor.onCommand(name,()=>{
     if(composing)return;
     if(['copy','cut','paste','selectAll','undo','redo'].includes(name)&&document.activeElement?.closest('input,textarea,[contenteditable]')){void window.editor.textClipboard(name);return;}
@@ -419,10 +429,11 @@ onMounted(async () => {
     action();
   }));
   window.addEventListener('compositionstart', compositionStart); window.addEventListener('compositionend', compositionEnd);
-  window.addEventListener('keydown', onKey); window.addEventListener('resize', fit);
+  if(stage.value){navigationObserver=new ResizeObserver(workspaceResized);navigationObserver.observe(stage.value);}
+  window.addEventListener('keydown', onKey); window.addEventListener('resize', workspaceResized);
   busy.value=false;initialized.value=true;await window.viewer.ready();
 });
-onUnmounted(() => { stopPlayback();clearTimeout(viewPreferencesTimer); operation++; epoch++; cancelStroke();renderer?.dispose(); full.closeModal(); subscriptions.forEach(stop => stop()); window.removeEventListener('compositionstart', compositionStart); window.removeEventListener('compositionend', compositionEnd); window.removeEventListener('keydown', onKey); window.removeEventListener('resize', fit); });
+onUnmounted(() => { stopPlayback();clearTimeout(viewPreferencesTimer); operation++; epoch++; cancelStroke();renderer?.dispose(); full.closeModal();navigationObserver?.disconnect();cancelAnimationFrame(navigationResizeFrame);subscriptions.forEach(stop => stop()); window.removeEventListener('compositionstart', compositionStart); window.removeEventListener('compositionend', compositionEnd); window.removeEventListener('keydown', onKey); window.removeEventListener('resize', workspaceResized); });
 </script>
 
 <template>
@@ -447,7 +458,7 @@ onUnmounted(() => { stopPlayback();clearTimeout(viewPreferencesTimer); operation
       <div class="zoom-tools">
         <button class="icon-button" :disabled="!project" :title="t.fit + ' · Ctrl+0'" :aria-label="t.fit" @click="fit"><Icon name="fit"/></button>
         <button class="icon-button" :disabled="!project" :aria-label="ui.zoomOut" @click="scale(.8)"><Icon name="minus"/></button>
-        <button class="zoom-value" :disabled="!project" title="100% · Ctrl+1" @click="zoom=1">{{ Math.round(zoom * 100) }}%</button>
+        <button class="zoom-value" :disabled="!project" title="100% · Ctrl+1" @click="setZoom(1)">{{ Math.round(zoom * 100) }}%</button>
         <button class="icon-button" :disabled="!project" :aria-label="ui.zoomIn" @click="scale(1.25)"><Icon name="plus"/></button>
       </div>
       <div class="toolbar-utilities">
@@ -517,7 +528,7 @@ onUnmounted(() => { stopPlayback();clearTimeout(viewPreferencesTimer); operation
           <p v-else-if="initialized" class="no-preview">{{ t.noPreview }}</p><p v-else class="no-preview" role="status">{{ui.loading}}</p>
         </div>
         <div class="floating-widgets" @pointerdown.stop @wheel.stop>
-          <NavigatorPanel v-if="project&&source==='engine'&&full.options.navigator" :language="language" :source="canvas" :width="project.manifest.width" :height="project.manifest.height" :zoom="zoom" :revision="project.revision" :busy="busy||painting||frameRendering||animationPlaying" :viewport="navigationViewport" @close="full.options.navigator=false" @navigate="navigate" @zoom="zoom=$event"/>
+          <NavigatorPanel v-if="project&&source==='engine'&&full.options.navigator" :language="language" :source="canvas" :width="project.manifest.width" :height="project.manifest.height" :zoom="zoom" :revision="project.revision" :busy="busy||painting||frameRendering||animationPlaying" :viewport="navigationViewport" @close="full.options.navigator=false" @navigate="navigate" @zoom="setZoom"/>
           <PalettePanel v-if="full.options.palette" :language="language" :color="color" :background="full.background" :swatches="swatches" :disabled="painting||busy||animationPlaying" @color="color=$event" @background="full.background=$event" @swatches="swatches=$event" @close="full.options.palette=false"/>
         </div>
       </section>

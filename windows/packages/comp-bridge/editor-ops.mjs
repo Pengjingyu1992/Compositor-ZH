@@ -8,12 +8,13 @@ import { fillPixels, strokePixels, resizePixels, applySelectedFilter, FILTERS } 
 import { supportsFillStyle, supportsVectorPath, validRGB, renderFillPixels } from './layer-styles.mjs';
 import{colorRangeMask}from'./color-range.mjs';
 import{readEdgeLevels,validateEdgeSettings,renderEdgeMask,resizeEdgeMask,decontaminateEdges}from'./edge-refinement.mjs';
+import{distortionPlan,carriedCorners,quadBounds,distortLayer}from'./distort.mjs';
 const fail = c => { throw new ProjectError(c); };
 const finite = (v,a=-300000,b=300000) => typeof v==='number' && Number.isFinite(v) && v>=a && v<=b;
 const pair = v => Array.isArray(v) && v.length===2 && v.every(n=>finite(n));
 const rgb = v => Array.isArray(v) && v.length===3 && v.every(n=>finite(n,0,255));
 const place = (w,h) => ({origin:[0,0],size:[w,h],rotation:0,flipX:false,flipY:false,sampling:'High quality'});
-export const GLOBAL_OPS = ['selection','lock','canvas','imageSize','arrange','group','merge','guides','flipCanvas','moveLayers','transformLayers','resolution'];
+export const GLOBAL_OPS = ['distort','selection','lock','canvas','imageSize','arrange','group','merge','guides','flipCanvas','moveLayers','transformLayers','resolution'];
 export function operationTargets(m,op) {
   const all=['canvas','imageSize','flipCanvas'].includes(op.kind),ids=all?m.layers.map(l=>l.id):op.ids??(op.id?[op.id]:[]);
   if(!Array.isArray(ids)||ids.length>10000||ids.some(id=>typeof id!=='string'||!m.layers.some(l=>l.id===id)))fail('stale');
@@ -26,7 +27,7 @@ export function checkPermission(data,op) {
   if(op.kind==='imageSize'&&op.width===data.manifest.width&&op.height===data.manifest.height)return;
   if(['duplicate','duplicateTree'].includes(op.kind)){const source=data.manifest.layers.find(layer=>layer.id===op.id);if(!source)fail('stale');if(source.parentID)checkPermission(data,{kind:'add',parentID:source.parentID});return;}
   const inserting=['add','importPixels'].includes(op.kind)||(['styled','fillLayer','path'].includes(op.kind)&&!op.id);
-  const dimensions=op.kind==='styled'&&op.resetTransform===true?['content','position']:['delete','group','ungroup','reorder','parent','merge','imageSize'].includes(op.kind)?['content','position','appearance','alpha']:['transform','transformMask','transformLayers','moveLayers','arrange','canvas','flipCanvas'].includes(op.kind)||op.kind==='mask'&&op.action==='link'?['position']:['appearance','effect','effects'].includes(op.kind)||op.kind==='mask'&&op.action==='toggle'?['appearance']:op.kind==='rename'?[]:['content'];
+  const dimensions=op.kind==='distort'?['content','position','alpha']:op.kind==='styled'&&op.resetTransform===true?['content','position']:['delete','group','ungroup','reorder','parent','merge','imageSize'].includes(op.kind)?['content','position','appearance','alpha']:['transform','transformMask','transformLayers','moveLayers','arrange','canvas','flipCanvas'].includes(op.kind)||op.kind==='mask'&&op.action==='link'?['position']:['appearance','effect','effects'].includes(op.kind)||op.kind==='mask'&&op.action==='toggle'?['appearance']:op.kind==='rename'?[]:['content'];
   const targets=inserting?[]:operationTargets(data.manifest,op);
   if(op.parentID){const parent=data.manifest.layers.find(l=>l.id===op.parentID);if(!parent?.isGroup)fail('invalid');targets.push(parent);}
   for(const l of targets) {
@@ -80,6 +81,19 @@ export function editorOperation(data,m,resources,target,op,codecs,descendants) {
   const layerFile=l=>`images/${l.imageFile}`, shift=(ids,dx,dy,carryAll=false)=>{for(const l of m.layers)if(ids.has(l.id.toUpperCase())){l.transform.origin=l.transform.origin.map((v,i)=>v+(i?dy:dx));if(l.maskPlacement&&(carryAll||l.maskLinked!==false))l.maskPlacement.origin=l.maskPlacement.origin.map((v,i)=>v+(i?dy:dx));}};
   const roots=ids=>m.layers.filter(l=>ids.includes(l.id)&&!m.layers.some(p=>p.id!==l.id&&ids.includes(p.id)&&descendants(p.id).has(l.id.toUpperCase())));
   switch(op.kind){
+    case 'distort':{
+      const plan=distortionPlan(m.layers,op.ids??[op.id],op.target??'content');quadBounds(op.corners);
+      const single=plan.rows.length===1&&!plan.rows[0].isGroup,shapes=plan.rows.map(row=>({row,corners:single?op.corners:carriedCorners(row.transform,plan.box,op.corners)}));
+      // Validate all image bounds before allocating any output. A failed child
+      // never publishes another child's rasterization or consumes undo history.
+      let pixels=0;for(const item of shapes)if(item.row.imageFile||item.row.maskFile){const box=quadBounds(item.corners);pixels+=box.width*box.height;if(pixels>LIMITS.pixels)fail('limit');}
+      for(const{row}of shapes){
+        const mask=row.maskFile?codecs.decodePNG(resources.get('images/'+row.maskFile)):undefined,result=distortLayer(row,plan.box,op.corners,{image:plan.target==='content'&&row.imageFile?codecs.decodePNG(resources.get(layerFile(row))):undefined,mask},plan.target);
+        if(result.image)resources.set(layerFile(row),codecs.encodePixels(result.image));if(result.mask&&result.mask!==mask)resources.set('images/'+row.maskFile,codecs.encodePixels(result.mask,true));
+        m.layers[m.layers.indexOf(row)]=result.row;
+      }
+      return true;
+    }
     case 'refineEdges':{
       if(!target.imageFile||target.isGroup||target.adjustment)fail('unsupported');
       const settings=validateEdgeSettings(op.settings),original=resources.get(layerFile(target)),image=codecs.decodePNG(original),levels=readEdgeLevels(op.mask,image.width,image.height),small=renderEdgeMask(levels,op.mask.width,op.mask.height,settings,image.width),mask=resizeEdgeMask(small,op.mask.width,op.mask.height,image.width,image.height),copy=settings.copy||settings.decontaminate>0;

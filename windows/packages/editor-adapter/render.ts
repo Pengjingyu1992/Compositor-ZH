@@ -9,15 +9,14 @@ const mode = (name?: string): EffectiveMode => ({ ...NORMAL_MODE, blend: blends[
 export function makeCanvas(w: number, h: number) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
 const context = (c: HTMLCanvasElement) => { const x = c.getContext('2d', { willReadFrequently: true }); if (!x) throw new Error('gpu'); return x; };
 export async function pngBytes(c: HTMLCanvasElement) { const b = await new Promise<Blob | null>(resolve => c.toBlob(resolve, 'image/png')); if (!b) throw new Error('asset'); return new Uint8Array(await b.arrayBuffer()); }
-export async function placedImage(url: string, p: Placement, w: number, h: number) {
-  const response = await fetch(url); if (!response.ok) throw new Error('asset');
-  const bitmap = await createImageBitmap(await response.blob());
+export async function placedImage(url: string | HTMLCanvasElement, p: Placement, w: number, h: number) {
+  let bitmap:ImageBitmap|undefined;const source=typeof url==='string'?await(async()=>{const response=await fetch(url);if(!response.ok)throw new Error('asset');return bitmap=await createImageBitmap(await response.blob());})():url;
   try {
     const canvas = makeCanvas(w,h), ctx = context(canvas), [x,y] = p.origin, [pw,ph] = p.size;
     ctx.imageSmoothingEnabled = p.sampling !== 'Nearest'; ctx.imageSmoothingQuality = 'high';
-    ctx.translate(x+pw/2,y+ph/2); ctx.rotate((p.rotation%360)*Math.PI/180); ctx.scale(p.flipX?-1:1,p.flipY?-1:1); ctx.drawImage(bitmap,-pw/2,-ph/2,pw,ph);
+    ctx.translate(x+pw/2,y+ph/2); ctx.rotate((p.rotation%360)*Math.PI/180); ctx.scale(p.flipX?-1:1,p.flipY?-1:1); ctx.drawImage(source,-pw/2,-ph/2,pw,ph);
     return canvas;
-  } finally { bitmap.close(); }
+  } finally { bitmap?.close(); }
 }
 export async function exportPlaced(url:string,p:Placement){
   const [w,h]=p.size,[x,y]=p.origin,angle=(p.rotation%360)*Math.PI/180,c=Math.abs(Math.cos(angle)),s=Math.abs(Math.sin(angle)),bw=w*c+h*s,bh=w*s+h*c;
@@ -26,7 +25,7 @@ export async function exportPlaced(url:string,p:Placement){
   const surface=await placedImage(url,{...p,origin:[x-left,y-top]},right-left,bottom-top);
   try{return {image:await pngBytes(surface),left,top};}finally{surface.width=surface.height=1;}
 }
-export function createPreviewRenderer() {
+export function createPreviewRenderer(sources?:Map<string,HTMLCanvasElement>) {
   const engine = createWebGLCompositor(), worker = new Worker(new URL('./pixels-worker.ts', import.meta.url), { type: 'module' });
   let initialized = false, failure: (() => void) | undefined;
   let live = true, width = 0, height = 0, frame = 0, requestID = 0, lossTimer: ReturnType<typeof setTimeout> | undefined;
@@ -71,7 +70,7 @@ export function createPreviewRenderer() {
       const backdrop=makeCanvas(width,height), masks=new Map<string,Uint8ClampedArray>();
       const maskFor=async(l:LayerRow)=>{
         if(!l.maskFile)return undefined;
-        if(!masks.has(l.id)){const c=await placedImage(project.urls[`images/${l.maskFile}`],l.maskPlacement??l.transform,width,height);const p=pixels(c);for(let i=0;i<p.data.length;i+=4)p.data[i]=Math.round(p.data[i]*p.data[i+3]/255);masks.set(l.id,p.data);release(c);}return masks.get(l.id);
+        if(!masks.has(l.id)){const url=project.urls[`images/${l.maskFile}`],c=await placedImage(sources?.get(url)??url,l.maskPlacement??l.transform,width,height);const p=pixels(c);for(let i=0;i<p.data.length;i+=4)p.data[i]=Math.round(p.data[i]*p.data[i+3]/255);masks.set(l.id,p.data);release(c);}return masks.get(l.id);
       };
       const cover=async(c:HTMLCanvasElement,l:LayerRow,folders:boolean,opacity=1)=>{
         const p=pixels(c), own=l.maskEnabled===false?undefined:await maskFor(l), parents:Uint8ClampedArray[]=[];
@@ -79,7 +78,7 @@ export function createPreviewRenderer() {
         for(let i=0;i<p.data.length;i+=4){let alpha=opacity*(own?own[i]/255:1);for(const mask of parents)alpha*=mask[i]/255;p.data[i+3]*=alpha;}put(c,p);
       };
       const own=async(l:LayerRow,folders=true)=>{
-        const c=l.imageFile?await placedImage(project.urls[`images/${l.imageFile}`],l.transform,width,height):makeCanvas(width,height);
+        const url=project.urls[`images/${l.imageFile}`],c=l.imageFile?await placedImage(sources?.get(url)??url,l.transform,width,height):makeCanvas(width,height);
         await cover(c,l,false);
         if(l.effects&&Object.values(l.effects).some(v=>v&&typeof v==='object'&&(v as {enabled?:boolean}).enabled!==false))put(c,await process(pixels(c),undefined,l.effects,{placement:l.transform,pixelSize:l.pixelSize}));
         if(folders)await cover(c,{...l,maskFile:undefined},true,l.effectiveOpacity);return c;

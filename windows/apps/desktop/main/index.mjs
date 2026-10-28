@@ -107,7 +107,7 @@ function nativeMenu() {
       { id: 'layer-new', label: zh ? '新建像素层' : 'New pixel layer', click: () => sendNativeCommand('editor:addPixels') },
       { id: 'layer-group', label: zh ? '新建组' : 'New group', click: () => sendNativeCommand('editor:addGroup') },
       { id: 'layer-mask', label: zh ? '添加蒙版' : 'Add mask', click: () => sendNativeCommand('editor:addMask') },
-      ...[['textOutlines','文字转轮廓','Convert text to outlines'],['newFill','新建填充图层…','New fill layer…'],['editFill','编辑填充图层…','Edit fill layer…'],['newPath','钢笔／新建路径…','Pen / New path…'],['editPath','编辑路径…','Edit path…'],['newVectorMask','新建矢量蒙版…','New vector mask…'],['editVectorMask','编辑矢量蒙版…','Edit vector mask…'],['vectorMaskFromPath','在下方图层创建矢量蒙版','Path to vector mask on layer below']].map(([name,cn,en])=>({id:`layer-${name}`,label:zh?cn:en,enabled:!!session.current&&!session.pending,click:()=>sendNativeCommand(`editor:${name}`)})),
+      ...[['distort','透视／自由扭曲…','Perspective / Free Distort…'],['textOutlines','文字转轮廓','Convert text to outlines'],['newFill','新建填充图层…','New fill layer…'],['editFill','编辑填充图层…','Edit fill layer…'],['newPath','钢笔／新建路径…','Pen / New path…'],['editPath','编辑路径…','Edit path…'],['newVectorMask','新建矢量蒙版…','New vector mask…'],['editVectorMask','编辑矢量蒙版…','Edit vector mask…'],['vectorMaskFromPath','在下方图层创建矢量蒙版','Path to vector mask on layer below']].map(([name,cn,en])=>({id:`layer-${name}`,label:zh?cn:en,enabled:!!session.current&&!session.pending,click:()=>sendNativeCommand(`editor:${name}`)})),
       { type: 'separator' },
       ...[['text','新建文字／编辑文字…','New / edit text…'],['shape','新建形状／编辑形状…','New / edit shape…'],['group','编组','Group','Ctrl+G'],['ungroup','解组','Ungroup','Ctrl+Shift+G'],['duplicate','复制图层','Duplicate layers'],['delete','删除图层','Delete layers'],['merge','合并所选图层','Merge selected layers'],['flatten','拼合图像','Flatten image'],['rasterize','栅格化','Rasterize'],['applyMask','应用蒙版','Apply mask']].map(([name,cn,en,accelerator])=>({label:zh?cn:en,accelerator,enabled:!!session.current,click:()=>sendNativeCommand('editor:'+name)})),
       { type: 'separator' },
@@ -321,7 +321,7 @@ handler('editor:textTools',async(action,payload)=>{
 });
 handler('editor:jumpHistory',(id,revision,index)=>projectRequest(async()=>{const result=session.jumpHistory(id,revision,index);nativeMenu();return result;}));
 handler('editor:edit', (id,revision,op)=>{
-  const heavy=o=>['refineEdges','stroke','fill','gradient','bucket','filter','imageSize','applyMask','selectionMask','fillLayer','path','vectorMask','filterStack','textOutlines','styled'].includes(o?.kind)||o?.kind==='selection'||(o?.kind==='batch'&&Array.isArray(o.operations)&&o.operations.some(heavy));
+  const heavy=o=>['distort','refineEdges','stroke','fill','gradient','bucket','filter','imageSize','applyMask','selectionMask','fillLayer','path','vectorMask','filterStack','textOutlines','styled'].includes(o?.kind)||o?.kind==='selection'||(o?.kind==='batch'&&Array.isArray(o.operations)&&o.operations.some(heavy));
   return projectRequest(async()=>{const result=heavy(op)?await session.editAsync(id,revision,op,buildEdit):session.edit(id,revision,op);nativeMenu();return result;});
 });
 const clipboardTokenType='electron application/osclipboard;format="org.compositorzh.clipboard-token"';

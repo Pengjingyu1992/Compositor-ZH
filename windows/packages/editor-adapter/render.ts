@@ -9,10 +9,17 @@ const mode = (name?: string): EffectiveMode => ({ ...NORMAL_MODE, blend: blends[
 export function makeCanvas(w: number, h: number) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
 const context = (c: HTMLCanvasElement) => { const x = c.getContext('2d', { willReadFrequently: true }); if (!x) throw new Error('gpu'); return x; };
 export async function pngBytes(c: HTMLCanvasElement) { const b = await new Promise<Blob | null>(resolve => c.toBlob(resolve, 'image/png')); if (!b) throw new Error('asset'); return new Uint8Array(await b.arrayBuffer()); }
-export async function placedImage(url: string | HTMLCanvasElement, p: Placement, w: number, h: number) {
+function outsideMaskTone(source:HTMLCanvasElement|ImageBitmap){
+  const surface=makeCanvas(source.width,source.height),ctx=context(surface);let total=0,count=0;
+  try{ctx.drawImage(source,0,0);const edge=(x:number,y:number,w:number,h:number)=>{const data=ctx.getImageData(x,y,w,h).data;for(let i=0;i<data.length;i+=4){total+=data[i];count++;}};
+    edge(0,0,source.width,1);if(source.height>1)edge(0,source.height-1,source.width,1);if(source.height>2){edge(0,1,1,source.height-2);if(source.width>1)edge(source.width-1,1,1,source.height-2);}return total*2>=count*255?255:0;
+  }finally{surface.width=surface.height=1;}
+}
+export async function placedImage(url: string | HTMLCanvasElement, p: Placement, w: number, h: number, outsideMask=false) {
   let bitmap:ImageBitmap|undefined;const source=typeof url==='string'?await(async()=>{const response=await fetch(url);if(!response.ok)throw new Error('asset');return bitmap=await createImageBitmap(await response.blob());})():url;
   try {
     const canvas = makeCanvas(w,h), ctx = context(canvas), [x,y] = p.origin, [pw,ph] = p.size;
+    if(outsideMask){ctx.fillStyle=outsideMaskTone(source)?'#fff':'#000';ctx.fillRect(0,0,w,h);}
     ctx.imageSmoothingEnabled = p.sampling !== 'Nearest'; ctx.imageSmoothingQuality = 'high';
     ctx.translate(x+pw/2,y+ph/2); ctx.rotate((p.rotation%360)*Math.PI/180); ctx.scale(p.flipX?-1:1,p.flipY?-1:1); ctx.drawImage(source,-pw/2,-ph/2,pw,ph);
     return canvas;
@@ -70,7 +77,7 @@ export function createPreviewRenderer(sources?:Map<string,HTMLCanvasElement>) {
       const backdrop=makeCanvas(width,height), masks=new Map<string,Uint8ClampedArray>();
       const maskFor=async(l:LayerRow)=>{
         if(!l.maskFile)return undefined;
-        if(!masks.has(l.id)){const url=project.urls[`images/${l.maskFile}`],c=await placedImage(sources?.get(url)??url,l.maskPlacement??l.transform,width,height);const p=pixels(c);for(let i=0;i<p.data.length;i+=4)p.data[i]=Math.round(p.data[i]*p.data[i+3]/255);masks.set(l.id,p.data);release(c);}return masks.get(l.id);
+        if(!masks.has(l.id)){const url=project.urls[`images/${l.maskFile}`],c=await placedImage(sources?.get(url)??url,l.maskPlacement??l.transform,width,height,!!l.maskPlacement);const p=pixels(c);for(let i=0;i<p.data.length;i+=4)p.data[i]=Math.round(p.data[i]*p.data[i+3]/255);masks.set(l.id,p.data);release(c);}return masks.get(l.id);
       };
       const cover=async(c:HTMLCanvasElement,l:LayerRow,folders:boolean,opacity=1)=>{
         const p=pixels(c), own=l.maskEnabled===false?undefined:await maskFor(l), parents:Uint8ClampedArray[]=[];

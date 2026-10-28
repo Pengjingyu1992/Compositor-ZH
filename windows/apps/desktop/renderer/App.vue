@@ -68,7 +68,7 @@ function canCommand(id:string){
   if(id==='ungroup')return !!row?.isGroup;if(id==='group')return !!full.ids.length;
   if(id==='editFill')return !!row?.fill;if(id==='editPath')return !!row?.shape?.vector;
   if(id==='editVectorMask')return !!row?.vectorMask;if(id==='textOutlines')return !!row?.text;
-  if(['filter','filterStack','advancedLiquify','effects','rasterize','copy','cut','duplicate','delete','applyMask','newVectorMask','vectorMaskFromPath','addMask'].includes(id))return !!row?.imageFile||['duplicate','delete'].includes(id)&&!!row?.isGroup;
+  if(['cameraRaw','filter','filterStack','advancedLiquify','effects','rasterize','copy','cut','duplicate','delete','applyMask','newVectorMask','vectorMaskFromPath','addMask'].includes(id))return !!row?.imageFile||['duplicate','delete'].includes(id)&&!!row?.isGroup;
   return true;
 }
 const finderCommands=computed(()=>commandCatalog.map(([id,zh,en,...keys])=>({id,zh,en,shortcut:keys[0],enabled:canCommand(id)})));

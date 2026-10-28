@@ -19,3 +19,7 @@ There is no telemetry, hosted editing service, account, automatic updater, or bu
 - **sharp 0.35.5**: Apache-2.0; ICC-aware image conversion via Little CMS and libvips. Platform-specific shared libvips libraries are LGPL-3.0-or-later with additional component licenses. See `resources/licenses/sharp-libvips/` for license texts, upstream source/build references and library replacement rights. Native libraries remain outside app.asar.
 
 - **fontkit 2.0.4**: MIT (Brotli decoder portions Apache-2.0), Devon Govett and contributors; local installed-font shaping and vector outlines. Its pinned dependencies and notices are included in `resources/licenses/`. System font files are read locally and are not included in projects or distribution packages.
+
+## Portable Camera Raw kernels
+
+The Windows/Linux renderer includes an import-free WebAssembly build of this project's MIT-licensed macOS `f8b1457` color/lens kernels. Source, source/binary SHA-256 and reproducible Clang/LLD 19.1.7 build instructions are retained in `native/portable-color`. The native macOS source is unchanged. Runtime allocation/math code from wasi-libc `574b88d` (including musl notices) and LLVM compiler-rt 19.1.7 is covered by the full inventory and license texts in `licenses/portable-color`, copied into every installation package. The module has no filesystem/network imports and does not bundle the compiler.

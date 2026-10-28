@@ -201,7 +201,7 @@ test('all supported filter previews and applications retain a valid document', a
       await page.mouse.move(box.x+box.width*.4,box.y+box.height*.4);await page.mouse.down();await page.mouse.move(box.x+box.width*.6,box.y+box.height*.6,{steps:4});await page.mouse.up();await ready();
     }
     await command('filter');await page.getByTestId('filter-kind').selectOption(kind);if(kind==='Color Lookup')await page.getByTestId('lut-file').setInputFiles({name:'identity.cube',mimeType:'text/plain',buffer:Buffer.from('LUT_1D_SIZE 2\n0 0 0\n1 1 1')});await page.getByTestId('update-preview').click();await expect(page.getByTestId('apply-editor')).toBeEnabled();
-    await expect(page.locator('.editor-preview img')).toBeVisible();await page.getByTestId('apply-editor').click();await ready();
+    await expect(kind==='Camera Raw Filter'?page.getByTestId('raw-sample'):page.locator('.editor-preview img')).toBeVisible();await page.getByTestId('apply-editor').click();await ready();
     await expect(page.getByTestId('rendered-canvas')).toBeVisible();
     await chooseOpen(source);await page.getByTestId('open-project').click();await expect(page.getByTestId('open-project')).toBeEnabled();await expect(page.getByTestId('rendered-canvas')).toBeVisible();await page.locator('.layer-select').filter({hasText:'Mint / 薄荷'}).click();await ready();
   });

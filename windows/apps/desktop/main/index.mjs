@@ -47,7 +47,7 @@ let closing = false, closePending = false;
 let preferenceQueue = Promise.resolve();
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml' };
 const headers = {
-  'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-src 'none'",
+  'Content-Security-Policy': "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-src 'none'",
   'X-Content-Type-Options': 'nosniff',
   'Cache-Control': 'no-store'
 };
@@ -111,7 +111,7 @@ function nativeMenu() {
       { label: zh ? '图层属性' : 'Layer properties', click: () => sendNativeCommand('editor:properties') },
       { label: zh ? '图层效果' : 'Layer effects', click: () => sendNativeCommand('editor:effects') }
     ] },
-    {label:zh?'滤镜':'Filter',submenu:[{id:'filter-repeat',label:zh?'重复上次滤镜':'Repeat last filter',accelerator:'Ctrl+Alt+F',enabled:!!session.current,click:()=>sendNativeCommand('editor:repeatFilter')},... [['filterStack','可编辑滤镜…','Editable filters…'],['advancedLiquify','高级液化…','Advanced Liquify…']].map(([name,cn,en])=>({id:`filter-${name}`,label:zh?cn:en,enabled:!!session.current&&!session.pending,click:()=>sendNativeCommand(`editor:${name}`)})),{label:zh?'滤镜图库…':'Filter gallery…',enabled:!!session.current,click:()=>sendNativeCommand('editor:filter')}]},
+    {label:zh?'滤镜':'Filter',submenu:[{id:'filter-repeat',label:zh?'重复上次滤镜':'Repeat last filter',accelerator:'Ctrl+Alt+F',enabled:!!session.current,click:()=>sendNativeCommand('editor:repeatFilter')},... [['cameraRaw','Camera Raw 滤镜…','Camera Raw Filter…'],['filterStack','可编辑滤镜…','Editable filters…'],['advancedLiquify','高级液化…','Advanced Liquify…']].map(([name,cn,en])=>({id:`filter-${name}`,label:zh?cn:en,enabled:!!session.current&&!session.pending,click:()=>sendNativeCommand(`editor:${name}`)})),{label:zh?'滤镜图库…':'Filter gallery…',enabled:!!session.current,click:()=>sendNativeCommand('editor:filter')}]},
     { label: zh ? '帮助' : 'Help', submenu: [
       {id:'command-finder',label:zh?'查找命令…':'Find a command…',accelerator:'Ctrl+Shift+P',click:()=>sendNativeCommand('editor:commandFinder')},
       {label:zh?'下一个标签页':'Next tab',accelerator:'Ctrl+Tab',click:()=>sendNativeCommand('editor:tabNext')},{label:zh?'上一个标签页':'Previous tab',accelerator:'Ctrl+Shift+Tab',click:()=>sendNativeCommand('editor:tabPrevious')},

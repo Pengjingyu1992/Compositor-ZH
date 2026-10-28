@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "reference": "macOS f8b1457",
+  "compiler": "Debian clang version 19.1.7 (3+b1)",
+  "sha256": "56a496f99e45092f9ef92d1bdc158ad25d614f97339c06a3f739ccc9dfdebe1d",
+  "bytes": 49386,
+  "inputs": {
+    "AdjustPixels.c": "f43b8991f0216cae34e2a620079868fdb7e3ff30f061ca9e2827d671af830b32",
+    "AdjustPixels.h": "92a1c8d7cd616c31c81c047e0049dbb371c2d83c9c0f50a698f6aacfc8b74e2a",
+    "LensPixels.c": "a59225d0561e41dd1f95dffb6b3519a98ef26ba483b4b6dbe8e7ee2918d5f081",
+    "LensPixels.h": "81d60f653de4f5d36d23cfe442b0c23ced1dfb500c7bbcb0c7fabed36904c73f",
+    "FilterCancellation.h": "6bbfeef367791166438adecc712732408d4d888e8d2821abfad8f9c10de0d4a3",
+    "bridge.c": "16df92968bed4b7084f4419cc1a8a80559693277b0c0d7dd7e191e50eff1a287"
+  }
+}

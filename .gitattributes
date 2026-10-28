@@ -1,0 +1,3 @@
+# Portable kernel source hashes must be identical on Windows and Linux.
+windows/native/portable-color/* text eol=lf
+windows/packages/comp-bridge/portable-color-wasm.mjs text eol=lf

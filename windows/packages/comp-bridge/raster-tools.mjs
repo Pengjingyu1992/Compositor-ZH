@@ -1,6 +1,7 @@
 import { limit, toDocument, toLocal, symmetryPoints, selectionCoverage, floodMask, validSurface } from './editor-math.mjs';
 import { adjustedPixels, blurPlane } from '../editor-adapter/pixels.mjs';
 import { posterColorFilter } from './poster-color.mjs';
+import{cameraRawPixels}from'./camera-raw.mjs';
 export const FILTERS = ['Gaussian Blur','Motion Blur','Add Noise','Sharpen','Mosaic','Dither','Vignette','Bloom / Glow','Tonal Contrast','Lens Correction','Camera Raw Filter','Remove Background','Content-Aware Fill','Curves','Exposure','Gradient Map','Grain','Black & White','Color Balance','Invert','Desaturate','Color Halftone','Selective Color','Channel Mixer','Color Lookup'];
 const color = v => v.map(n=>limit(n,0,255));
 function blend(data,at,rgb,alpha,erase=false,lockAlpha=false) {
@@ -90,9 +91,10 @@ export function resizePixels(image,w,h,nearestNeighbor=false) {
     for(let c=0;c<3;c++)out[at+c]=sum[3]?sum[c]/sum[3]:0;out[at+3]=sum[3]*255;
   }return {width:w,height:h,data:out};
 }
-export function filterPixels(image,kind,s={}) {
+export function filterPixels(image,kind,s={},preview) {
   if(!FILTERS.includes(kind))throw new Error('invalid');
   if(['Color Halftone','Selective Color','Channel Mixer','Color Lookup'].includes(kind))return posterColorFilter(image,kind,s);
+  if(kind==='Camera Raw Filter')return cameraRawPixels(image,s.cameraRaw??{exposure:s.exposure??0,contrast:s.contrast??0,saturation:s.saturation??0,temperature:s.temperature??0},preview);
   const {width:w,height:h,data:src}=image,data=new Uint8ClampedArray(src),amount=s.amount??50,radius=s.radius??4;
   const adjustments=['Gaussian Blur','Motion Blur','Add Noise','Curves','Exposure','Gradient Map','Grain','Black & White','Color Balance','Invert'];
   if(adjustments.includes(kind))return adjustedPixels(image,{...s,kind,blurRadius:s.blurRadius??radius,motionAngle:s.motionAngle??s.angle??0,motionDistance:s.motionDistance??s.distance??10,noiseAmount:s.noiseAmount??amount,noiseSeed:s.noiseSeed??s.seed??0});
@@ -112,8 +114,6 @@ export function filterPixels(image,kind,s={}) {
     for(let i=0;i<w*h;i++)for(let c=0;c<3;c++)data[i*4+c]=kind==='Bloom / Glow'?src[i*4+c]+blurred[c][i]*amount/100:src[i*4+c]+(src[i*4+c]-blurred[c][i])*amount/100;
   }
   if(kind==='Vignette')for(let y=0;y<h;y++)for(let x=0;x<w;x++){const i=(y*w+x)*4,d=Math.hypot((x-w/2)/Math.max(1,w/2),(y-h/2)/Math.max(1,h/2)),v=limit((d-(s.midpoint??.35))/(1-(s.midpoint??.35)),0,1);for(let c=0;c<3;c++)data[i+c]=src[i+c]*(1-v*v*amount/100);}
-  if(kind==='Camera Raw Filter')for(let i=0;i<data.length;i+=4){const gray=src[i]*.2126+src[i+1]*.7152+src[i+2]*.0722;
-    for(let c=0;c<3;c++){let value=src[i+c]*2**(s.exposure??0);value=128+(value-128)*(1+(s.contrast??0)/100);value=gray+(value-gray)*(1+(s.saturation??0)/100);value+=(c===0?1:c===2?-1:0)*(s.temperature??0)*.5;data[i+c]=value;}}
   if(kind==='Lens Correction')for(let y=0;y<h;y++)for(let x=0;x<w;x++){const dx=(x-w/2)/(w/2),dy=(y-h/2)/(h/2),scale=1+(s.distortion??0)/100*(dx*dx+dy*dy),p=nearest(src,w,h,w/2+(x-w/2)*scale,h/2+(y-h/2)*scale);data.set(p??[0,0,0,0],(y*w+x)*4);}
   if(kind==='Remove Background'){
     const visited=new Uint8Array(w*h),queue=new Int32Array(w*h);let head=0,tail=0;const tolerance=s.tolerance??28,reference=[0,0,0],samples=[[0,0],[w-1,0],[0,h-1],[w-1,h-1]].map(([x,y])=>(y*w+x)*4);
@@ -133,8 +133,8 @@ export function inpaintPixels(image,selection,t) {
   while(head<tail){const i=queue[head++],next=neighbors(i),samples=next.filter(n=>known[n]===1);if(!samples.length)continue;for(let c=0;c<4;c++)data[i*4+c]=samples.reduce((v,n)=>v+data[n*4+c],0)/samples.length;known[i]=1;for(const n of next)if(!known[n]){known[n]=2;queue[tail++]=n;}}
   return {width:w,height:h,data};
 }
-export function applySelectedFilter(image,t,selection,kind,settings) {
-  const changed=kind==='Content-Aware Fill'?inpaintPixels(image,selection,t):filterPixels(image,kind,settings),out=new Uint8ClampedArray(image.data);
+export function applySelectedFilter(image,t,selection,kind,settings,preview) {
+  const changed=kind==='Content-Aware Fill'?inpaintPixels(image,selection,t):filterPixels(image,kind,settings,preview),out=new Uint8ClampedArray(image.data);
   for(let y=0;y<image.height;y++)for(let x=0;x<image.width;x++){const a=selectionCoverage(selection,toDocument([x+.5,y+.5],t,image.width,image.height)),at=(y*image.width+x)*4;if(!a)continue;const before=image.data[at+3]/255,after=changed.data[at+3]/255,alpha=before*(1-a)+after*a;for(let c=0;c<3;c++)out[at+c]=alpha?(image.data[at+c]*before*(1-a)+changed.data[at+c]*after*a)/alpha:0;out[at+3]=alpha*255;}
   return {width:image.width,height:image.height,data:out};
 }

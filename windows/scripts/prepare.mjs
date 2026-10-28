@@ -2,6 +2,8 @@ import { readFile, writeFile, mkdir, readdir, copyFile, cp } from 'node:fs/promi
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
+import{verifyPortableColor}from'./verify-portable-color.mjs';
+await verifyPortableColor();
 const root = fileURLToPath(new URL('../', import.meta.url));
 const icon = await readFile(path.join(root, '../Compositor/Assets.xcassets/AppIcon.appiconset/app-icon-256.png'));
 await mkdir(path.join(root, 'assets'), { recursive: true });
@@ -53,6 +55,9 @@ await license('ag-psd'); await license('pngjs');
 await license('gifenc'); await license('omggif');
 await license('sharp'); await license('fontkit');
 await cp(path.join(root, 'licenses/sharp-libvips'), path.join(destination, 'sharp-libvips'), { recursive: true });
+await cp(path.join(root,'licenses/portable-color'),path.join(destination,'portable-color'),{recursive:true});
+index.push({name:'portable-color/wasi-libc',version:'0.0~git20241209.574b88d-2',license:'SEE LICENSE IN portable-color/wasi-libc-copyright.txt',notices:'portable-color/wasi-libc-copyright.txt'});
+index.push({name:'portable-color/compiler-rt',version:'19.1.7',license:'Apache-2.0 WITH LLVM-exception',notices:'portable-color/compiler-rt-copyright.txt'});
 const nativePlatform = `${process.platform}-${process.arch}`;
 const sharpMetadata = JSON.parse(await readFile(path.join(root, 'node_modules/sharp/package.json')));
 for (const name of [`@img/sharp-${nativePlatform}`, `@img/sharp-libvips-${nativePlatform}`].filter(name => sharpMetadata.optionalDependencies[name])) {

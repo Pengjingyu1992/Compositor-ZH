@@ -5,9 +5,9 @@ on:
   workflow_call:
   push:
     branches: ['**']
-    paths: ['windows/**', 'docs/windows-*.md', 'docs/project-format.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md', '.github/workflows/windows-*.yml']
+    paths: ['.gitattributes', 'windows/**', 'docs/windows-*.md', 'docs/project-format.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md', '.github/workflows/windows-*.yml']
   pull_request:
-    paths: ['windows/**', 'docs/windows-*.md', 'docs/project-format.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md', '.github/workflows/windows-*.yml']
+    paths: ['.gitattributes', 'windows/**', 'docs/windows-*.md', 'docs/project-format.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md', '.github/workflows/windows-*.yml']
 
 concurrency:
   group: windows-${{ github.workflow }}-${{ github.ref }}

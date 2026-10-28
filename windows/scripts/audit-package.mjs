@@ -13,6 +13,10 @@ const linux = process.argv.includes('--linux');
 const directoryFlag = process.argv.indexOf('--directory');
 const directory = path.resolve(directoryFlag >= 0 ? process.argv[directoryFlag + 1] : linux ? '../linux/release' : 'release'), unpacked = path.join(directory, linux ? 'linux-unpacked' : 'win-unpacked');
 const asar = path.join(unpacked, 'resources/app.asar');
+const portableSource=extractFile(asar,'packages/comp-bridge/portable-color-wasm.mjs').toString('utf8'),portableEncoded=portableSource.match(/PORTABLE_COLOR_BASE64=("[A-Za-z0-9+/=]+")/),portableHash=portableSource.match(/PORTABLE_COLOR_SHA256="([a-f0-9]{64})"/);
+if(!portableEncoded||!portableHash)throw new Error('Missing portable color module');
+const portableBytes=Buffer.from(JSON.parse(portableEncoded[1]),'base64');
+if(createHash('sha256').update(portableBytes).digest('hex')!==portableHash[1]||WebAssembly.Module.imports(new WebAssembly.Module(portableBytes)).length)throw new Error('Invalid portable color module or host imports');
 const entries = listPackage(asar).map(p => p.replaceAll('\\', '/'));
 const runtimeModule = /^\/node_modules\/(?:sharp|semver|detect-libc|@img\/(?:colour|sharp-(?:libvips-)?(?:linux|win32)-x64))(?:\/|$)/;
 const forbidden = entries.filter(p => /(?:\.(?:ttf|otf|ttc|woff2?)$|\.map$|\/tests\/|\.comp\/|\.env|\.git\/|\/release\/)/.test(p) || p.includes('/node_modules/') && p !== '/node_modules/@img' && !runtimeModule.test(p));
@@ -24,7 +28,7 @@ for (const entry of entries.filter(p => /\.(?:js|mjs|cjs|json|html|css)$/.test(p
 }
 for (const license of ['LICENSE.electron.txt', 'LICENSES.chromium.html']) await readFile(path.join(unpacked, license));
 const notices = await readdir(path.join(unpacked, 'resources/licenses'));
-for (const name of ['fontkit-LICENSE','dfa-LICENSE','brotli-LICENSE','brotli-Apache-2.0.txt','sharp-LICENSE', 'detect-libc-LICENSE', 'semver-LICENSE', 'img-colour-LICENSE.md', 'sharp-libvips/LGPL-3.0.txt', 'sharp-libvips/GPL-3.0.txt', 'sharp-libvips/SOURCES.md']) {
+for (const name of ['portable-color/Compositor-MIT.txt','portable-color/wasi-libc-copyright.txt','portable-color/compiler-rt-copyright.txt','portable-color/Apache-2.0.txt','portable-color/CC0-1.0.txt','portable-color/SOURCES.md','fontkit-LICENSE','dfa-LICENSE','brotli-LICENSE','brotli-Apache-2.0.txt','sharp-LICENSE', 'detect-libc-LICENSE', 'semver-LICENSE', 'img-colour-LICENSE.md', 'sharp-libvips/LGPL-3.0.txt', 'sharp-libvips/GPL-3.0.txt', 'sharp-libvips/SOURCES.md']) {
   await readFile(path.join(unpacked, 'resources/licenses', name));
 }
 const nativePlatform = linux ? 'linux-x64' : 'win32-x64';

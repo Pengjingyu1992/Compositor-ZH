@@ -30,8 +30,11 @@
 - [中文紧凑窗口](implemented-compact.png)
 - [重启后的欢迎界面](implemented-welcome.png)
 
-251 项单元测试、TypeScript、源码隐私审查与独立 PSD／图片读取通过。第二候选的 16 项定向 GUI 全部通过；在此基础上增加跟随系统、中文长名称和紧凑窗口完整可见断言。最终应用新增的外观／中文／紧凑窗口 GUI 已通过（包括关闭过渡动画的稳定截图复查）。同一应用完整 GUI 运行中，两个平台的云端构建结果将单独记录；未完成的检查不计为通过。
+251 项单元测试、TypeScript、源码隐私审查与独立 PSD／图片读取通过。最终同一应用完整 **83/83 GUI 通过**，无跳过、失败或重试；新增的跟随系统、中文长名称和紧凑窗口完整可见断言也已通过。主要文字／背景对比度八组均达到 4.5:1；正文为浅色 14.23:1、深色 11.64:1。
 
-本机最终应用 ASAR SHA-256：`16adac9ea3c986a849f1ae9e72e641bb64ec04037c9b272b19557919d4243248`。未解包应用源码审查覆盖 213 个条目、161 个文本文件，私有模式匹配为 0；安装器／容器结构和完整许可证检查由平台 CI 另行执行。
+- [Windows 云端 40738733764](https://github.com/Pengjingyu1992/Compositor-ZH/actions/runs/40738733764)：成功，80 项 GUI 通过、3 项 Linux 专属跳过；NSIS/ZIP、校验值、许可证和包隐私审查通过。
+- [Linux 云端 40738733928](https://github.com/Pengjingyu1992/Compositor-ZH/actions/runs/40738733928)：成功，83/83 GUI；提取后的 AppImage 启动器、三格式安装包、校验值、许可证和包隐私审查通过。
+
+本机最终应用 ASAR SHA-256：`16adac9ea3c986a849f1ae9e72e641bb64ec04037c9b272b19557919d4243248`。应用资源审查覆盖 213 个条目、161 个文本文件，私有模式匹配为 0。详细记录与原有 macOS CI 异常说明见 [验证记录](../../docs/desktop-ui-verification.md)。
 
 真实桌面的高 DPI、输入法、触控笔和硬件 GPU 仍需各平台设备验收。没有发布新正式版，也没有修改 macOS 的源码、工程、发行或全局 Latest。整体功能对齐的剩余项仍见 [功能对照表](../../docs/windows-linux-macos-parity.md)。

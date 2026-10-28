@@ -92,7 +92,10 @@ test('selection panel buttons invalidate their overlay and crop, trim and both c
     if(covered) await expect.poll(()=>alpha(...point)).toBeGreaterThan(0); else await expect.poll(()=>alpha(...point)).toBe(0);
   }
   await panel.getByRole('button',{name:'Deselect',exact:true}).click(); await ready();
-  await command('selectAll'); await command('cropSelection'); expect([(await save()).manifest.width,(await save()).manifest.height]).toEqual([320,240]);
+  await page.mouse.move(box.x+box.width*.2,box.y+box.height*.25); await page.mouse.down(); await page.mouse.move(box.x+box.width*.6,box.y+box.height*.7,{steps:4}); await page.mouse.up(); await ready();
+  const selectedSize=await page.locator('.paint-overlay').evaluate(c=>{const {data}=c.getContext('2d').getImageData(0,0,c.width,c.height);let left=c.width,top=c.height,right=-1,bottom=-1;for(let y=0;y<c.height;y++)for(let x=0;x<c.width;x++)if(data[(y*c.width+x)*4+3]){left=Math.min(left,x);top=Math.min(top,y);right=Math.max(right,x);bottom=Math.max(bottom,y);}return [right-left+1,bottom-top+1];});
+  expect(selectedSize[0]).toBeLessThan(320); expect(selectedSize[1]).toBeLessThan(240); await command('cropSelection');
+  const cropped=(await save()).manifest; expect([cropped.width,cropped.height]).toEqual(selectedSize); await undo();
   await command('deselect');
   for (const [name,axis,expected] of [['flipCanvasH',0,[270,210,60]],['flipCanvasV',1,[190,100,60]]]) {
     await command(name); const m=(await save()).manifest;

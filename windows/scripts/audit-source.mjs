@@ -2,17 +2,11 @@ import { execFileSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {sensitive}from'./private-patterns.mjs';
+export {sensitive}from'./private-patterns.mjs';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const files = [...new Set(execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z'], { cwd: root }).toString().split('\0').filter(Boolean))];
 const findings = [];
-const homePath = /(?:\/(?:Users|home)\/[^/\\\s]+(?:\/|$)|\/root(?:\/|$)|[A-Z]:\\Users\\[^\\\s]+(?:\\|$))/i;
-const credential = /(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,}|sk-(?:proj-)?[A-Za-z0-9_-]{30,}|xox[baprs]-[A-Za-z0-9-]{20,}|AIza[0-9A-Za-z_-]{35}|AKIA[0-9A-Z]{16})/;
-export const sensitive = [
-  homePath,
-  credential,
-  /-----BEGIN (?:RSA |EC |OPENSSH |DSA |ENCRYPTED )?PRIVATE KEY-----/,
-  /(?:api[_-]?key|access[_-]?token|password)\s*[:=]\s*["'][A-Za-z0-9_\-]{20,}["']/i
-];
 for (const file of files) {
   if (!/\.(?:mjs|cjs|ts|vue|md|yml|json|txt|py)$/.test(file) || !(file.startsWith('windows/') || file.startsWith('linux/') || /^docs\/(windows|linux)-/.test(file) || /\/(windows|linux)-/.test(file) || /^\.github\/workflows\/linux-/.test(file))) continue;
   const text = await readFile(path.join(root, file), 'utf8');

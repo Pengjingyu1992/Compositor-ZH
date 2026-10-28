@@ -2,6 +2,8 @@ import { readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { listPackage, extractFile } from '@electron/asar';
+import {sensitive}from'./private-patterns.mjs';
+import {verifyPortableColor}from'./verify-portable-color.mjs';
 
 process.on('uncaughtException', error => {
   const message = String(error.message).replaceAll('%', '%25').replaceAll('\r', '%0D').replaceAll('\n', '%0A');
@@ -11,20 +13,24 @@ process.on('uncaughtException', error => {
 
 const linux = process.argv.includes('--linux');
 const directoryFlag = process.argv.indexOf('--directory');
+const guiReportFlag=process.argv.indexOf('--gui-report');
+const guiReport=guiReportFlag>=0?process.argv[guiReportFlag+1]:'playwright-report/smoke-results.json';
+if(guiReportFlag>=0&&(!guiReport||guiReport.startsWith('--')))throw new Error('Expected a GUI report path');
 const directory = path.resolve(directoryFlag >= 0 ? process.argv[directoryFlag + 1] : linux ? '../linux/release' : 'release'), unpacked = path.join(directory, linux ? 'linux-unpacked' : 'win-unpacked');
 const asar = path.join(unpacked, 'resources/app.asar');
 const portableSource=extractFile(asar,path.join('packages','comp-bridge','portable-color-wasm.mjs')).toString('utf8'),portableEncoded=portableSource.match(/PORTABLE_COLOR_BASE64=("[A-Za-z0-9+/=]+")/),portableHash=portableSource.match(/PORTABLE_COLOR_SHA256="([a-f0-9]{64})"/);
 if(!portableEncoded||!portableHash)throw new Error('Missing portable color module');
 const portableBytes=Buffer.from(JSON.parse(portableEncoded[1]),'base64');
-if(createHash('sha256').update(portableBytes).digest('hex')!==portableHash[1]||WebAssembly.Module.imports(new WebAssembly.Module(portableBytes)).length)throw new Error('Invalid portable color module or host imports');
+const portableMetadata=await verifyPortableColor();
+if(portableHash[1]!==portableMetadata.sha256||createHash('sha256').update(portableBytes).digest('hex')!==portableHash[1]||WebAssembly.Module.imports(new WebAssembly.Module(portableBytes)).length)throw new Error('Invalid portable color module or host imports');
 const entries = listPackage(asar).map(p => p.replaceAll('\\', '/'));
 const runtimeModule = /^\/node_modules\/(?:sharp|semver|detect-libc|@img\/(?:colour|sharp-(?:libvips-)?(?:linux|win32)-x64))(?:\/|$)/;
 const forbidden = entries.filter(p => /(?:\.(?:ttf|otf|ttc|woff2?)$|\.map$|\/tests\/|\.comp\/|\.env|\.git\/|\/release\/)/.test(p) || p.includes('/node_modules/') && p !== '/node_modules/@img' && !runtimeModule.test(p));
 if (forbidden.length) throw new Error(`Unexpected packaged files: ${forbidden.join(', ')}`);
-const privatePath = /(?:\/(?:Users|home)\/[^/\\\s]+(?:\/|$)|\/root(?:\/|$)|[A-Z]:\\Users\\[^\\\s]+(?:\\|$)|gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,}|sk-(?:proj-)?[A-Za-z0-9_-]{30,}|xox[baprs]-[A-Za-z0-9-]{20,}|AIza[0-9A-Za-z_-]{35}|AKIA[0-9A-Z]{16}|-----BEGIN (?:RSA |EC |OPENSSH |DSA |ENCRYPTED )?PRIVATE KEY-----|(?:api[_-]?key|access[_-]?token|password)\s*[:=]\s*["'][A-Za-z0-9_\-]{20,}["'])/i;
 for (const entry of entries.filter(p => /\.(?:js|mjs|cjs|json|html|css)$/.test(p))) {
   const filename = entry.replace(/^\//, '').replaceAll('/', path.sep);
-  if (privatePath.test(extractFile(asar, filename).toString('utf8'))) throw new Error(`Potential private path or credential pattern in ${entry}`);
+  const source=extractFile(asar, filename).toString('utf8');
+  if (sensitive.some(pattern=>pattern.test(source))) throw new Error(`Potential private path or credential pattern in ${entry}`);
 }
 for (const license of ['LICENSE.electron.txt', 'LICENSES.chromium.html']) await readFile(path.join(unpacked, license));
 const notices = await readdir(path.join(unpacked, 'resources/licenses'));
@@ -55,9 +61,10 @@ if (linux) {
   const { inspectLinuxArtifacts } = await import('../../linux/audit-artifacts.mjs');
   artifactChecks = await inspectLinuxArtifacts(directory, artifacts);
   try {
-    const full = JSON.parse(await readFile('playwright-report/smoke-results.json', 'utf8')), { stats } = full;
+    const full = JSON.parse(await readFile(guiReport, 'utf8')), { stats } = full;
     guiChecks = { passed: stats.expected, failed: stats.unexpected, skipped: stats.skipped };
     if (stats.unexpected) {
+      if(guiReportFlag>=0)throw new Error('The selected GUI report contains failed checks');
       try {
         const recheck = JSON.parse(await readFile('playwright-report/smoke-recheck-results.json', 'utf8'));
         const specs = suites => suites.flatMap(suite => [...(suite.specs ?? []), ...specs(suite.suites ?? [])]);
@@ -70,7 +77,8 @@ if (linux) {
         guiRechecks = { passed: recheck.stats.expected, failed: 0, skipped: 0, allFailedChecksRechecked, applicationSHA256, fullRunReport: 'windows/playwright-report/smoke-results.json', correctiveRunReport: 'windows/playwright-report/smoke-recheck-results.json' };
       } catch (error) { if (error.code !== 'ENOENT') throw error; }
     }
-  } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  } catch (error) { if (guiReportFlag>=0||error.code !== 'ENOENT') throw error; }
+  if(guiChecks?.failed&&!guiRechecks)throw new Error('GUI checks failed without a valid corrective report for this build');
 }
 await writeFile(path.join(directory, 'PACKAGE-REVIEW.json'), JSON.stringify({ platform: linux ? 'Linux x64' : 'Windows x64', sourceCommit: process.env.GITHUB_SHA ?? 'manual build', readOnly: false, editing: 'revision-bound operations; staged save with backup and journal', packagedEntries: entries.length, sourceMaps: false, privatePatternMatches: 0, bundledNotices: notices.sort(), artifacts, ...(linux ? { realLinuxDesktopAcceptance: 'pending', artifactChecks, guiChecks, ...(guiRechecks ? { guiRechecks } : {}) } : { realWindows10And11Acceptance: 'pending', localTests: 'not run; cloud checks only' }) }, null, 2) + '\n');
 console.log('Packaged source and license review passed. SHA256SUMS.txt written.');

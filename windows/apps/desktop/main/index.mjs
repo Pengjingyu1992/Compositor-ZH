@@ -20,6 +20,7 @@ import { OUTPUT_FORMATS, validateCMYKProfile } from '../../../packages/platform/
 import { desktopEdition } from '../../../packages/platform/desktop.mjs';
 import {BatchExportRun}from'../../../packages/platform/batch-export.mjs';
 import {captureLayers}from'../../../packages/platform/layer-clipboard.mjs';
+import {ImageImportRun,insertImportedImage}from'../../../packages/platform/image-import.mjs';
 
 const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 const RENDERER = path.join(ROOT, 'out', 'renderer');
@@ -40,6 +41,7 @@ const viewPreferences=new ViewPreferences(app.getPath('userData'));
 const workspace=new ProjectWorkspace(readProject,{codecs,recovery,journalDirectory});
 let session=workspace.active;const recentProjects=new RecentProjects(app.getPath('userData'));
 let batchJob;
+let imageImportJob;
 async function stopBatch(job=batchJob){if(!job)return;clearTimeout(job.timer);await job.run.cancel();if(batchJob===job){batchJob=undefined;job.owner.pending=false;nativeMenu();}}
 function touchBatch(job){clearTimeout(job.timer);job.timer=setTimeout(()=>{void stopBatch(job).catch(()=>{});},180000);job.timer.unref();}
 let rendererReady=false,pendingNativeCommand;
@@ -196,12 +198,12 @@ win = new BrowserWindow({
 win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 win.webContents.on('will-navigate', (event, url) => { if (url !== HOME) event.preventDefault(); });
 win.webContents.on('will-attach-webview', event => event.preventDefault());
-win.webContents.on('render-process-gone',()=>{void stopBatch().catch(()=>{});});
+win.webContents.on('render-process-gone',()=>{imageImportJob?.run.cancel();void stopBatch().catch(()=>{});});
 win.on('focus',()=>{if(rendererReady&&!workspace.busy)win.webContents.send('editor:externalCheck');});
 win.on('close', event => {
   if (closing) return;
   event.preventDefault(); if (closePending) return; closePending = true;
-  const waitForIdle = async () => {await stopBatch();while(workspace.busy)await new Promise(resolve=>setTimeout(resolve,100));for(const target of workspace.sessions)if(!(await canLeave(target)))return false;return true;};
+  const waitForIdle = async () => {imageImportJob?.run.cancel();await stopBatch();while(workspace.busy)await new Promise(resolve=>setTimeout(resolve,100));for(const target of workspace.sessions)if(!(await canLeave(target)))return false;return true;};
   waitForIdle().then(async ok => { if (ok) { for(const target of workspace.sessions)await clearRecovery(target);await viewPreferences.queue.catch(()=>{});await recentProjects.queue.catch(()=>{});closing = true; win.close(); } }).catch(() => {}).finally(() => closePending = false);
 });
 win.on('closed', () => {for(const target of workspace.sessions)target.close(); win = null; });
@@ -223,6 +225,8 @@ handler('viewer:drop', async location => {
   if (typeof location !== 'string' || !path.isAbsolute(location) || location.length > 32768 || path.extname(location).toLowerCase() !== '.comp') return { error: 'path' };
   if (!(await canLeave())) return { canceled: true }; return projectRequest(() => session.open(() => location));
 });
+handler('viewer:dropFiles',(records,payload)=>importImageRecords(records,payload));
+handler('viewer:cancelImport',jobID=>{if(imageImportJob?.run.id===jobID)imageImportJob.run.cancel();return {};});
 handler('viewer:reload', async id => { if (!(await canLeave())) return { canceled: true }; return projectRequest(() => session.reload(id)); });
 handler('viewer:close',async()=>{if(!session.current)return{closed:true,workspace:workspace.state()};if(!(await canLeave()))return{closed:false};await clearRecovery();const result=workspace.close(workspace.activeID,true);session=workspace.active;nativeMenu();return{...result,workspace:workspace.state()};});
 handler('editor:new', async (w, h) => { if (!(await canLeave())) return { canceled: true }; return projectRequest(() => Promise.resolve(session.create(w, h))); });
@@ -270,22 +274,39 @@ function buildEdit(data,op) {
     worker.once('message',r=>{clearTimeout(timer);worker.terminate();if(r.error)reject(new ProjectError(r.error));else resolve(r.data);});worker.once('error',()=>{clearTimeout(timer);reject(new ProjectError('invalid'));});
   });
 }
-function imageCodec(operation, bytes, resolution) {
+function imageCodec(operation, bytes, resolution, signal) {
   return new Promise((resolve, reject) => {
+    if(signal?.aborted){reject(new ProjectError('canceled'));return;}
     const worker = new Worker(new URL('../../../packages/platform/image-codec-worker.mjs', import.meta.url), {
       workerData: { operation, bytes, resolution, codecPath: path.join(ROOT, 'out/codecs/index.cjs') },
       resourceLimits: { maxOldGenerationSizeMb: 256, maxYoungGenerationSizeMb: 32 }
     });
     let settled = false;
     const finish = (error, result) => {
-      if (settled) return; settled = true; clearTimeout(timer); worker.terminate();
+      if (settled) return; settled = true; clearTimeout(timer);signal?.removeEventListener('abort',abort);worker.terminate();
       if (error) reject(new ProjectError(error)); else resolve(result);
     };
     const timer = setTimeout(() => finish('limit'), 30000);
+    const abort=()=>finish('canceled');signal?.addEventListener('abort',abort,{once:true});
     worker.once('message', value => finish(value.error, value.result));
     worker.once('error', () => finish('asset'));
     worker.once('exit', () => { if (!settled) finish('asset'); });
   });
+}
+async function importImageRecords(records,payload={}){
+  if(!payload||typeof payload!=='object'||Array.isArray(payload))return {error:'invalid'};
+  if(workspace.busy||imageImportJob)return {error:'busy'};
+  const owner=session,current=owner.current,revision=owner.revision,generation=owner.generation;
+  if(current?current.id!==payload.id||revision!==payload.revision:payload.id!=null||payload.revision!=null)return {error:'stale'};
+  let run,timer;
+  try{
+    run=new ImageImportRun(records,{targetID:payload.targetID,point:payload.point});imageImportJob={run,owner};owner.pending=true;nativeMenu();timer=setTimeout(()=>run.cancel(),180000);
+    const candidate=await run.build(current?.data,codecs,(bytes,signal)=>imageCodec('decodeSourceImage',bytes,undefined,signal),progress=>win?.webContents.send('viewer:importProgress',progress));
+    if(owner!==session||owner.current!==current||owner.revision!==revision||owner.generation!==generation)throw new ProjectError('stale');run.check();
+    const result=current?owner.commit(current.data,candidate,{kind:'importPixels'}):owner.install(candidate);
+    owner.scheduleRecovery();return {...result,workspace:workspace.state()};
+  }catch(error){return error.code==='canceled'?{canceled:true}:{error:error.code??'asset'};}
+  finally{clearTimeout(timer);if(imageImportJob?.run===run)imageImportJob=undefined;owner.pending=false;nativeMenu();}
 }
 let installedFontNames;
 handler('editor:textTools',async(action,payload)=>{
@@ -334,13 +355,14 @@ handler('editor:clipboard',async(id,revision,action,png,info={})=>{
 handler('editor:textClipboard',action=>{if(!['copy','cut','paste','selectAll','undo','redo'].includes(action))return;win.webContents[action]();});
 handler('editor:history', (id, revision, dir) => { const result = session.history(id, revision, dir); nativeMenu(); return result; });
 handler('editor:save', (id, revision, as) => projectRequest(() => session.save(id, revision, c => chooseSave(c, as === true))));
-handler('editor:image', async (id, revision) => {
+handler('editor:image', async (id, revision, targetID) => {
   if (session.pending) return { error: 'busy' };
   if (session.current ? session.current.id !== id || session.revision !== revision : id != null || revision != null) return { error: 'stale' };
   const owner = session.current, generation = session.generation;
   session.pending = true; nativeMenu();
   try {
-    const choice = await dialog.showOpenDialog(win, { properties: ['openFile'], filters: [{ name: 'Image', extensions: ['png', 'jpg', 'jpeg', 'tif', 'tiff', 'webp', 'avif', 'jp2', 'gif', 'eps', 'epsf', 'epsi'] }] }); if (choice.canceled) return { canceled: true };
+    const choice = await dialog.showOpenDialog(win, { properties: ['openFile','multiSelections'], filters: [{ name: 'Image', extensions: ['png', 'jpg', 'jpeg', 'tif', 'tiff', 'webp', 'avif', 'gif', 'eps', 'epsf', 'epsi'] }] }); if (choice.canceled) return { canceled: true };
+    if(choice.filePaths.length>1){session.pending=false;return await importImageRecords(choice.filePaths.map(location=>({location})),{id,revision,targetID});}
     const extension = path.extname(choice.filePaths[0]).toLowerCase();
     let imageResolution, importedResource;
     // Windows dialogs/TEMP may use an 8.3 parent name. Read through the
@@ -380,15 +402,8 @@ handler('editor:image', async (id, revision) => {
       if (created.error) return created;
       id = session.current.id; revision = session.revision;
     }
-    const op = { kind: 'importPixels', png: new Uint8Array(b), name: path.basename(choice.filePaths[0]).slice(0, 256) };
-    const result = importedResource?.originalPNG ? await session.editAsync(id, revision, op, async data => {
-      const candidate = editProject(data, op, codecs), manifest = structuredClone(candidate.manifest);
-      const layer = manifest.layers.find(l => l.id === manifest.activeLayerID);
-      const resources = new Map(candidate.resources);
-      resources.set(`images/${layer.imageFile}`, importedResource);
-      manifest.version = 17;
-      return projectData(manifest, resources, candidate.name);
-    }) : session.edit(id, revision, op);
+    const op={kind:'importPixels',name:path.basename(choice.filePaths[0]).slice(0,256)},resource=importedResource??codecs.validatePNG(new Uint8Array(b));
+    const result=await session.editAsync(id,revision,op,data=>insertImportedImage(data,resource,{name:op.name,targetID},codecs));
     if (!owner && result.error) session.close();
     return result;
   } catch (e) { return { error: e.code ?? 'asset' }; } finally { session.pending = false; nativeMenu(); }

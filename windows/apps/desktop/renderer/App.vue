@@ -37,6 +37,7 @@ const activeFrameID = ref<string>(), animationPlaying = ref(false), frameRenderi
 let playbackEpoch = 0;
 const iconURL = 'compositor://app/icon.png';
 const selected = ref<LayerRow>(), busy = ref(true), initialized=ref(false),error = ref(''), settingError = ref(false);
+const importProgress=ref<{jobID:string;completed:number;total:number}>();
 const query = ref(''), collapsed = ref(new Set<string>()), dropping = ref(false), reportState = ref<'idle' | 'copied' | 'error'>('idle');
 const stage = ref<HTMLDivElement>(), canvas = ref<HTMLCanvasElement>(), zoom = ref(1);
 const source = ref<'engine' | 'saved' | 'none'>('none'), extraIssues = ref<string[]>([]);
@@ -217,7 +218,8 @@ async function submitEdit(op:Record<string,unknown>,owner:Pick<ViewerProject,'id
 function edit(op:Record<string,unknown>){const p=project.value;if(!p)return;if(op.kind==='transform'&&(full.ids.length>1||selected.value?.isGroup))op={...op,kind:'transformLayers',ids:full.ids};return submitEdit({id:selected.value?.id,...op},p);}
 function history(direction:string){const p=project.value;if(p)return request(()=>window.editor.history(p.id,p.revision,direction));}
 function save(as=false){const p=project.value;if(p)return request(()=>window.editor.save(p.id,p.revision,as));}
-function importImage(): Promise<void> {const p=project.value;return request(()=>window.editor.importImage(p?.id,p?.revision));}
+function cancelImageImport(){if(importProgress.value)void window.viewer.cancelImport(importProgress.value.jobID).catch(()=>{});}
+async function importImage(): Promise<void> {if(busy.value||frameRendering.value)return;const p=project.value;try{await request(()=>window.editor.importImage(p?.id,p?.revision,selected.value?.id));}finally{importProgress.value=undefined;}}
 function importPSD(){return request(()=>window.editor.importPSD());}
 function recover(){return request(()=>window.editor.recover());}
 function add(type:string,adjustment?:string){return edit({kind:'add',type,adjustment,name:type==='group'?t.value.editor.group:type==='adjustment'?t.value.adjustments[ADJUSTMENTS.indexOf(adjustment!)]:t.value.raster,parentID:selected.value?.isGroup?selected.value.id:selected.value?.parentID});}
@@ -306,13 +308,14 @@ function dragEnter(event: DragEvent) {
 }
 function dragLeave() { dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) dropping.value = false; }
 function dragOver(event: DragEvent) { if (event.dataTransfer) event.dataTransfer.dropEffect = busy.value ? 'none' : 'copy'; }
-function dropProject(event: DragEvent) {
+async function dropProject(event: DragEvent) {
   dragDepth = 0; dropping.value = false;
-  if (busy.value) return;
+  if (busy.value||painting.value||frameRendering.value||structuredDialog.value||newDialog.value||outputDialog.value||full.modal) return;
   const files = event.dataTransfer?.files;
   if (!files?.length) return;
-  if (files.length !== 1) { error.value = 'drop'; return; }
-  return request(() => window.viewer.drop(files[0]));
+  if(files.length===1&&/\.comp$/i.test(files[0].name))return request(()=>window.viewer.drop(files[0]));
+  const p=project.value,board=artboard.value?.getBoundingClientRect(),area=stage.value?.getBoundingClientRect(),x=event.clientX,y=event.clientY,inside=board&&area&&x>=Math.max(board.left,area.left)&&x<=Math.min(board.right,area.right)&&y>=Math.max(board.top,area.top)&&y<=Math.min(board.bottom,area.bottom),point=p&&inside?[(x-board!.left)/zoom.value,(y-board!.top)/zoom.value]:undefined;
+  try{await request(()=>window.viewer.dropFiles([...files],{id:p?.id,revision:p?.revision,targetID:selected.value?.id,point}));}finally{importProgress.value=undefined;}
 }
 function toggleGroup(row: LayerRow) {
   const key = row.id.toUpperCase(), next = new Set(collapsed.value);
@@ -386,6 +389,7 @@ onMounted(async () => {
   document.documentElement.lang = language.value;
   try{const result=await window.viewer.viewSettings();if(result.settings)applyViewSettings(result.settings);await nextTick();}catch{settingError.value=true;}viewPreferencesReady=true;await refreshWorkspace();
   subscriptions.push(window.viewer.onOpen(open), window.viewer.onReload(reload), window.viewer.onClose(closeProject), window.viewer.onFit(fit), window.viewer.onActual(() => zoom.value = 1));
+  subscriptions.push(window.viewer.onImportProgress(value=>{importProgress.value=value;}));
   const commands: Record<string, () => unknown> = {...full.commands,colorRange:openColorRange,batchExport:()=>{if(editable.value)structuredDialog.value='batch';},newTab:openNewTab,openTab:()=>workspaceAction('open'),tabNext:()=>cycleTab(1),tabPrevious:()=>cycleTab(-1),recentProjects:showRecent,unlockedCopy:copyProject,grayscaleCopy,externalCheck:checkExternal,navigator:()=>{full.options.navigator=!full.options.navigator;},rulers:()=>{full.options.rulers=!full.options.rulers;},palette:()=>{full.options.palette=!full.options.palette;},viewSettings:()=>{structuredDialog.value='viewSettings';},commandFinder:openCommands,historyPanel:showHistoryPanel,textOutlines:()=>edit({kind:'textOutlines'}),filterStack:()=>openFilterStack(),advancedLiquify:()=>openFilterStack(true),newFill:()=>openStructured('fill'),editFill:()=>openStructured('fill',true),newPath:()=>openStructured('path'),editPath:()=>openStructured('path',true),newVectorMask:()=>openStructured('mask'),editVectorMask:()=>openStructured('mask',true),vectorMaskFromPath:maskFromPath,exportAs:()=>{outputDialog.value=true;},new:()=>{newInTab.value=false;newDialog.value=true;},image:importImage,importPSD,save:()=>save(),saveAs:()=>save(true),png:()=>exportImage('png'),gif:()=>exportImage('gif'),eps:()=>exportImage('eps'),exportPSD:()=>{psdDialog.value=true;},recover,undo:()=>history('undo'),redo:()=>history('redo'),addPixels:()=>add('pixels'),addGroup:()=>add('group'),addMask:()=>{if(selected.value)edit({kind:'mask',action:'add'});},details:showDetails,properties:()=>{inspectorTab.value='properties';},effects:showEffects};
   commandActions.value={...commands,open,close:closeProject,fit,actual:()=>{zoom.value=1;}};
   for(const [name,action] of Object.entries(commands))subscriptions.push(window.editor.onCommand(name,()=>{
@@ -434,6 +438,7 @@ onUnmounted(() => { stopPlayback();clearTimeout(viewPreferencesTimer); operation
     <div v-if="project||workspaceState.tabs.length" class="document-tabs" role="tablist" :aria-label="language==='en'?'Open projects':'打开的项目'" @keydown="workspaceTabKey">
       <div v-for="tab in workspaceState.tabs" :key="tab.id" class="document-tab" :class="{active:tab.active}"><button role="tab" :aria-selected="tab.active" :tabindex="tab.active?0:-1" :disabled="busy||painting||frameRendering" :data-tab-id="tab.id" @click="switchTab(tab.id)">{{tab.name}}<span v-if="tab.dirty">•</span></button><button class="tab-close" :disabled="busy||painting||frameRendering" :aria-label="(language==='en'?'Close tab · ':'关闭标签页 · ')+tab.name" @click="closeTab(tab.id)">×</button></div><button class="new-tab" data-testid="new-tab" :disabled="busy||painting||frameRendering" :aria-label="language==='en'?'New tab':'新建标签页'" @click="openNewTab">+</button>
     </div>
+    <div v-if="importProgress" class="notice import-progress" role="status" data-testid="import-progress"><span>{{language==='en'?'Importing images':'正在导入图像'}} · {{importProgress.completed}} / {{importProgress.total}}</span><progress :value="importProgress.completed" :max="importProgress.total" :aria-label="language==='en'?'Importing images':'正在导入图像'"></progress><button data-testid="cancel-import" @click="cancelImageImport">{{language==='en'?'Cancel':'取消'}}</button></div>
     <div v-if="externalNotice" class="notice external-notice" role="status"><span>{{language==='en'?(externalNotice.missing?'The project on disk is missing or cannot be read. Current edits are still open.':'The project changed on disk. Reload to read those changes; saving checks the original file first.'):(externalNotice.missing?'磁盘上的项目已丢失或无法读取，当前编辑仍保留。':'项目已被外部修改；可重新加载查看。保存前会检查原文件，防止覆盖外部更改。')}}</span><button :disabled="busy" @click="reload">{{language==='en'?'Reload':'重新加载'}}</button><button :disabled="busy" @click="ignoreExternal">{{language==='en'?'Dismiss':'暂不处理'}}</button></div>
     <div v-if="error || settingError" class="error" role="alert">{{ settingError ? t.settingsError : t.errorTitle + ' · ' + labelError(error) }}<button class="icon-button" :aria-label="t.editor.cancel" @click="error='';settingError=false"><Icon name="close"/></button></div>
     <div class="optionsbar" data-testid="tool-options">

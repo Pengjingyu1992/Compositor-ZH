@@ -47,6 +47,9 @@ declare global {
       language(value: Language): Promise<{ language: Language }>;
       open(): Promise<OpenResult>;
       drop(file: File): Promise<OpenResult>;
+      dropFiles(files:File[],payload:{id?:string;revision?:string;targetID?:string;point?:number[]}):Promise<OpenResult>;
+      cancelImport(jobID:string):Promise<Record<string,never>>;
+      onImportProgress(callback:(value:{jobID:string;completed:number;total:number})=>void):()=>void;
       reload(id: string): Promise<OpenResult>;
       close(): Promise<OpenResult>;
       copyReport(id: string, display: { source: 'engine' | 'saved' | 'none'; issues: string[] }): Promise<{ copied?: boolean; error?: string }>;
@@ -66,7 +69,7 @@ declare global {
       jumpHistory(id:string,revision:string,index:number):Promise<OpenResult>;
       history(id: string, revision: string, direction: string): Promise<OpenResult>;
       save(id: string, revision: string, as?: boolean): Promise<OpenResult>;
-      importImage(id?: string, revision?: string): Promise<OpenResult>;
+      importImage(id?: string, revision?: string,targetID?:string): Promise<OpenResult>;
       importPSD(): Promise<OpenResult>;
       batchExport(action:string,payload:Record<string,unknown>):Promise<{jobID?:string;targets?:{id:string|null;name:string}[];total?:number;completed?:number;exported?:boolean;folder?:string;canceled?:boolean;error?:string}>;
       onBatchProgress(callback:(value:{jobID:string;completed:number;total:number})=>void):()=>void;

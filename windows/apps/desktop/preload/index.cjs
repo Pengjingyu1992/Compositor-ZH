@@ -14,6 +14,16 @@ contextBridge.exposeInMainWorld('viewer', Object.freeze({
     try { return ipcRenderer.invoke('viewer:drop', webUtils.getPathForFile(file)); }
     catch { return Promise.resolve({ error: 'path' }); }
   },
+  dropFiles: async (files,payload) => {
+    try{
+      if(!Array.isArray(files)||!files.length||files.length>32)return {error:'drop'};
+      const records=[];let total=0;
+      for(const file of files){const location=webUtils.getPathForFile(file);if(location){records.push({location});continue;}if(!file.size||file.size>64*1024**2||/\.comp$/i.test(file.name))return {error:'path'};total+=file.size;if(total>128*1024**2)return {error:'limit'};records.push({name:file.name,bytes:new Uint8Array(await file.arrayBuffer())});}
+      return ipcRenderer.invoke('viewer:dropFiles',records,payload);
+    }catch{return {error:'path'};}
+  },
+  cancelImport: jobID => ipcRenderer.invoke('viewer:cancelImport',jobID),
+  onImportProgress: callback => {const listener=(_event,value)=>callback(value);ipcRenderer.on('viewer:importProgress',listener);return()=>ipcRenderer.removeListener('viewer:importProgress',listener);},
   reload: id => ipcRenderer.invoke('viewer:reload', id),
   close: () => ipcRenderer.invoke('viewer:close'),
   copyReport: (id, display) => ipcRenderer.invoke('viewer:report', id, display),
@@ -34,7 +44,7 @@ contextBridge.exposeInMainWorld('editor', Object.freeze({
   jumpHistory: (id,revision,index) => ipcRenderer.invoke('editor:jumpHistory',id,revision,index),
   history: (id, revision, direction) => ipcRenderer.invoke('editor:history', id, revision, direction),
   save: (id, revision, as = false) => ipcRenderer.invoke('editor:save', id, revision, as),
-  importImage: (id, revision) => ipcRenderer.invoke('editor:image', id, revision),
+  importImage: (id, revision, targetID) => ipcRenderer.invoke('editor:image', id, revision, targetID),
   importPSD: () => ipcRenderer.invoke('editor:importPSD'),
   batchExport: (action,payload) => ipcRenderer.invoke('editor:batchExport',action,payload),
   onBatchProgress: callback => {const listener=(_event,value)=>callback(value);ipcRenderer.on('editor:batchProgress',listener);return()=>ipcRenderer.removeListener('editor:batchProgress',listener);},

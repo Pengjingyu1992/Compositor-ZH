@@ -22,7 +22,7 @@ contextBridge.exposeInMainWorld('viewer', Object.freeze({
   onFit: callback => subscribe('viewer:fit', callback),
   onActual: callback => subscribe('viewer:actual', callback)
 }));
-const commands = new Set(['recentProjects','newTab','openTab','tabNext','tabPrevious','unlockedCopy','grayscaleCopy','externalCheck','navigator','rulers','palette','viewSettings','commandFinder','historyPanel','repeatFilter','textOutlines','filterStack','advancedLiquify','newFill','editFill','newPath','editPath','newVectorMask','editVectorMask','vectorMaskFromPath','exportAs', 'new', 'image', 'importPSD', 'save', 'saveAs', 'png', 'gif', 'eps', 'exportPSD', 'recover', 'undo', 'redo', 'addPixels', 'addGroup', 'addMask', 'details', 'properties', 'effects','selectAll','deselect','invertSelection','expandSelection','contractSelection','featherSelection','fill','clear','selectionMask','cropSelection','canvasSize','imageSize','trim','filter','group','ungroup','duplicate','delete','merge','flatten','rasterize','applyMask','text','shape','copy','copyMerged','cut','paste','flipCanvasH','flipCanvasV','grid','snap']);
+const commands = new Set(['batchExport','recentProjects','newTab','openTab','tabNext','tabPrevious','unlockedCopy','grayscaleCopy','externalCheck','navigator','rulers','palette','viewSettings','commandFinder','historyPanel','repeatFilter','textOutlines','filterStack','advancedLiquify','newFill','editFill','newPath','editPath','newVectorMask','editVectorMask','vectorMaskFromPath','exportAs', 'new', 'image', 'importPSD', 'save', 'saveAs', 'png', 'gif', 'eps', 'exportPSD', 'recover', 'undo', 'redo', 'addPixels', 'addGroup', 'addMask', 'details', 'properties', 'effects','selectAll','deselect','invertSelection','expandSelection','contractSelection','featherSelection','fill','clear','selectionMask','cropSelection','canvasSize','imageSize','trim','filter','group','ungroup','duplicate','delete','merge','flatten','rasterize','applyMask','text','shape','copy','copyMerged','cut','paste','flipCanvasH','flipCanvasV','grid','snap']);
 contextBridge.exposeInMainWorld('editor', Object.freeze({
   clipboard: (id,revision,action,png) => ipcRenderer.invoke('editor:clipboard',id,revision,action,png),
   textTools: (action,payload) => ipcRenderer.invoke('editor:textTools',action,payload),
@@ -35,6 +35,8 @@ contextBridge.exposeInMainWorld('editor', Object.freeze({
   save: (id, revision, as = false) => ipcRenderer.invoke('editor:save', id, revision, as),
   importImage: (id, revision) => ipcRenderer.invoke('editor:image', id, revision),
   importPSD: () => ipcRenderer.invoke('editor:importPSD'),
+  batchExport: (action,payload) => ipcRenderer.invoke('editor:batchExport',action,payload),
+  onBatchProgress: callback => {const listener=(_event,value)=>callback(value);ipcRenderer.on('editor:batchProgress',listener);return()=>ipcRenderer.removeListener('editor:batchProgress',listener);},
   outputTools: (action, payload) => ipcRenderer.invoke('editor:outputTools', action, payload),
   export: (id, revision, type, payload) => ipcRenderer.invoke('editor:export', id, revision, type, payload),
   recover: () => ipcRenderer.invoke('editor:recover'),

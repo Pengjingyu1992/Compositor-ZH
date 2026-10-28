@@ -41,7 +41,16 @@ export async function encodeOutputImage(value, options = {}) {
   if (size) { const ratio = size / Math.max(width, height); width = Math.max(1, Math.round(width * ratio)); height = Math.max(1, Math.round(height * ratio)); }
   if (width * height > 16_000_000) throw new ProjectError('limit');
   try {
-    let image = sharp(bytes, { limitInputPixels: 16_000_000, failOn: 'warning' }).resize(width, height).withMetadata({ density: resolution }).withIccProfile('srgb');
+    let image = sharp(bytes, { limitInputPixels: 16_000_000, failOn: 'warning' });
+    // Float linear RGB avoids 8-bit premultiply truncation when resizing soft
+    // transparency. Repeated resize must not progressively darken its colors.
+    if(width!==dimensions.width||height!==dimensions.height){
+      // Decode ICC before switching to the float pipeline. Keeping an input
+      // profile attached here makes libvips interpret float samples as bytes.
+      const decoded=await image.withIccProfile('srgb',{attach:false}).ensureAlpha().raw().timeout({seconds:20}).toBuffer({resolveWithObject:true});
+      image=sharp(decoded.data,{raw:{width:decoded.info.width,height:decoded.info.height,channels:4}}).pipelineColourspace('scrgb');
+    }
+    image=image.resize(width,height).toColourspace('srgb').withMetadata({ density: resolution }).withIccProfile('srgb');
     const format = options.format;
     if (format === 'png') image = image.png();
     if (format === 'webp') image = image.webp({ quality, lossless: options.lossless === true });

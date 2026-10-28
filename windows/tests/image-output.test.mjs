@@ -32,6 +32,11 @@ test('JPEG composites alpha onto white and print proof is a nonmutating RGB conv
   const proof = await printProof(source); const metadata = await sharp(proof).metadata();
   assert.equal(metadata.space, 'srgb'); assert.equal(metadata.width, 8); assert.equal(metadata.height, 4); assert.deepEqual(source, before);
 });
+test('resizing translucent colors uses float precision without repeated darkening',async()=>{
+  const input=await sharp({create:{width:64,height:48,channels:4,background:{r:119,g:219,b:179,alpha:64/255}}}).png().toBuffer();
+  const first=await encodeOutputImage(input,{format:'png',size:32}),second=await encodeOutputImage(first,{format:'png',size:16});
+  for(const value of [first,second]){const pixels=await sharp(value).raw().toBuffer();for(const [channel,expected]of [119,219,179,64].entries())assert.ok(Math.abs(pixels[channel]-expected)<=1,`${channel}: ${pixels[channel]}`);}
+});
 test('a selected CMYK ICC is embedded and invalid profiles, inputs and allocations are rejected', async () => {
   const native = await encodeOutputImage(source, { format: 'cmyktiff' }), profile = (await sharp(native).metadata()).icc;
   const custom = await encodeOutputImage(source, { format: 'cmyktiff', profile }); assert.deepEqual((await sharp(custom).metadata()).icc, profile);

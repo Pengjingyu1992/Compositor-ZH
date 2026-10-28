@@ -1,5 +1,6 @@
 export const parityMessages = {
   en: {
+    batchExport:'Batch Export',batchSizes:'Longest edges, separated by commas (0 = original)',batchPrefix:'Filename prefix',batchLayers:'Export selected layers separately',batchTip:'Export PNG/JPEG at up to 20 sizes per target. A new output folder appears only when the entire batch succeeds. JPEG uses a white background.',batchCanceled:'Export canceled. No output folder was created.',
     output: 'Export As / Print proof', close: 'Close', format: 'Format', quality: 'Quality', longEdge: 'Longest edge (0 = original)',
     resolution: 'Resolution (DPI)', lossless: 'Lossless WebP', export: 'Export…', proof: 'Refresh print proof',
     profile: 'CMYK ICC profile', chooseProfile: 'Choose ICC…', defaultProfile: 'Built-in CMYK', resetProfile: 'Use built-in profile',
@@ -16,6 +17,7 @@ export const parityMessages = {
     path:'Editable path',vectorMask:'Vector mask',pathTip:'Click to add anchors; drag to create handles. Click the first anchor to close; double-click to finish. Alt-drag a handle to break symmetry. Wheel to zoom; Space-drag to pan.',contours:'Contours',newContour:'New subpath',finishContour:'Finish open path',closeContour:'Close path',evenOdd:'Even-odd fill',pathFill:'Fill',pathStroke:'Stroke',strokeWidth:'Stroke width',roundCaps:'Round caps',deleteAnchor:'Delete anchor',removeHandles:'Remove handles',anchors:'Anchors',drawMode:'Draw',editMode:'Edit nodes',color:'Color',locked:'This layer or its parent is locked.',
   },
   'zh-Hans': {
+    batchExport:'批量导出',batchSizes:'长边尺寸，用逗号分隔（0 为原尺寸）',batchPrefix:'文件名前缀',batchLayers:'分别导出选定图层',batchTip:'每个目标最多导出 20 种尺寸的 PNG/JPEG。整批成功后才显示新的输出文件夹；JPEG 使用白色背景。',batchCanceled:'已取消导出，没有生成输出文件夹。',
     output: '导出为 / 印刷预览', close: '关闭', format: '格式', quality: '质量', longEdge: '最长边（0 保持原尺寸）',
     resolution: '分辨率（DPI）', lossless: '无损 WebP', export: '导出…', proof: '刷新印刷预览',
     profile: 'CMYK ICC 配置', chooseProfile: '选择 ICC…', defaultProfile: '内置 CMYK', resetProfile: '使用内置配置',

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BatchExportDialog from './BatchExportDialog.vue';
 import RecentDialog from './RecentDialog.vue';
 import NavigatorPanel from './NavigatorPanel.vue';
 import Rulers from './Rulers.vue';
@@ -54,7 +55,7 @@ function canCommand(id:string){
   const p=project.value,row=selected.value;if(!p)return false;
   if(id==='undo')return p.canUndo;if(id==='redo')return p.canRedo;
   if(['save','saveAs','close','fit','actual','grid','snap','rulers','navigator','historyPanel','properties','unlockedCopy'].includes(id))return true;
-  if(['exportAs','exportPSD','gif','eps','copyMerged','grayscaleCopy'].includes(id))return source.value==='engine';
+  if(['exportAs','exportPSD','gif','eps','copyMerged','grayscaleCopy','batchExport'].includes(id))return source.value==='engine';
   if(!editable.value)return false;
   if(id==='repeatFilter')return !!row?.imageFile&&!!full.lastFilter;
   if(['expandSelection','contractSelection','featherSelection','cropSelection'].includes(id))return !!p.selection;
@@ -185,9 +186,13 @@ async function checkExternal(){const p=project.value;if(!p?.hasLocation||busy.va
 async function ignoreExternal(){const p=project.value,notice=externalNotice.value;if(!p||!notice)return;if(notice.missing)ignoredMissing.add(p.id);await window.editor.workspace('ignoreExternal',{id:p.id,revision:p.revision,signature:notice.signature});externalNotice.value=undefined;}
 function open() { return request(() => window.viewer.open()); }
 function reload() { const id = project.value?.id; if (id) return request(() => window.viewer.reload(id)); }
-async function closeProject() {
-  if(busy.value||painting.value||frameRendering.value)return;
-  const result=await window.viewer.close();if(result.workspace)workspaceState.value=result.workspace;if(!result.closed){if(result.error)error.value=result.error;return;}
+let closeTask:Promise<void>|undefined;
+function closeProject(){if(!closeTask)closeTask=closeProjectNow().finally(()=>{closeTask=undefined;});return closeTask;}
+async function closeProjectNow() {
+  if(painting.value)return;const owner=project.value?.id,deadline=Date.now()+30000;
+  while((busy.value||frameRendering.value)&&Date.now()<deadline)await new Promise(resolve=>setTimeout(resolve,20));
+  if(busy.value||frameRendering.value||painting.value||project.value?.id!==owner)return;
+  busy.value=true;let result:OpenResult;try{result=await window.viewer.close();}finally{busy.value=false;}if(result.workspace)workspaceState.value=result.workspace;if(!result.closed){if(result.error)error.value=result.error;return;}
   if(result.project){await request(()=>Promise.resolve(result));return;}
   stopPlayback(); operation++; epoch++; renderer?.dispose(); renderer = undefined;
   drag = undefined;
@@ -375,7 +380,7 @@ onMounted(async () => {
   document.documentElement.lang = language.value;
   try{const result=await window.viewer.viewSettings();if(result.settings)applyViewSettings(result.settings);await nextTick();}catch{settingError.value=true;}viewPreferencesReady=true;await refreshWorkspace();
   subscriptions.push(window.viewer.onOpen(open), window.viewer.onReload(reload), window.viewer.onClose(closeProject), window.viewer.onFit(fit), window.viewer.onActual(() => zoom.value = 1));
-  const commands: Record<string, () => unknown> = {...full.commands,newTab:openNewTab,openTab:()=>workspaceAction('open'),tabNext:()=>cycleTab(1),tabPrevious:()=>cycleTab(-1),recentProjects:showRecent,unlockedCopy:copyProject,grayscaleCopy,externalCheck:checkExternal,navigator:()=>{full.options.navigator=!full.options.navigator;},rulers:()=>{full.options.rulers=!full.options.rulers;},palette:()=>{full.options.palette=!full.options.palette;},viewSettings:()=>{structuredDialog.value='viewSettings';},commandFinder:openCommands,historyPanel:showHistoryPanel,textOutlines:()=>edit({kind:'textOutlines'}),filterStack:()=>openFilterStack(),advancedLiquify:()=>openFilterStack(true),newFill:()=>openStructured('fill'),editFill:()=>openStructured('fill',true),newPath:()=>openStructured('path'),editPath:()=>openStructured('path',true),newVectorMask:()=>openStructured('mask'),editVectorMask:()=>openStructured('mask',true),vectorMaskFromPath:maskFromPath,exportAs:()=>{outputDialog.value=true;},new:()=>{newInTab.value=false;newDialog.value=true;},image:importImage,importPSD,save:()=>save(),saveAs:()=>save(true),png:()=>exportImage('png'),gif:()=>exportImage('gif'),eps:()=>exportImage('eps'),exportPSD:()=>{psdDialog.value=true;},recover,undo:()=>history('undo'),redo:()=>history('redo'),addPixels:()=>add('pixels'),addGroup:()=>add('group'),addMask:()=>{if(selected.value)edit({kind:'mask',action:'add'});},details:showDetails,properties:()=>{inspectorTab.value='properties';},effects:showEffects};
+  const commands: Record<string, () => unknown> = {...full.commands,batchExport:()=>{if(editable.value)structuredDialog.value='batch';},newTab:openNewTab,openTab:()=>workspaceAction('open'),tabNext:()=>cycleTab(1),tabPrevious:()=>cycleTab(-1),recentProjects:showRecent,unlockedCopy:copyProject,grayscaleCopy,externalCheck:checkExternal,navigator:()=>{full.options.navigator=!full.options.navigator;},rulers:()=>{full.options.rulers=!full.options.rulers;},palette:()=>{full.options.palette=!full.options.palette;},viewSettings:()=>{structuredDialog.value='viewSettings';},commandFinder:openCommands,historyPanel:showHistoryPanel,textOutlines:()=>edit({kind:'textOutlines'}),filterStack:()=>openFilterStack(),advancedLiquify:()=>openFilterStack(true),newFill:()=>openStructured('fill'),editFill:()=>openStructured('fill',true),newPath:()=>openStructured('path'),editPath:()=>openStructured('path',true),newVectorMask:()=>openStructured('mask'),editVectorMask:()=>openStructured('mask',true),vectorMaskFromPath:maskFromPath,exportAs:()=>{outputDialog.value=true;},new:()=>{newInTab.value=false;newDialog.value=true;},image:importImage,importPSD,save:()=>save(),saveAs:()=>save(true),png:()=>exportImage('png'),gif:()=>exportImage('gif'),eps:()=>exportImage('eps'),exportPSD:()=>{psdDialog.value=true;},recover,undo:()=>history('undo'),redo:()=>history('redo'),addPixels:()=>add('pixels'),addGroup:()=>add('group'),addMask:()=>{if(selected.value)edit({kind:'mask',action:'add'});},details:showDetails,properties:()=>{inspectorTab.value='properties';},effects:showEffects};
   commandActions.value={...commands,open,close:closeProject,fit,actual:()=>{zoom.value=1;}};
   for(const [name,action] of Object.entries(commands))subscriptions.push(window.editor.onCommand(name,()=>{
     if(composing)return;
@@ -552,6 +557,7 @@ onUnmounted(() => { stopPlayback();clearTimeout(viewPreferencesTimer); operation
     </div>
     <AiPanel :language="language" :project="project" :busy="busy" :editable="editable" :edit="submitEdit" :history="history"/>
     <CompleteControls :e="full" mode="dialogs" :tool="tool" :disabled="!editable" :selected="selected" :color="color" :size="brushSize" :opacity="brushOpacity" :target="paintTarget"/>
+    <BatchExportDialog v-if="structuredDialog==='batch' && project" :language="language" :project="project" :selected="full.ids" @running="painting=$event" @close="structuredDialog=''"/>
     <OutputDialog v-if="outputDialog && project" :language="language" :project="project" :get-composite="outputComposite" :export-file="(type,options)=>exportImage(type,false,options)" @close="outputDialog=false"/>
     <RecentDialog v-if="structuredDialog==='recent'" :language="language" :state="recentState" :update="recentSettings" @close="structuredDialog=''" @update="recentState=$event" @open="openRecent"/>
     <ViewSettingsDialog v-if="structuredDialog==='viewSettings'" :language="language" :settings="viewState()" @close="structuredDialog=''" @apply="confirmViewSettings"/>

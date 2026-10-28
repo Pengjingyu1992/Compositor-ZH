@@ -67,6 +67,8 @@ declare global {
       save(id: string, revision: string, as?: boolean): Promise<OpenResult>;
       importImage(id?: string, revision?: string): Promise<OpenResult>;
       importPSD(): Promise<OpenResult>;
+      batchExport(action:string,payload:Record<string,unknown>):Promise<{jobID?:string;targets?:{id:string|null;name:string}[];total?:number;completed?:number;exported?:boolean;folder?:string;canceled?:boolean;error?:string}>;
+      onBatchProgress(callback:(value:{jobID:string;completed:number;total:number})=>void):()=>void;
       outputTools(action: string, payload: Record<string, unknown>): Promise<{error?:string;canceled?:boolean;profile?:string;png?:Uint8Array}>;
       export(id: string, revision: string, type: string, payload: Record<string, unknown>): Promise<OpenResult>;
       recover(): Promise<OpenResult>;

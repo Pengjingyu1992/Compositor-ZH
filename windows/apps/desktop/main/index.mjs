@@ -18,6 +18,7 @@ import { renderEPS } from '../../../packages/platform/eps-import.mjs';
 import { EPS_LIMITS } from '../../../packages/comp-bridge/eps-raster.mjs';
 import { OUTPUT_FORMATS, validateCMYKProfile } from '../../../packages/platform/image-output.mjs';
 import { desktopEdition } from '../../../packages/platform/desktop.mjs';
+import {BatchExportRun}from'../../../packages/platform/batch-export.mjs';
 
 const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 const RENDERER = path.join(ROOT, 'out', 'renderer');
@@ -37,6 +38,9 @@ const journalDirectory = path.join(app.getPath('userData'), 'save-journals');
 const viewPreferences=new ViewPreferences(app.getPath('userData'));
 const workspace=new ProjectWorkspace(readProject,{codecs,recovery,journalDirectory});
 let session=workspace.active;const recentProjects=new RecentProjects(app.getPath('userData'));
+let batchJob;
+async function stopBatch(job=batchJob){if(!job)return;clearTimeout(job.timer);await job.run.cancel();if(batchJob===job){batchJob=undefined;job.owner.pending=false;nativeMenu();}}
+function touchBatch(job){clearTimeout(job.timer);job.timer=setTimeout(()=>{void stopBatch(job).catch(()=>{});},180000);job.timer.unref();}
 let closing = false, closePending = false;
 let preferenceQueue = Promise.resolve();
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml' };
@@ -72,6 +76,7 @@ function nativeMenu() {
       { id: 'file-save-as', label: zh ? '另存为…' : 'Save As…', accelerator: 'Ctrl+Shift+S', enabled: !!session.current && !session.pending, click: () => win?.webContents.send('editor:saveAs') },
       { id: 'file-export-png', label: zh ? '导出 PNG…' : 'Export PNG…', click: () => win?.webContents.send('editor:png') },
       { id: 'file-export-as', label: zh ? '导出为 / 印刷预览…' : 'Export As / Print proof…', enabled: !!session.current && !session.pending, accelerator: 'Ctrl+Alt+Shift+S', click: () => win?.webContents.send('editor:exportAs') },
+      {id:'file-batch-export',label:zh?'批量导出…':'Batch Export…',enabled:!!session.current&&!session.pending,click:()=>win?.webContents.send('editor:batchExport')},
       { id: 'file-export-psd', label: zh ? '导出 PSD…' : 'Export PSD…', click: () => win?.webContents.send('editor:exportPSD') },
       ...['gif', 'eps'].map(type => ({ id: `file-export-${type}`, label: zh ? `导出 ${type.toUpperCase()}…` : `Export ${type.toUpperCase()}…`, enabled: !!session.current && !session.pending, click: () => win?.webContents.send(`editor:${type}`) })),
       { id: 'file-recover', label: zh ? '恢复未保存项目…' : 'Recover unsaved project…', click: () => win?.webContents.send('editor:recover') },
@@ -186,11 +191,12 @@ win = new BrowserWindow({
 win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 win.webContents.on('will-navigate', (event, url) => { if (url !== HOME) event.preventDefault(); });
 win.webContents.on('will-attach-webview', event => event.preventDefault());
+win.webContents.on('render-process-gone',()=>{void stopBatch().catch(()=>{});});
 win.on('focus',()=>{if(!workspace.busy)win.webContents.send('editor:externalCheck');});
 win.on('close', event => {
   if (closing) return;
   event.preventDefault(); if (closePending) return; closePending = true;
-  const waitForIdle = async () => {while(workspace.busy)await new Promise(resolve=>setTimeout(resolve,100));for(const target of workspace.sessions)if(!(await canLeave(target)))return false;return true;};
+  const waitForIdle = async () => {await stopBatch();while(workspace.busy)await new Promise(resolve=>setTimeout(resolve,100));for(const target of workspace.sessions)if(!(await canLeave(target)))return false;return true;};
   waitForIdle().then(async ok => { if (ok) { for(const target of workspace.sessions)await clearRecovery(target);await viewPreferences.queue.catch(()=>{});await recentProjects.queue.catch(()=>{});closing = true; win.close(); } }).catch(() => {}).finally(() => closePending = false);
 });
 win.on('closed', () => {for(const target of workspace.sessions)target.close(); win = null; });
@@ -381,6 +387,26 @@ handler('editor:importPSD', async () => {
   } catch (e) { return { error: e.code ?? 'psdFormat' }; } finally { session.pending = false; nativeMenu(); }
 });
 let outputProfile = null;
+handler('editor:batchExport',async(action,payload={})=>{
+  if(action==='start'){
+    if(workspace.busy||!session.current||session.current.id!==payload.id||session.revision!==payload.revision)return{error:'stale'};
+    if(session.current.data.analysis.issues.length)return{error:'unsupported'};
+    const owner=session,current=owner.current;owner.pending=true;nativeMenu();
+    try{
+      const choice=await dialog.showOpenDialog(win,{title:language==='en'?'Choose a batch export folder':'选择批量导出文件夹',properties:['openDirectory']});if(choice.canceled)return{canceled:true};
+      const run=await BatchExportRun.create(choice.filePaths[0],current.data.manifest,current.data.name,payload.options,payload.selected,(png,options)=>imageCodec('encodeOutputImage',png,options),(completed,total)=>{if(batchJob)win?.webContents.send('editor:batchProgress',{jobID:batchJob.run.id,completed,total});});
+      batchJob={run,owner,current,revision:owner.revision};touchBatch(batchJob);return{jobID:run.id,targets:run.targets,total:run.total};
+    }catch(error){return{error:error.code??'write'};}finally{if(!batchJob)owner.pending=false;nativeMenu();}
+  }
+  const job=batchJob;if(!job||payload.jobID!==job.run.id)return{error:'stale'};
+  if(action==='cancel'){await stopBatch(job);return{canceled:true};}
+  if(!['append','finish'].includes(action))return{error:'invalid'};
+  try{
+    if(session!==job.owner||session.current!==job.current||session.revision!==job.revision)throw new ProjectError('stale');touchBatch(job);
+    if(action==='append')return await job.run.append(payload.index,payload.png);
+    const result=await job.run.finish();clearTimeout(job.timer);batchJob=undefined;job.owner.pending=false;nativeMenu();return result;
+  }catch(error){await stopBatch(job);return error.code==='canceled'?{canceled:true}:{error:error.code??'write'};}
+});
 handler('editor:outputTools', async (action, payload) => {
   if (!session.current || session.pending || payload?.id !== session.current.id || payload?.revision !== session.revision) return { error: 'stale' };
   const owner = session.current, revision = session.revision;

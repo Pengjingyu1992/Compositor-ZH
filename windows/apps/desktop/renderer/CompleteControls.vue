@@ -64,4 +64,4 @@ function value(event:Event){return (event.target as HTMLInputElement).value;}
   </div>
 </template>
 
-<style scoped>.camera-raw-dialog>.dialog-actions{position:sticky;bottom:0;z-index:5;background:var(--panel,#292929);padding:12px 0;margin:0;box-shadow:0 -5px 12px #0003}</style>
+<style scoped>.camera-raw-dialog>.dialog-actions{position:sticky;bottom:0;z-index:5;background: var(--panel,#292929);padding:12px 0;margin:0;box-shadow: 0 -5px 12px var(--shadow)}</style>

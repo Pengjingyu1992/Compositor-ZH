@@ -1,0 +1,48 @@
+{
+  "desktop": {
+    "columns": "684px 684px",
+    "width": 1392
+  },
+  "directions": [
+    {
+      "class": "dir-a",
+      "width": 960,
+      "height": 600,
+      "overflow": false
+    },
+    {
+      "class": "dir-b",
+      "width": 960,
+      "height": 600,
+      "overflow": false
+    },
+    {
+      "class": "dir-c",
+      "width": 960,
+      "height": 600,
+      "overflow": false
+    },
+    {
+      "class": "dir-d",
+      "width": 960,
+      "height": 600,
+      "overflow": false
+    }
+  ],
+  "mobile": {
+    "columns": "354px",
+    "width": 354
+  },
+  "browserErrors": [],
+  "externalRequests": [],
+  "liveSelection": null,
+  "checks": [
+    "four options and one shell",
+    "desktop two columns and mobile one column",
+    "dial output updates",
+    "keyboard choice and Escape",
+    "focus restored",
+    "failed POST keeps notes and allows retry",
+    "live selection remains empty; no user choice fabricated"
+  ]
+}

@@ -1,6 +1,9 @@
 <script setup lang="ts">
 defineProps<{ name: string }>();
 const paths: Record<string, string[]> = {
+  sidebar:['M3 4h18v16H3Z','M15 4v16'],
+  export:['M5 13v8h14v-8','M12 16V2','m7 7 5-5 5 5'],
+  appearance:['M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z','M12 3v18','M12 7h6','M12 11h8','M12 15h7'],
   pen:['m4 20 3-10L17 3l4 4-7 10Z','m4 20 7-7','m7 10 7 7','M11 13h.01'],
   marquee:['M3 3h4m3 0h4m3 0h4v4m0 3v4m0 3v4h-4m-3 0h-4m-3 0H3v-4m0-3v-4m0-3V3'],
   lasso:['M7 17c-8-4-6-13 3-14 12-1 16 10 8 14-6 3-12 3-12 0 0-2 4-3 5 0 2 5-3 6-6 5'],

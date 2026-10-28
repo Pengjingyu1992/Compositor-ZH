@@ -37,7 +37,7 @@ type Line = { kind: 'you' | 'reply' | 'ok' | 'skip' | 'bad' | 'note'; text: stri
 const lines = ref<Line[]>([]);
 const prompt = ref('');
 const marked = ref('');
-const open = ref(true);
+const open = ref(false);
 const height = ref(216);
 const asking = ref(false);
 const settingsOpen = ref(false);
@@ -225,9 +225,9 @@ function release() { anchor = 0; }
       <span class="spacer"></span>
       <span class="muted"><small>{{ keyState }}</small></span>
       <button data-testid="ai-settings" @click="settingsOpen = true">{{ t.settings }}</button>
-      <button class="icon-button" :aria-label="open ? t.collapse : t.expand" :title="open ? t.collapse : t.expand" data-testid="ai-fold" @click="open = !open">{{ open ? '▾' : '▴' }}</button>
+      <button class="icon-button" :aria-label="open ? t.collapse : t.expand" :title="open ? t.collapse : t.expand" data-testid="ai-fold" :aria-expanded="open" aria-controls="assistant-body" @click="open = !open">{{ open ? '▾' : '▴' }}</button>
     </header>
-    <div v-if="open" class="assistant-body">
+    <div v-if="open" id="assistant-body" class="assistant-body">
       <div class="assistant-layers">
         <button v-for="layer in layers" :key="layer.id" type="button" class="assistant-chip" :class="{ marked: marked === layer.id, off: !layer.isVisible }" :title="layer.name" data-testid="ai-layer" @click="marked = marked === layer.id ? '' : layer.id">{{ layer.name }}</button>
       </div>
@@ -274,20 +274,20 @@ function release() { anchor = 0; }
 .assistant-body { flex: 1; display: flex; flex-direction: column; gap: 6px; padding: 6px 10px 8px; min-height: 0; }
 .assistant-layers { display: flex; align-items: center; gap: 5px; overflow-x: auto; overflow-y: hidden; flex: 0 0 auto; padding-bottom: 2px; scrollbar-width: thin; }
 .assistant-chip { flex: 0 0 auto; padding: 1px 9px; border-radius: 10px; font-size: 12px; white-space: nowrap; }
-.assistant-chip.marked { border-color: var(--accent); color: #18392b; background: var(--accent); }
+.assistant-chip.marked { border-color: var(--accent); color: var(--on-accent); background: var(--selection-solid); }
 .assistant-chip.off { opacity: .5; text-decoration: line-through; }
 .assistant-log { flex: 1; min-height: 0; overflow: auto; padding: 5px 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--canvas); font-size: 12px; line-height: 1.6; }
 .assistant-log p { margin: 0; overflow-wrap: anywhere; }
-.line-you { color: #bcd7ff; }
-.line-reply { color: #d8d8d8; }
-.line-ok { color: #a8e0c4; }
-.line-skip { color: #f0c98a; }
-.line-bad { color: #f0a1a1; }
+.line-you { color: var(--accent); }
+.line-reply { color: var(--text); }
+.line-ok { color: var(--success); }
+.line-skip { color: var(--warning); }
+.line-bad { color: var(--error); }
 .line-note { color: var(--muted); }
 .assistant-row { display: flex; gap: 6px; align-items: center; flex: 0 0 auto; }
 .assistant-row input { flex: 1; min-width: 0; }
 .assistant-settings { display: grid; gap: 8px; margin: 10px 0; }
-.assistant-settings label { display: grid; gap: 4px; color: #bcbcbc; font-size: 12px; }
+.assistant-settings label { display: grid; gap: 4px; color: var(--muted); font-size: 12px; }
 .assistant-settings input { width: 100%; }
-.notice-error { color: #f0a1a1; }
+.notice-error { color: var(--error); }
 </style>

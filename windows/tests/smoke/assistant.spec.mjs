@@ -46,6 +46,9 @@ test.beforeEach(async()=>{
   await page.getByTestId('language').selectOption('zh-Hans');
   await page.getByTestId('open-project').click();
   await expect(page.getByTestId('rendered-canvas')).toBeVisible();
+  await expect(page.getByTestId('ai-fold')).toHaveAttribute('aria-expanded','false');
+  await page.getByTestId('ai-fold').click();
+  await expect(page.getByTestId('ai-prompt')).toBeVisible();
 });
 test.afterEach(async()=>{releaseAnswer?.();await instance?.close();if(stub)await new Promise(r=>stub.close(r));await rm(temp,{recursive:true,force:true});});
 

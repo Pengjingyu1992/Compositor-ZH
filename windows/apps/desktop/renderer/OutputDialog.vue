@@ -37,5 +37,5 @@ onUnmounted(()=>{generation++;clearProof();});
   </section></div>
 </template>
 <style scoped>
-.output-dialog{width:min(780px,95vw);max-height:90vh;overflow:auto}.proof-comparison{display:grid;grid-template-columns:1fr 1fr;gap:12px}.proof-comparison figure{margin:0;min-width:0}.proof-comparison img{max-width:100%;max-height:280px;object-fit:contain;background:repeating-conic-gradient(#777 0 25%,#aaa 0 50%) 0/16px 16px}fieldset{border:1px solid var(--border);margin:12px 0}p[role=alert]{color:#ffb4b4}
+.output-dialog{width:min(780px,95vw);max-height:90vh;overflow:auto}.proof-comparison{display:grid;grid-template-columns:1fr 1fr;gap:12px}.proof-comparison figure{margin:0;min-width:0}.proof-comparison img{max-width:100%;max-height:280px;object-fit:contain;background:repeating-conic-gradient(#777 0 25%,#aaa 0 50%) 0/16px 16px}fieldset{border: 1px solid var(--border);margin:12px 0}p[role=alert]{color: var(--error)}
 </style>

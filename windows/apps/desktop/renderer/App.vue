@@ -8,6 +8,7 @@ import RecentDialog from './RecentDialog.vue';
 import NavigatorPanel from './NavigatorPanel.vue';
 import Rulers from './Rulers.vue';
 import PalettePanel from './PalettePanel.vue';
+import{parityMessages}from'./parity-labels';
 import ViewSettingsDialog from './ViewSettingsDialog.vue';
 import {DEFAULT_VIEW_SETTINGS,VIEW_OPTION_KEYS,validateViewSettings}from'../../../packages/comp-bridge/view-settings.mjs';
 import CommandDialog from './CommandDialog.vue';
@@ -47,6 +48,10 @@ const source = ref<'engine' | 'saved' | 'none'>('none'), extraIssues = ref<strin
 const tool=ref('pan'),color=ref('#bae9d6'),brushSize=ref(24),brushOpacity=ref(100),paintTarget=ref('content');
 const newDialog=ref(false),newWidth=ref(1920),newHeight=ref(1080),psdDialog=ref(false),outputDialog=ref(false),status=ref(''),painting=ref(false);
 const overlay=ref<HTMLCanvasElement>(),artboard=ref<HTMLDivElement>();
+const appearance=ref('system'),showsInspector=ref(true);
+const chrome=computed(()=>parityMessages[language.value]);
+watch(appearance,value=>{document.documentElement.dataset.appearance=value;document.documentElement.style.colorScheme=value==='system'?'light dark':value;},{immediate:true});
+function toggleInspector(){showsInspector.value=!showsInspector.value;void nextTick(updateNavigation);}
 const inspectorTab=ref('properties'), detailsDialog=ref(false), searchOpen=ref(false);
 const stackLiquify=ref(false),rangePNG=ref<Uint8Array>();let rangeOwner:Pick<ViewerProject,'id'|'revision'>|undefined;
 async function openColorRange(){if(!editable.value)return;await request(async()=>{const owner=project.value!;rangePNG.value=await outputComposite();rangeOwner={id:owner.id,revision:owner.revision};structuredDialog.value='range';return {};});}
@@ -99,7 +104,7 @@ function toolLabel(key:string){return String(full.labels[key as keyof typeof ful
 const ui = computed(() => t.value.workspace);
 const thumbURL = (row: LayerRow, mask=false) => project.value?.urls[`images/${mask ? row.maskFile : row.imageFile}`];
 function selectLayer(row: LayerRow,event?:MouseEvent) { if(animationPlaying.value||frameRendering.value||busy.value||painting.value)return; const p = project.value, frame = p && frameForLayer(p, row.id); if (frame && frame !== activeFrameID.value) { activeFrameID.value = frame; void renderAnimationFrame(); } full.select(row,event); inspectorTab.value=row.adjustment?'adjustments':'properties'; }
-function showEffects() { if(selected.value?.imageFile)inspectorTab.value='effects'; }
+function showEffects() { if(selected.value?.imageFile){showsInspector.value=true;inspectorTab.value='effects';} }
 function showDetails() { detailsDialog.value=true; }
 function toggleSearch() { searchOpen.value=!searchOpen.value; if(!searchOpen.value)query.value=''; }
 let returnFocus: HTMLElement | null = null;
@@ -381,8 +386,8 @@ watch(() => newDialog.value || psdDialog.value || outputDialog.value || structur
 });
 function cancelStroke(){full.cancel();drag=undefined;}
 let viewPreferencesReady=false,viewPreferencesTimer:ReturnType<typeof setTimeout>|undefined;
-function viewState(){return {...Object.fromEntries(VIEW_OPTION_KEYS.map(key=>[key,(full.options as Record<string,any>)[key]])),foreground:color.value,background:full.background,swatches:[...swatches.value]};}
-function applyViewSettings(value:Record<string,any>){const settings=validateViewSettings(value);for(const key of VIEW_OPTION_KEYS)(full.options as Record<string,any>)[key]=settings[key];color.value=settings.foreground;full.background=settings.background;swatches.value=[...settings.swatches];}
+function viewState(){return {appearance:appearance.value,...Object.fromEntries(VIEW_OPTION_KEYS.map(key=>[key,(full.options as Record<string,any>)[key]])),foreground:color.value,background:full.background,swatches:[...swatches.value]};}
+function applyViewSettings(value:Record<string,any>){const settings=validateViewSettings(value);appearance.value=settings.appearance;for(const key of VIEW_OPTION_KEYS)(full.options as Record<string,any>)[key]=settings[key];color.value=settings.foreground;full.background=settings.background;swatches.value=[...settings.swatches];}
 function confirmViewSettings(value:Record<string,any>){applyViewSettings(value);structuredDialog.value='';}
 watch(viewState,()=>{if(!viewPreferencesReady)return;clearTimeout(viewPreferencesTimer);viewPreferencesTimer=setTimeout(()=>{void window.viewer.viewSettings(ipcData(viewState())).then(result=>{if(result.error)settingError.value=true;}).catch(()=>{settingError.value=true;});},150);},{deep:true});
 const gridStyle=computed(()=>{const spacing=Math.max(1,full.options.gridSpacing*zoom.value),minor=Math.max(.5,spacing/full.options.gridSubdivisions),rgb=[1,3,5].map(index=>parseInt(full.options.gridColor.slice(index,index+2),16)),line=(opacity:number)=>'rgba('+rgb.join(',')+','+opacity+')',major=line(full.options.gridOpacity/100),faint=line(full.options.gridOpacity/300);return {backgroundImage:`linear-gradient(to right,${major} 1px,transparent 1px),linear-gradient(to bottom,${major} 1px,transparent 1px),linear-gradient(to right,${faint} 1px,transparent 1px),linear-gradient(to bottom,${faint} 1px,transparent 1px)`,backgroundSize:`${spacing}px ${spacing}px,${spacing}px ${spacing}px,${minor}px ${minor}px,${minor}px ${minor}px`};});
@@ -399,7 +404,7 @@ onMounted(async () => {
   try{const result=await window.viewer.viewSettings();if(result.settings)applyViewSettings(result.settings);await nextTick();}catch{settingError.value=true;}viewPreferencesReady=true;await refreshWorkspace();
   subscriptions.push(window.viewer.onOpen(open), window.viewer.onReload(reload), window.viewer.onClose(closeProject), window.viewer.onFit(fit), window.viewer.onActual(() => zoom.value = 1));
   subscriptions.push(window.viewer.onImportProgress(value=>{importProgress.value=value;}));
-  const commands: Record<string, () => unknown> = {...full.commands,distort:openDistort,refineEdges:openEdgeRefinement,colorRange:openColorRange,batchExport:()=>{if(editable.value)structuredDialog.value='batch';},newTab:openNewTab,openTab:()=>workspaceAction('open'),tabNext:()=>cycleTab(1),tabPrevious:()=>cycleTab(-1),recentProjects:showRecent,unlockedCopy:copyProject,grayscaleCopy,externalCheck:checkExternal,navigator:()=>{full.options.navigator=!full.options.navigator;},rulers:()=>{full.options.rulers=!full.options.rulers;},palette:()=>{full.options.palette=!full.options.palette;},viewSettings:()=>{structuredDialog.value='viewSettings';},commandFinder:openCommands,historyPanel:showHistoryPanel,textOutlines:()=>edit({kind:'textOutlines'}),filterStack:()=>openFilterStack(),advancedLiquify:()=>openFilterStack(true),newFill:()=>openStructured('fill'),editFill:()=>openStructured('fill',true),newPath:()=>openStructured('path'),editPath:()=>openStructured('path',true),newVectorMask:()=>openStructured('mask'),editVectorMask:()=>openStructured('mask',true),vectorMaskFromPath:maskFromPath,exportAs:()=>{outputDialog.value=true;},new:()=>{newInTab.value=false;newDialog.value=true;},image:importImage,importPSD,save:()=>save(),saveAs:()=>save(true),png:()=>exportImage('png'),gif:()=>exportImage('gif'),eps:()=>exportImage('eps'),exportPSD:()=>{psdDialog.value=true;},recover,undo:()=>history('undo'),redo:()=>history('redo'),addPixels:()=>add('pixels'),addGroup:()=>add('group'),addMask:()=>{if(selected.value)edit({kind:'mask',action:'add'});},details:showDetails,properties:()=>{inspectorTab.value='properties';},effects:showEffects};
+  const commands: Record<string, () => unknown> = {...full.commands,distort:openDistort,refineEdges:openEdgeRefinement,colorRange:openColorRange,batchExport:()=>{if(editable.value)structuredDialog.value='batch';},newTab:openNewTab,openTab:()=>workspaceAction('open'),tabNext:()=>cycleTab(1),tabPrevious:()=>cycleTab(-1),recentProjects:showRecent,unlockedCopy:copyProject,grayscaleCopy,externalCheck:checkExternal,navigator:()=>{full.options.navigator=!full.options.navigator;},rulers:()=>{full.options.rulers=!full.options.rulers;},palette:()=>{full.options.palette=!full.options.palette;},viewSettings:()=>{structuredDialog.value='viewSettings';},commandFinder:openCommands,historyPanel:showHistoryPanel,textOutlines:()=>edit({kind:'textOutlines'}),filterStack:()=>openFilterStack(),advancedLiquify:()=>openFilterStack(true),newFill:()=>openStructured('fill'),editFill:()=>openStructured('fill',true),newPath:()=>openStructured('path'),editPath:()=>openStructured('path',true),newVectorMask:()=>openStructured('mask'),editVectorMask:()=>openStructured('mask',true),vectorMaskFromPath:maskFromPath,exportAs:()=>{outputDialog.value=true;},new:()=>{newInTab.value=false;newDialog.value=true;},image:importImage,importPSD,save:()=>save(),saveAs:()=>save(true),png:()=>exportImage('png'),gif:()=>exportImage('gif'),eps:()=>exportImage('eps'),exportPSD:()=>{psdDialog.value=true;},recover,undo:()=>history('undo'),redo:()=>history('redo'),addPixels:()=>add('pixels'),addGroup:()=>add('group'),addMask:()=>{if(selected.value)edit({kind:'mask',action:'add'});},details:showDetails,properties:()=>{showsInspector.value=true;inspectorTab.value='properties';},effects:showEffects};
   commandActions.value={...commands,open,close:closeProject,fit,actual:()=>{zoom.value=1;}};
   for(const [name,action] of Object.entries(commands))subscriptions.push(window.editor.onCommand(name,()=>{
     if(composing)return;
@@ -426,27 +431,29 @@ onUnmounted(() => { stopPlayback();clearTimeout(viewPreferencesTimer); operation
         <button class="icon-button" :disabled="busy || painting" :title="t.open + ' · Ctrl+O'" :aria-label="t.open" data-testid="open-project" @click="open"><Icon name="open"/></button>
         <button class="icon-button" :disabled="!project || busy || painting" :title="t.editor.save + ' · Ctrl+S'" :aria-label="t.editor.save" data-testid="save-project" @click="save()"><Icon name="save"/></button>
       </div>
-      <div class="document-tab" :class="{active:project}">
-        <span class="document-name">{{ project?.name ?? ui.noDocument }}<span v-if="project?.dirty" class="dirty-dot" :title="t.editor.unsaved"></span></span>
-        <button v-if="project || busy" class="icon-button tab-close" :title="t.close + ' · Ctrl+W'" :aria-label="t.close" data-testid="close-project" :disabled="painting" @click="closeProject"><Icon name="close"/></button>
-      </div>
+      <button v-if="!workspaceState.tabs.length && (project || busy)" class="icon-button tab-close" :title="t.close + ' · Ctrl+W'" :aria-label="t.close" data-testid="close-project" :disabled="painting" @click="closeProject"><Icon name="close"/></button>
       <div class="history-tools">
         <button class="icon-button" :disabled="!project?.canUndo || busy || painting" :title="t.editor.undo + ' · Ctrl+Z'" :aria-label="t.editor.undo" data-testid="undo" @click="history('undo')"><Icon name="undo"/></button>
         <button class="icon-button" :disabled="!project?.canRedo || busy || painting" :title="t.editor.redo + ' · Ctrl+Shift+Z'" :aria-label="t.editor.redo" data-testid="redo" @click="history('redo')"><Icon name="redo"/></button>
       </div>
-      <div class="toolbar-spacer"></div>
+      <div v-if="project||workspaceState.tabs.length" class="document-tabs" role="tablist" :aria-label="language==='en'?'Open projects':'打开的项目'" @keydown="workspaceTabKey">
+      <div v-for="tab in workspaceState.tabs" :key="tab.id" class="document-tab" :class="{active:tab.active}"><button role="tab" :title="tab.name" :aria-selected="tab.active" :tabindex="tab.active?0:-1" :disabled="busy||painting||frameRendering" :data-tab-id="tab.id" @click="switchTab(tab.id)">{{tab.name}}<span v-if="tab.dirty">•</span></button><button class="tab-close" :data-testid="tab.active?'close-project':undefined" :disabled="painting||frameRendering||(!tab.active&&busy)" :aria-label="(language==='en'?'Close tab · ':'关闭标签页 · ')+tab.name" @click="tab.active?closeProject():closeTab(tab.id)">×</button></div><button class="new-tab" data-testid="new-tab" :disabled="busy||painting||frameRendering" :aria-label="language==='en'?'New tab':'新建标签页'" @click="openNewTab">+</button>
+    </div>
+      <div v-if="!project&&!workspaceState.tabs.length" class="toolbar-spacer"></div>
       <div class="zoom-tools">
         <button class="icon-button" :disabled="!project" :title="t.fit + ' · Ctrl+0'" :aria-label="t.fit" @click="fit"><Icon name="fit"/></button>
         <button class="icon-button" :disabled="!project" :aria-label="ui.zoomOut" @click="scale(.8)"><Icon name="minus"/></button>
         <button class="zoom-value" :disabled="!project" title="100% · Ctrl+1" @click="zoom=1">{{ Math.round(zoom * 100) }}%</button>
         <button class="icon-button" :disabled="!project" :aria-label="ui.zoomIn" @click="scale(1.25)"><Icon name="plus"/></button>
       </div>
+      <div class="toolbar-utilities">
+        <button class="icon-button" :disabled="busy||painting" :aria-label="chrome.inspector" :title="chrome.inspector" :aria-expanded="showsInspector" aria-controls="project-inspector" data-testid="toggle-inspector" @click="toggleInspector"><Icon name="sidebar"/></button>
+        <button class="icon-button" :disabled="!project||source!=='engine'||busy||painting" :aria-label="chrome.exportDocument" :title="chrome.exportDocument" data-testid="export-document" @click="outputDialog=true"><Icon name="export"/></button>
+      </div>
       <select class="language-select" :aria-label="t.language" :value="language" data-testid="language" @change="changeLanguage"><option value="zh-Hans">简体中文</option><option value="en">English</option></select>
+      <button class="icon-button" :disabled="busy||painting" :aria-label="chrome.appearanceSettings" :title="chrome.appearanceSettings" data-testid="interface-settings" @click="structuredDialog='viewSettings'"><Icon name="appearance"/></button>
       <button class="icon-button" :aria-label="ui.details" :title="ui.details" data-testid="project-details" @click="showDetails"><Icon name="info"/></button>
     </header>
-    <div v-if="project||workspaceState.tabs.length" class="document-tabs" role="tablist" :aria-label="language==='en'?'Open projects':'打开的项目'" @keydown="workspaceTabKey">
-      <div v-for="tab in workspaceState.tabs" :key="tab.id" class="document-tab" :class="{active:tab.active}"><button role="tab" :aria-selected="tab.active" :tabindex="tab.active?0:-1" :disabled="busy||painting||frameRendering" :data-tab-id="tab.id" @click="switchTab(tab.id)">{{tab.name}}<span v-if="tab.dirty">•</span></button><button class="tab-close" :disabled="busy||painting||frameRendering" :aria-label="(language==='en'?'Close tab · ':'关闭标签页 · ')+tab.name" @click="closeTab(tab.id)">×</button></div><button class="new-tab" data-testid="new-tab" :disabled="busy||painting||frameRendering" :aria-label="language==='en'?'New tab':'新建标签页'" @click="openNewTab">+</button>
-    </div>
     <div v-if="importProgress" class="notice import-progress" role="status" data-testid="import-progress"><span>{{language==='en'?'Importing images':'正在导入图像'}} · {{importProgress.completed}} / {{importProgress.total}}</span><progress :value="importProgress.completed" :max="importProgress.total" :aria-label="language==='en'?'Importing images':'正在导入图像'"></progress><button data-testid="cancel-import" @click="cancelImageImport">{{language==='en'?'Cancel':'取消'}}</button></div>
     <div v-if="externalNotice" class="notice external-notice" role="status"><span>{{language==='en'?(externalNotice.missing?'The project on disk is missing or cannot be read. Current edits are still open.':'The project changed on disk. Reload to read those changes; saving checks the original file first.'):(externalNotice.missing?'磁盘上的项目已丢失或无法读取，当前编辑仍保留。':'项目已被外部修改；可重新加载查看。保存前会检查原文件，防止覆盖外部更改。')}}</span><button :disabled="busy" @click="reload">{{language==='en'?'Reload':'重新加载'}}</button><button :disabled="busy" @click="ignoreExternal">{{language==='en'?'Dismiss':'暂不处理'}}</button></div>
     <div v-if="error || settingError" class="error" role="alert">{{ settingError ? t.settingsError : t.errorTitle + ' · ' + labelError(error) }}<button class="icon-button" :aria-label="t.editor.cancel" @click="error='';settingError=false"><Icon name="close"/></button></div>
@@ -464,12 +471,16 @@ onUnmounted(() => { stopPlayback();clearTimeout(viewPreferencesTimer); operation
     </div>
     <main>
       <nav class="toolrail" :aria-label="ui.tools">
-        <button v-for="key in tools" :key="key" class="icon-button tool-button" :class="{active:tool===key}" :aria-pressed="tool===key" :disabled="painting || (key!=='pan' && !editable)" :title="toolLabel(key) + ' (' + toolKeys[key] + ')'" :aria-label="toolLabel(key)" @click="tool=key"><Icon :name="key"/></button>
-        <button class="icon-button tool-button" :disabled="painting||!editable" :title="full.labels.pen+' (P)'" :aria-label="full.labels.pen" @click="openStructured('path')"><Icon name="pen"/></button><div class="rail-divider"></div>
+        <div class="toolrail-scroll">
+        <button v-for="key in tools.filter(key=>!['pan','zoom'].includes(key))" :key="key" class="icon-button tool-button" :class="{active:tool===key}" :aria-pressed="tool===key" :disabled="painting || (key!=='pan' && !editable)" :title="toolLabel(key) + ' (' + toolKeys[key] + ')'" :aria-label="toolLabel(key)" @click="tool=key"><Icon :name="key"/></button>
+        <button class="icon-button tool-button" :disabled="painting||!editable" :title="full.labels.pen+' (P)'" :aria-label="full.labels.pen" @click="openStructured('path')"><Icon name="pen"/></button></div>
+        <div class="toolrail-footer"><div class="rail-divider"></div>
+        <button v-for="key in tools.filter(key=>['pan','zoom'].includes(key))" :key="key" class="icon-button tool-button" :class="{active:tool===key}" :aria-pressed="tool===key" :disabled="painting || (key!=='pan' && !editable)" :title="toolLabel(key) + ' (' + toolKeys[key] + ')'" :aria-label="toolLabel(key)" @click="tool=key"><Icon :name="key"/></button>
         <label class="color-swatch" :title="full.labels.foreground"><span :style="{background:color}"></span><input type="color" v-model="color" :aria-label="t.editor.color" :disabled="painting"></label>
         <label class="color-swatch background-swatch" :title="full.labels.background"><span :style="{background:full.background}"></span><input type="color" v-model="full.background" :aria-label="full.labels.background" :disabled="painting"></label>
         <button class="icon-button" :title="full.labels.swap+' (X)'" :aria-label="full.labels.swap" @click="[color,full.background]=[full.background,color]"><Icon name="swap"/></button>
         <button class="icon-button" :title="full.labels.defaults+' (D)'" :aria-label="full.labels.defaults" @click="color='#000000';full.background='#ffffff'"><Icon name="defaults"/></button>
+        </div>
       </nav>
       <section class="workarea navigation-workarea">
         <div v-if="issues.length" class="notice">{{ source==='saved' ? t.fallback : t.detailsOnly }} {{ issues.map(labelIssue).join(' · ') }}</div>
@@ -506,7 +517,7 @@ onUnmounted(() => { stopPlayback();clearTimeout(viewPreferencesTimer); operation
           <PalettePanel v-if="full.options.palette" :language="language" :color="color" :background="full.background" :swatches="swatches" :disabled="painting||busy||animationPlaying" @color="color=$event" @background="full.background=$event" @swatches="swatches=$event" @close="full.options.palette=false"/>
         </div>
       </section>
-      <aside>
+      <aside v-show="showsInspector" id="project-inspector" :aria-label="chrome.inspector">
         <section class="layers-panel">
           <div class="panel-heading"><strong>{{ t.layers }}</strong><span class="layer-count">{{ project?.analysis.rows.length ?? 0 }}</span><button class="icon-button" :disabled="!project" :aria-label="ui.search" :title="ui.search" :aria-expanded="searchOpen" data-testid="toggle-layer-search" @click="toggleSearch"><Icon name="search"/></button></div>
           <div v-if="project" class="layer-appearance">
@@ -597,5 +608,5 @@ onUnmounted(() => { stopPlayback();clearTimeout(viewPreferencesTimer); operation
 </template>
 
 <style>
-.document-tabs{display:flex;align-items:stretch;gap:2px;background:#222;border-bottom:1px solid var(--border);overflow-x:auto;flex-shrink:0}.document-tabs .document-tab{display:flex;align-items:stretch;border-right:1px solid var(--border);max-width:260px;flex-shrink:0}.document-tabs .document-tab.active{background:var(--surface-raised)}.document-tabs .document-tab button,.document-tabs .new-tab{border:0;background:transparent;border-radius:0;min-height:30px}.document-tabs .document-tab [role=tab]{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;justify-content:start}.document-tabs .document-tab .tab-close{padding:4px 8px}.external-notice{display:flex;align-items:center;gap:8px}.external-notice>span{flex:1}.navigation-workarea{position:relative}.floating-widgets{position:absolute;z-index:7;right:12px;top:12px;max-height:calc(100% - 24px);overflow:auto;display:flex;flex-direction:column;gap:10px;pointer-events:none}.floating-panel{pointer-events:auto;background:var(--panel,#242424);border:1px solid var(--border);border-radius:6px;padding:8px;box-shadow:0 6px 20px #0005}.floating-panel>header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}.floating-panel>header .icon-button{width:22px;height:22px;min-height:22px}.ruler-guide line{stroke:#71dfed}
+.external-notice{display:flex;align-items:center;gap:8px}.external-notice>span{flex:1}.navigation-workarea{position:relative}.floating-widgets{position:absolute;z-index:7;right:12px;top:12px;max-height:calc(100% - 24px);overflow:auto;display:flex;flex-direction:column;gap:10px;pointer-events:none}.floating-panel{pointer-events:auto;background: var(--panel,#242424);border: 1px solid var(--border);border-radius: 6px;padding:8px;box-shadow: 0 6px 20px var(--shadow)}.floating-panel>header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}.floating-panel>header .icon-button{width:22px;height:22px;min-height:22px}.ruler-guide line{stroke:#71dfed}
 </style>

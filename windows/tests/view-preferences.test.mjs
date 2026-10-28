@@ -29,3 +29,11 @@ test('ruler ticks remain sparse at extreme zoom and only enumerate the visible d
   for(const zoom of [.01,.1,1,8]){const ticks=rulerTicks(30000,zoom,10000,1000/zoom);assert.ok(ticks.length<100);assert.ok(ticks.every(tick=>tick.position>=0&&tick.position<=30000));const major=ticks.filter(tick=>tick.major);if(major.length>1)assert.ok((major[1].position-major[0].position)*zoom>=80);}
   assert.throws(()=>validateViewSettings({...DEFAULT_VIEW_SETTINGS,swatches:new Array(65).fill('#123456')}));
 });
+
+test('appearance migrates existing workspace preferences without dropping colors and rejects unknown themes',async()=>{
+  const directory=await mkdtemp(path.join(os.tmpdir(),'comp-appearance-'));
+  try{const legacy={...structuredClone(DEFAULT_VIEW_SETTINGS),gridSpacing:41,gridSubdivisions:3,rulerUnit:'cm',foreground:'#134679',swatches:['#134679','#abc123']};delete legacy.appearance;await writeFile(path.join(directory,'workspace.json'),JSON.stringify({schema:1,settings:legacy}));const store=new ViewPreferences(directory);assert.deepEqual(await store.read(),{...legacy,appearance:'system'});
+    for(const appearance of['light','dark','system']){const settings={...legacy,appearance};await store.write(settings);assert.deepEqual(await new ViewPreferences(directory).read(),settings);}
+    for(const appearance of[null,undefined,1,'automatic','dark;external'])assert.throws(()=>store.write({...legacy,appearance}),error=>error.code==='invalid');assert.equal((await store.read()).appearance,'system');
+  }finally{await rm(directory,{recursive:true,force:true});}
+});

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, dialog, ipcMain, protocol, clipboard, ClipboardItem, nativeImage } from 'electron';
+import { app, BrowserWindow, Menu, dialog, ipcMain, protocol, clipboard, ClipboardItem, nativeImage, nativeTheme } from 'electron';
 import { readFile, lstat, open, rename, rm } from 'node:fs/promises';
 import { Worker } from 'node:worker_threads';
 import { createRequire } from 'node:module';
@@ -191,7 +191,7 @@ protocol.handle('compositor', async request => {
   } catch { return new Response(null, { status: 404 }); }
 });
 win = new BrowserWindow({
-  width: 1250, height: 820, minWidth: 850, minHeight: 580, backgroundColor: '#18191c',
+  width: 1250, height: 820, minWidth: 850, minHeight: 580, backgroundColor: nativeTheme.shouldUseDarkColors?'#252527':'#f5f5f7',
   icon: path.join(RENDERER, 'icon.png'),
   webPreferences: { preload: path.join(ROOT, 'apps/desktop/preload/index.cjs'), nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true, spellcheck: false }
 });
@@ -208,7 +208,7 @@ win.on('close', event => {
 });
 win.on('closed', () => {for(const target of workspace.sessions)target.close(); win = null; });
 app.on('window-all-closed', () => app.quit());
-handler('viewer:viewSettings',async value=>{try{return {settings:value===undefined?await viewPreferences.read():await viewPreferences.write(value)};}catch(error){return {error:error.code??'write'};}});
+handler('viewer:viewSettings',async value=>{try{const settings=value===undefined?await viewPreferences.read():await viewPreferences.write(value);nativeTheme.themeSource=settings.appearance;win?.setBackgroundColor(nativeTheme.shouldUseDarkColors?'#252527':'#f5f5f7');return {settings};}catch(error){return {error:error.code??'write'};}});
 handler('viewer:ready',()=>{rendererReady=true;nativeMenu();if(pendingNativeCommand){const channel=pendingNativeCommand;pendingNativeCommand=undefined;sendNativeCommand(channel);}return {};});
 handler('viewer:settings', () => ({ language, version: app.getVersion(), edition: edition.id }));
 handler('viewer:language', async value => {

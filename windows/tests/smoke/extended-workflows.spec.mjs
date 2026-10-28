@@ -11,6 +11,7 @@ import { saveProject, RecoveryStore } from '../../packages/platform/save-project
 import { ADJUSTMENT_KINDS, EFFECT_KINDS } from '../../packages/comp-bridge/capabilities.mjs';
 import { FILTERS } from '../../packages/comp-bridge/raster-tools.mjs';
 import { smokeExecutable, smokeArgs, smokeEnv } from './electron-launch.mjs';
+import { waitForSaved } from './save-check.mjs';
 
 let temp, instance, page, source, saved = 0, runtimeErrors;
 test.beforeEach(async () => {
@@ -34,8 +35,7 @@ async function save() {
   const file = path.join(temp, `saved-${++saved}.comp`);
   await instance.evaluate(({ dialog }, file) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: file }); }, file);
   await menu('file-save-as');
-  await expect.poll(async () => { try { return JSON.parse(await readFile(path.join(file, 'manifest.json'), 'utf8')); } catch { return null; } }).not.toBeNull();
-  await expect(page.locator('.badge')).toContainText('Saved');
+  await waitForSaved(page, async () => { try { return JSON.parse(await readFile(path.join(file, 'manifest.json'), 'utf8')).format === 'com.compositor.project'; } catch { return false; } });
   await ready();
   return { file, manifest: JSON.parse(await readFile(path.join(file, 'manifest.json'), 'utf8')) };
 }

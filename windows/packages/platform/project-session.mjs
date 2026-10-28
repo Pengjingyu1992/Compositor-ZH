@@ -3,6 +3,7 @@ import { readProject } from '../comp-bridge/project.mjs';
 import { editProject, newProject } from '../comp-bridge/edit.mjs';
 import { fingerprint, saveProject } from './save-project.mjs';
 import path from 'node:path';
+import {pasteLayers} from './layer-clipboard.mjs';
 
 export class ProjectSession {
   constructor(reader = readProject, options = {}) {
@@ -69,6 +70,12 @@ export class ProjectSession {
       // Count unique immutable buffers shared by snapshots, not logical copies.
       while (this.undoStack.length > 80 || this.historyBytes() > 256 * 1024 ** 2) { if (!this.undoStack.length) break; this.undoStack.shift(); }
       this.scheduleRecovery(); return this.view();
+  }
+
+  pasteLayers(id,revision,bundle,options){
+    if(this.pending)return {error:'busy'};
+    if(!this.current||this.current.id!==id||this.revision!==revision)return {error:'stale'};
+    try{const before=this.current.data;return this.commit(before,pasteLayers(before,bundle,options),{kind:'paste'});}catch(error){return {error:error.code??'invalid'};}
   }
 
   async editAsync(id,revision,op,build) {

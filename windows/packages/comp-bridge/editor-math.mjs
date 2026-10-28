@@ -52,6 +52,10 @@ export function maskBounds(mask,w,h) {
 }
 export function shapeMask(w,h,kind,start,end,points=[]) {
   validSurface(w,h);const out=new Uint8Array(w*h);
+  // View-to-document floating-point noise must not add a full opaque row or
+  // column beside a pixel-aligned marquee.
+  const aligned=value=>Math.abs(value-Math.round(value))<.001?Math.round(value):value;
+  start=start.map(aligned);end=end.map(aligned);
   const x0=Math.min(start[0],end[0]),y0=Math.min(start[1],end[1]),rw=Math.max(1,Math.abs(end[0]-start[0])),rh=Math.max(1,Math.abs(end[1]-start[1]));
   if(kind==='lasso'){
     const rect=union(points.map(p=>({x:p[0],y:p[1],w:1,h:1})));

@@ -19,6 +19,7 @@ import { EPS_LIMITS } from '../../../packages/comp-bridge/eps-raster.mjs';
 import { OUTPUT_FORMATS, validateCMYKProfile } from '../../../packages/platform/image-output.mjs';
 import { desktopEdition } from '../../../packages/platform/desktop.mjs';
 import {BatchExportRun}from'../../../packages/platform/batch-export.mjs';
+import {captureLayers}from'../../../packages/platform/layer-clipboard.mjs';
 
 const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 const RENDERER = path.join(ROOT, 'out', 'renderer');
@@ -302,14 +303,32 @@ handler('editor:edit', (id,revision,op)=>{
   const heavy=o=>['stroke','fill','gradient','bucket','filter','imageSize','applyMask','selectionMask','fillLayer','path','vectorMask','filterStack','textOutlines','styled'].includes(o?.kind)||o?.kind==='selection'||(o?.kind==='batch'&&Array.isArray(o.operations)&&o.operations.some(heavy));
   return projectRequest(async()=>{const result=heavy(op)?await session.editAsync(id,revision,op,buildEdit):session.edit(id,revision,op);nativeMenu();return result;});
 });
-handler('editor:clipboard',async(id,revision,action,png)=>{
+const clipboardTokenType='electron application/osclipboard;format="org.compositorzh.clipboard-token"';
+let copiedContent;
+handler('editor:clipboard',async(id,revision,action,png,info={})=>{
   if(session.pending)return {error:'busy'};if(!session.current||session.current.id!==id||session.revision!==revision)return {error:'stale'};
   const owner=session.current;session.pending=true;nativeMenu();
-  try {if(action==='copy'){const resource=codecs.validatePNG(png);await clipboard.write([new ClipboardItem({'image/png':new Blob([new Uint8Array(resource.bytes)],{type:'image/png'})})]);return {copied:true};}
-    if(action!=='paste')return {error:'invalid'};const items=await clipboard.read(),item=items.find(i=>i.types.includes('image/png')||i.types.includes('image/jpeg'));if(!item)return {error:'asset'};const type=item.types.includes('image/png')?'image/png':'image/jpeg',blob=await item.getType(type);if(blob.size>LIMITS.asset)return {error:'limit'};
-    let bytes=Buffer.from(await blob.arrayBuffer());if(type==='image/jpeg'){jpegDimensions(bytes);const image=nativeImage.createFromBuffer(bytes);if(image.isEmpty())return {error:'asset'};bytes=image.toPNG();}
+  try {if(['copy','copyLayers'].includes(action)){
+      if(owner.data.analysis.issues.length)return {error:'unsupported'};
+      const token=randomUUID(),record={token},types={[clipboardTokenType]:new Blob([token])};
+      if(action==='copyLayers'){if(owner.data.selection)return {error:'selection'};record.layers=captureLayers(owner.data,info.ids);}
+      else{if(!Array.isArray(info.origin)||info.origin.length!==2||info.origin.some(value=>!Number.isFinite(value)||Math.abs(value)>300000))return {error:'invalid'};record.origin=[...info.origin];}
+      if(png!==undefined){const resource=codecs.validatePNG(png);types['image/png']=new Blob([new Uint8Array(resource.bytes)],{type:'image/png'});}
+      else if(!record.layers)return {error:'asset'};
+      await clipboard.write([new ClipboardItem(types)]);copiedContent=record;return {copied:true};
+    }
+    if(action!=='paste')return {error:'invalid'};const items=await clipboard.read(),marker=items.find(item=>item.types.includes(clipboardTokenType));
+    let token;try{if(marker){const blob=await marker.getType(clipboardTokenType);if(blob.size<=64)token=await blob.text();}}catch{/* An external writer may have replaced this format. */}
+    if(copiedContent?.token!==token)copiedContent=undefined;
+    if(session.current!==owner||session.revision!==revision)return {error:'stale'};
+    if(copiedContent?.layers){session.pending=false;return session.pasteLayers(id,revision,copiedContent.layers,{targetID:info.targetID,suffix:language==='en'?' (copy)':'（副本）'});}
+    const item=items.find(i=>i.types.includes('image/png')||i.types.includes('image/jpeg'));if(!item)return {error:'asset'};const type=item.types.includes('image/png')?'image/png':'image/jpeg',blob=await item.getType(type);if(blob.size>LIMITS.asset)return {error:'limit'};
+    let bytes=Buffer.from(await blob.arrayBuffer());if(type==='image/jpeg')bytes=Buffer.from((await imageCodec('decodeSourceImage',bytes)).bytes);
+    const resource=codecs.validatePNG(bytes),target=owner.data.manifest.layers.find(row=>row.id===info.targetID);
+    if(info.targetID&&!target)return {error:'stale'};
+    const origin=copiedContent?.origin??[Math.floor((owner.data.manifest.width-resource.width)/2),Math.floor((owner.data.manifest.height-resource.height)/2)],parentID=target?.isGroup?target.id:target?.parentID;
     if(session.current!==owner||session.revision!==revision)return {error:'stale'};session.pending=false;
-    return session.edit(id,revision,{kind:'importPixels',name:language==='en'?'Pasted image':'粘贴图像',png:new Uint8Array(bytes)});
+    return session.edit(id,revision,{kind:'importPixels',name:language==='en'?'Pasted image':'粘贴图像',png:new Uint8Array(bytes),origin,parentID,aboveID:target?.id,dropsSelection:true});
   }catch(e){return {error:e.code??'invalid'};}finally{session.pending=false;nativeMenu();}
 });
 handler('editor:textClipboard',action=>{if(!['copy','cut','paste','selectAll','undo','redo'].includes(action))return;win.webContents[action]();});

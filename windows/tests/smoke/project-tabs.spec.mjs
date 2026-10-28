@@ -12,7 +12,7 @@ test('project tabs keep history and locks independent, retain copies, remember r
   test.setTimeout(180000);const temp=await mkdtemp(path.join(os.tmpdir(),'comp-tabs-ui-')),one=path.join(temp,'one.comp'),two=path.join(temp,'two.comp');await fixture(one);await fixture(two,m=>({...m,documentID:randomUUID().toUpperCase()}));const original=await readFile(path.join(one,'manifest.json'));let instance,page;const errors=[];
   try{
     const launch=async()=>{instance=await _electron.launch({executablePath:smokeExecutable(),args:smokeArgs(),env:smokeEnv(temp)});page=await instance.firstWindow();page.on('pageerror',error=>errors.push(error.message));await expect(page.getByTestId('language')).toBeVisible();await instance.evaluate(({dialog})=>{dialog.showMessageBox=async()=>({response:1});});};
-    const command=async name=>instance.evaluate(({BrowserWindow},name)=>BrowserWindow.getAllWindows()[0].webContents.send('editor:'+name),name);
+    const command=async name=>instance.evaluate(({BrowserWindow,Menu},name)=>{if(name==='recentProjects')Menu.getApplicationMenu().getMenuItemById('file-recentProjects').click();else BrowserWindow.getAllWindows()[0].webContents.send('editor:'+name);},name);
     const choose=async location=>instance.evaluate(({dialog},location)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[location]});},location);
     const ready=async()=>{await expect(page.getByTestId('save-project')).toBeEnabled();await expect(page.locator('[role=alert]')).toHaveCount(0);};
     const select=async name=>{await page.locator('.layer-select').filter({hasText:name}).click();await expect(page.getByTestId('layer-opacity')).toBeEnabled();};

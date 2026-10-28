@@ -172,7 +172,12 @@ export function editProject(data, op, codecs) {
   };
   if (!editorOperation(data,m,resources,target,op,codecs,descendants)) switch (op.kind) {
     case 'add': add(op.type, op.name); break;
-    case 'importPixels': add('pixels', op.name); break;
+    case 'importPixels': {
+      add('pixels', op.name);const row=m.layers.at(-1);
+      if(op.origin!==undefined){if(!Array.isArray(op.origin)||op.origin.length!==2||op.origin.some(value=>!Number.isFinite(value)||Math.abs(value)>300000))fail('invalid');row.transform.origin=clone(op.origin);}
+      if(op.aboveID){const above=m.layers.find(layer=>layer.id===op.aboveID);if(!above)fail('stale');const ids=descendants(above.id),base=above.maskSourceID??above.id;for(const layer of m.layers)if(layer.maskSourceID?.toUpperCase()===base.toUpperCase())ids.add(layer.id.toUpperCase());m.layers.pop();const index=m.layers.reduce((after,layer,i)=>ids.has(layer.id.toUpperCase())?i+1:after,0);m.layers.splice(index,0,row);}
+      break;
+    }
     case 'rename': if (typeof op.name !== 'string' || op.name.length > 256) fail('invalid'); target.name = op.name; break;
     case 'appearance': {
       if (!['opacity', 'blendMode', 'isVisible'].includes(op.field)) fail('invalid');
@@ -285,6 +290,6 @@ export function editProject(data, op, codecs) {
   const result = projectData(m, resources, data.name);
   if (op.kind !== 'rename' && result.analysis.issues.length) fail(result.analysis.issues.includes('memory') ? 'limit' : 'unsupported');
   result.locks=data.locks;
-  result.selection=op.kind==='canvas'||dimensionsChanged?null:data.selection;
+  result.selection=op.kind==='canvas'||dimensionsChanged||op.kind==='importPixels'&&op.dropsSelection===true?null:data.selection;
   return result;
 }

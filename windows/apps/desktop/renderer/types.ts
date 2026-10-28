@@ -60,7 +60,7 @@ declare global {
       workspace(action:string,payload?:Record<string,unknown>):Promise<OpenResult>;
       textTools(action:string,payload:Record<string,unknown>):Promise<{error?:string;png?:Uint8Array;fonts?:string[]}>;
       textClipboard(action:string):Promise<void>;
-      clipboard(id:string,revision:string,action:string,png?:Uint8Array):Promise<OpenResult>;
+      clipboard(id:string,revision:string,action:string,png?:Uint8Array,info?:{targetID?:string;ids?:string[];origin?:number[]}):Promise<OpenResult>;
       create(w: number, h: number): Promise<OpenResult>;
       edit(id: string, revision: string, op: Record<string, unknown>): Promise<OpenResult>;
       jumpHistory(id:string,revision:string,index:number):Promise<OpenResult>;

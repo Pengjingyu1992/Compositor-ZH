@@ -13,7 +13,7 @@ const linux = process.argv.includes('--linux');
 const directoryFlag = process.argv.indexOf('--directory');
 const directory = path.resolve(directoryFlag >= 0 ? process.argv[directoryFlag + 1] : linux ? '../linux/release' : 'release'), unpacked = path.join(directory, linux ? 'linux-unpacked' : 'win-unpacked');
 const asar = path.join(unpacked, 'resources/app.asar');
-const portableSource=extractFile(asar,'packages/comp-bridge/portable-color-wasm.mjs').toString('utf8'),portableEncoded=portableSource.match(/PORTABLE_COLOR_BASE64=("[A-Za-z0-9+/=]+")/),portableHash=portableSource.match(/PORTABLE_COLOR_SHA256="([a-f0-9]{64})"/);
+const portableSource=extractFile(asar,path.join('packages','comp-bridge','portable-color-wasm.mjs')).toString('utf8'),portableEncoded=portableSource.match(/PORTABLE_COLOR_BASE64=("[A-Za-z0-9+/=]+")/),portableHash=portableSource.match(/PORTABLE_COLOR_SHA256="([a-f0-9]{64})"/);
 if(!portableEncoded||!portableHash)throw new Error('Missing portable color module');
 const portableBytes=Buffer.from(JSON.parse(portableEncoded[1]),'base64');
 if(createHash('sha256').update(portableBytes).digest('hex')!==portableHash[1]||WebAssembly.Module.imports(new WebAssembly.Module(portableBytes)).length)throw new Error('Invalid portable color module or host imports');

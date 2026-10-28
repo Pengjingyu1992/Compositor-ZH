@@ -36,7 +36,7 @@ const edition = ref<'linux' | 'windows'>('windows');
 const activeFrameID = ref<string>(), animationPlaying = ref(false), frameRendering = ref(false);
 let playbackEpoch = 0;
 const iconURL = 'compositor://app/icon.png';
-const selected = ref<LayerRow>(), busy = ref(false), error = ref(''), settingError = ref(false);
+const selected = ref<LayerRow>(), busy = ref(true), initialized=ref(false),error = ref(''), settingError = ref(false);
 const query = ref(''), collapsed = ref(new Set<string>()), dropping = ref(false), reportState = ref<'idle' | 'copied' | 'error'>('idle');
 const stage = ref<HTMLDivElement>(), canvas = ref<HTMLCanvasElement>(), zoom = ref(1);
 const source = ref<'engine' | 'saved' | 'none'>('none'), extraIssues = ref<string[]>([]);
@@ -398,6 +398,7 @@ onMounted(async () => {
   }));
   window.addEventListener('compositionstart', compositionStart); window.addEventListener('compositionend', compositionEnd);
   window.addEventListener('keydown', onKey); window.addEventListener('resize', fit);
+  busy.value=false;initialized.value=true;await window.viewer.ready();
 });
 onUnmounted(() => { stopPlayback();clearTimeout(viewPreferencesTimer); operation++; epoch++; cancelStroke();renderer?.dispose(); full.closeModal(); subscriptions.forEach(stop => stop()); window.removeEventListener('compositionstart', compositionStart); window.removeEventListener('compositionend', compositionEnd); window.removeEventListener('keydown', onKey); window.removeEventListener('resize', fit); });
 </script>
@@ -459,7 +460,7 @@ onUnmounted(() => { stopPlayback();clearTimeout(viewPreferencesTimer); operation
       <section class="workarea navigation-workarea">
         <div v-if="issues.length" class="notice">{{ source==='saved' ? t.fallback : t.detailsOnly }} {{ issues.map(labelIssue).join(' · ') }}</div>
         <div ref="stage" class="stage" @scroll="updateNavigation" @wheel="wheel" @pointerdown="panStart" @pointermove="panMove" @pointerup="panEnd" @pointercancel="cancelStroke">
-          <div v-if="!project" class="welcome">
+          <div v-if="!project && initialized" class="welcome">
             <form @submit.prevent="create">
               <h1>{{ t.editor.newCanvas }}</h1><p>{{ ui.transparent }}</p>
               <div class="new-dimensions"><label>{{ t.editor.width }}<span class="unit-field"><input type="number" v-model.number="newWidth" min="1" max="30000" required><span>px</span></span></label><button class="icon-button" type="button" :aria-label="t.editor.swap" :title="t.editor.swap" @click="[newWidth,newHeight]=[newHeight,newWidth]"><Icon name="swap"/></button><label>{{ t.editor.height }}<span class="unit-field"><input type="number" v-model.number="newHeight" min="1" max="30000" required><span>px</span></span></label></div>
@@ -467,7 +468,7 @@ onUnmounted(() => { stopPlayback();clearTimeout(viewPreferencesTimer); operation
             </form>
             <div class="welcome-secondary"><button class="text-button" :disabled="busy" @click="importImage">{{ t.editor.importImage }}</button><button class="text-button" :disabled="busy" @click="importPSD">{{ t.editor.importPSD }}</button><button class="text-button" :disabled="busy" data-testid="recover" @click="recover">{{ t.editor.recover }}</button></div>
           </div>
-          <div v-else-if="source!=='none'" class="canvas-surround" :style="{minWidth:project.manifest.width * zoom + 80 + 'px',minHeight:project.manifest.height * zoom + 80 + 'px'}">
+          <div v-else-if="project && source!=='none'" class="canvas-surround" :style="{minWidth:project.manifest.width * zoom + 80 + 'px',minHeight:project.manifest.height * zoom + 80 + 'px'}">
             <div ref="artboard" class="artboard" :class="'tool-'+tool" :style="{width:project.manifest.width * zoom + 'px',height:project.manifest.height * zoom + 'px'}">
               <canvas v-if="source==='engine'" ref="canvas" data-testid="rendered-canvas"></canvas>
               <canvas v-if="source==='engine'" ref="overlay" class="paint-overlay"></canvas>
@@ -484,7 +485,7 @@ onUnmounted(() => { stopPlayback();clearTimeout(viewPreferencesTimer); operation
               <Rulers v-if="source==='engine'&&full.options.rulers" :language="language" :width="project.manifest.width" :height="project.manifest.height" :zoom="zoom" :resolution="project.manifest.resolution??72" :unit="full.options.rulerUnit" :viewport="navigationViewport" :disabled="!editable" :owner="{id:project.id,revision:project.revision}" @gesture="painting=$event" @guide="rulerGuide"/>
             </div>
           </div>
-          <p v-else class="no-preview">{{ t.noPreview }}</p>
+          <p v-else-if="initialized" class="no-preview">{{ t.noPreview }}</p><p v-else class="no-preview" role="status">{{ui.loading}}</p>
         </div>
         <div class="floating-widgets" @pointerdown.stop @wheel.stop>
           <NavigatorPanel v-if="project&&source==='engine'&&full.options.navigator" :language="language" :source="canvas" :width="project.manifest.width" :height="project.manifest.height" :zoom="zoom" :revision="project.revision" :busy="busy||painting||frameRendering||animationPlaying" :viewport="navigationViewport" @close="full.options.navigator=false" @navigate="navigate" @zoom="zoom=$event"/>

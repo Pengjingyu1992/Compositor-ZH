@@ -7,6 +7,7 @@ const subscribe = (channel, callback) => {
 contextBridge.exposeInMainWorld('viewer', Object.freeze({
   viewSettings: value => ipcRenderer.invoke('viewer:viewSettings',value),
   settings: () => ipcRenderer.invoke('viewer:settings'),
+  ready: () => ipcRenderer.invoke('viewer:ready'),
   language: value => ipcRenderer.invoke('viewer:language', value),
   open: () => ipcRenderer.invoke('viewer:open'),
   drop: file => {

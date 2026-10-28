@@ -41,6 +41,8 @@ let session=workspace.active;const recentProjects=new RecentProjects(app.getPath
 let batchJob;
 async function stopBatch(job=batchJob){if(!job)return;clearTimeout(job.timer);await job.run.cancel();if(batchJob===job){batchJob=undefined;job.owner.pending=false;nativeMenu();}}
 function touchBatch(job){clearTimeout(job.timer);job.timer=setTimeout(()=>{void stopBatch(job).catch(()=>{});},180000);job.timer.unref();}
+let rendererReady=false,pendingNativeCommand;
+function sendNativeCommand(channel){if(!rendererReady){pendingNativeCommand=channel;return;}win?.webContents.send(channel);}
 let closing = false, closePending = false;
 let preferenceQueue = Promise.resolve();
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml' };
@@ -65,58 +67,60 @@ function handler(name, fn) {
 function nativeMenu() {
   const zh = language === 'zh-Hans';
   win?.setTitle(`${zh ? '叠绘' : 'Compositor'} · ${edition.label}` + (session.isDirty() ? ' *' : ''));
-  Menu.setApplicationMenu(Menu.buildFromTemplate([
+  const menu=Menu.buildFromTemplate([
     { label: zh ? '文件' : 'File', submenu: [
-      { id: 'file-new', label: zh ? '新建画布…' : 'New canvas…', accelerator: 'Ctrl+N', click: () => win?.webContents.send('editor:new') },
-      ... [['newTab','新建标签页…','New tab…','Ctrl+Alt+N'],['openTab','在新标签页打开…','Open in new tab…','Ctrl+Alt+O'],['recentProjects','最近项目…','Recent projects…'],['unlockedCopy','创建未锁定副本','Create unlocked copy'],['grayscaleCopy','创建灰度副本','Create grayscale copy']].map(([name,cn,en,accelerator])=>({id:`file-${name}`,label:zh?cn:en,accelerator,enabled:!session.pending,click:()=>win?.webContents.send(`editor:${name}`)})),
-      { id: 'file-open', label: zh ? '打开项目…' : 'Open project…', accelerator: 'Ctrl+O', click: () => win?.webContents.send('viewer:open') },
-      { id: 'file-image', label: zh ? '导入图像…' : 'Import image…', click: () => win?.webContents.send('editor:image') },
-      { id: 'file-import-psd', label: zh ? '导入 PSD…' : 'Import PSD…', click: () => win?.webContents.send('editor:importPSD') },
-      { id: 'file-save', label: zh ? '保存' : 'Save', accelerator: 'Ctrl+S', enabled: !!session.current && !session.pending, click: () => win?.webContents.send('editor:save') },
-      { id: 'file-save-as', label: zh ? '另存为…' : 'Save As…', accelerator: 'Ctrl+Shift+S', enabled: !!session.current && !session.pending, click: () => win?.webContents.send('editor:saveAs') },
-      { id: 'file-export-png', label: zh ? '导出 PNG…' : 'Export PNG…', click: () => win?.webContents.send('editor:png') },
-      { id: 'file-export-as', label: zh ? '导出为 / 印刷预览…' : 'Export As / Print proof…', enabled: !!session.current && !session.pending, accelerator: 'Ctrl+Alt+Shift+S', click: () => win?.webContents.send('editor:exportAs') },
-      {id:'file-batch-export',label:zh?'批量导出…':'Batch Export…',enabled:!!session.current&&!session.pending,click:()=>win?.webContents.send('editor:batchExport')},
-      { id: 'file-export-psd', label: zh ? '导出 PSD…' : 'Export PSD…', click: () => win?.webContents.send('editor:exportPSD') },
-      ...['gif', 'eps'].map(type => ({ id: `file-export-${type}`, label: zh ? `导出 ${type.toUpperCase()}…` : `Export ${type.toUpperCase()}…`, enabled: !!session.current && !session.pending, click: () => win?.webContents.send(`editor:${type}`) })),
-      { id: 'file-recover', label: zh ? '恢复未保存项目…' : 'Recover unsaved project…', click: () => win?.webContents.send('editor:recover') },
-      { id: 'file-reload', label: zh ? '重新加载项目' : 'Reload project', accelerator: 'Ctrl+R', enabled: !!session.current && !session.pending, click: () => win?.webContents.send('viewer:reload') },
-      { id: 'file-close', label: zh ? '关闭项目' : 'Close project', accelerator: 'Ctrl+W', enabled: !!session.current || session.pending, click: () => win?.webContents.send('viewer:close') },
+      { id: 'file-new', label: zh ? '新建画布…' : 'New canvas…', accelerator: 'Ctrl+N', click: () => sendNativeCommand('editor:new') },
+      ... [['newTab','新建标签页…','New tab…','Ctrl+Alt+N'],['openTab','在新标签页打开…','Open in new tab…','Ctrl+Alt+O'],['recentProjects','最近项目…','Recent projects…'],['unlockedCopy','创建未锁定副本','Create unlocked copy'],['grayscaleCopy','创建灰度副本','Create grayscale copy']].map(([name,cn,en,accelerator])=>({id:`file-${name}`,label:zh?cn:en,accelerator,enabled:!session.pending,click:()=>sendNativeCommand(`editor:${name}`)})),
+      { id: 'file-open', label: zh ? '打开项目…' : 'Open project…', accelerator: 'Ctrl+O', click: () => sendNativeCommand('viewer:open') },
+      { id: 'file-image', label: zh ? '导入图像…' : 'Import image…', click: () => sendNativeCommand('editor:image') },
+      { id: 'file-import-psd', label: zh ? '导入 PSD…' : 'Import PSD…', click: () => sendNativeCommand('editor:importPSD') },
+      { id: 'file-save', label: zh ? '保存' : 'Save', accelerator: 'Ctrl+S', enabled: !!session.current && !session.pending, click: () => sendNativeCommand('editor:save') },
+      { id: 'file-save-as', label: zh ? '另存为…' : 'Save As…', accelerator: 'Ctrl+Shift+S', enabled: !!session.current && !session.pending, click: () => sendNativeCommand('editor:saveAs') },
+      { id: 'file-export-png', label: zh ? '导出 PNG…' : 'Export PNG…', click: () => sendNativeCommand('editor:png') },
+      { id: 'file-export-as', label: zh ? '导出为 / 印刷预览…' : 'Export As / Print proof…', enabled: !!session.current && !session.pending, accelerator: 'Ctrl+Alt+Shift+S', click: () => sendNativeCommand('editor:exportAs') },
+      {id:'file-batch-export',label:zh?'批量导出…':'Batch Export…',enabled:!!session.current&&!session.pending,click:()=>sendNativeCommand('editor:batchExport')},
+      { id: 'file-export-psd', label: zh ? '导出 PSD…' : 'Export PSD…', click: () => sendNativeCommand('editor:exportPSD') },
+      ...['gif', 'eps'].map(type => ({ id: `file-export-${type}`, label: zh ? `导出 ${type.toUpperCase()}…` : `Export ${type.toUpperCase()}…`, enabled: !!session.current && !session.pending, click: () => sendNativeCommand(`editor:${type}`) })),
+      { id: 'file-recover', label: zh ? '恢复未保存项目…' : 'Recover unsaved project…', click: () => sendNativeCommand('editor:recover') },
+      { id: 'file-reload', label: zh ? '重新加载项目' : 'Reload project', accelerator: 'Ctrl+R', enabled: !!session.current && !session.pending, click: () => sendNativeCommand('viewer:reload') },
+      { id: 'file-close', label: zh ? '关闭项目' : 'Close project', accelerator: 'Ctrl+W', enabled: !!session.current || session.pending, click: () => sendNativeCommand('viewer:close') },
       { type: 'separator' }, { label: zh ? '退出' : 'Quit', role: 'quit' }
     ] },
     { label: zh ? '编辑' : 'Edit', submenu: [
       // Text fields have their own history, even when the project has no edits.
-      { id: 'edit-undo', label: zh ? '撤销' : 'Undo', accelerator: 'Ctrl+Z', enabled: !session.pending, click: () => win?.webContents.send('editor:undo') },
-      { id: 'edit-redo', label: zh ? '重做' : 'Redo', accelerator: 'Ctrl+Shift+Z', enabled: !session.pending, click: () => win?.webContents.send('editor:redo') },
-      { type: 'separator' }, ...[['cut','剪切','Cut','Ctrl+X'],['copy','复制','Copy','Ctrl+C'],['copyMerged','合并复制','Copy merged','Ctrl+Shift+C'],['paste','粘贴','Paste','Ctrl+V']].map(([name,cn,en,accelerator])=>({label:zh?cn:en,accelerator,click:()=>win?.webContents.send('editor:'+name)}))
+      { id: 'edit-undo', label: zh ? '撤销' : 'Undo', accelerator: 'Ctrl+Z', enabled: !session.pending, click: () => sendNativeCommand('editor:undo') },
+      { id: 'edit-redo', label: zh ? '重做' : 'Redo', accelerator: 'Ctrl+Shift+Z', enabled: !session.pending, click: () => sendNativeCommand('editor:redo') },
+      { type: 'separator' }, ...[['cut','剪切','Cut','Ctrl+X'],['copy','复制','Copy','Ctrl+C'],['copyMerged','合并复制','Copy merged','Ctrl+Shift+C'],['paste','粘贴','Paste','Ctrl+V']].map(([name,cn,en,accelerator])=>({label:zh?cn:en,accelerator,click:()=>sendNativeCommand('editor:'+name)}))
     ] },
     { label: zh ? '显示' : 'View', submenu: [
-      { label: zh ? '适合窗口' : 'Fit to window', accelerator: 'Ctrl+0', click: () => win?.webContents.send('viewer:fit') },
-      { label: '100%', accelerator: 'Ctrl+1', click: () => win?.webContents.send('viewer:actual') },
-      ...[['grid','网格','Grid'],['snap','吸附','Snap']].map(([name,cn,en])=>({label:zh?cn:en,click:()=>win?.webContents.send('editor:'+name)})),
+      { label: zh ? '适合窗口' : 'Fit to window', accelerator: 'Ctrl+0', click: () => sendNativeCommand('viewer:fit') },
+      { label: '100%', accelerator: 'Ctrl+1', click: () => sendNativeCommand('viewer:actual') },
+      ...[['grid','网格','Grid'],['snap','吸附','Snap']].map(([name,cn,en])=>({label:zh?cn:en,click:()=>sendNativeCommand('editor:'+name)})),
       { label: zh ? '全屏' : 'Full screen', role: 'togglefullscreen' }
-    ,... [['navigator','导航缩略图','Navigator'],['rulers','标尺','Rulers'],['palette','颜色面板','Color panel'],['viewSettings','网格与标尺设置…','Grid and ruler settings…']].map(([name,cn,en])=>({id:`view-${name}`,label:zh?cn:en,click:()=>win?.webContents.send(`editor:${name}`)}))] },
-    { label:zh?'选择':'Select',submenu:[['colorRange','色彩范围…','Color Range…'],['selectAll','全选','Select all','Ctrl+A'],['deselect','取消选区','Deselect','Ctrl+D'],['invertSelection','反选','Invert selection','Ctrl+Shift+I'],['expandSelection','扩展选区','Expand selection'],['contractSelection','收缩选区','Contract selection'],['featherSelection','羽化选区','Feather selection'],['fill','填充前景色','Fill foreground'],['clear','清除','Clear'],['selectionMask','选区转蒙版','Selection to mask']].map(([name,cn,en,accelerator])=>({label:zh?cn:en,accelerator,enabled:!!session.current,click:()=>win?.webContents.send('editor:'+name)})) },
-    { label:zh?'图像':'Image',submenu:[['canvasSize','画布尺寸…','Canvas size…'],['imageSize','图像尺寸…','Image size…'],['cropSelection','裁剪到选区','Crop to selection'],['trim','修剪透明边缘','Trim transparent edges'],['flipCanvasH','水平翻转画布','Flip canvas horizontally'],['flipCanvasV','垂直翻转画布','Flip canvas vertically']].map(([name,cn,en])=>({label:zh?cn:en,enabled:!!session.current,click:()=>win?.webContents.send('editor:'+name)})) },
+    ,... [['navigator','导航缩略图','Navigator'],['rulers','标尺','Rulers'],['palette','颜色面板','Color panel'],['viewSettings','网格与标尺设置…','Grid and ruler settings…']].map(([name,cn,en])=>({id:`view-${name}`,label:zh?cn:en,click:()=>sendNativeCommand(`editor:${name}`)}))] },
+    { label:zh?'选择':'Select',submenu:[['colorRange','色彩范围…','Color Range…'],['selectAll','全选','Select all','Ctrl+A'],['deselect','取消选区','Deselect','Ctrl+D'],['invertSelection','反选','Invert selection','Ctrl+Shift+I'],['expandSelection','扩展选区','Expand selection'],['contractSelection','收缩选区','Contract selection'],['featherSelection','羽化选区','Feather selection'],['fill','填充前景色','Fill foreground'],['clear','清除','Clear'],['selectionMask','选区转蒙版','Selection to mask']].map(([name,cn,en,accelerator])=>({label:zh?cn:en,accelerator,enabled:!!session.current,click:()=>sendNativeCommand('editor:'+name)})) },
+    { label:zh?'图像':'Image',submenu:[['canvasSize','画布尺寸…','Canvas size…'],['imageSize','图像尺寸…','Image size…'],['cropSelection','裁剪到选区','Crop to selection'],['trim','修剪透明边缘','Trim transparent edges'],['flipCanvasH','水平翻转画布','Flip canvas horizontally'],['flipCanvasV','垂直翻转画布','Flip canvas vertically']].map(([name,cn,en])=>({label:zh?cn:en,enabled:!!session.current,click:()=>sendNativeCommand('editor:'+name)})) },
     { label: zh ? '图层' : 'Layer', submenu: [
-      { id: 'layer-new', label: zh ? '新建像素层' : 'New pixel layer', click: () => win?.webContents.send('editor:addPixels') },
-      { id: 'layer-group', label: zh ? '新建组' : 'New group', click: () => win?.webContents.send('editor:addGroup') },
-      { id: 'layer-mask', label: zh ? '添加蒙版' : 'Add mask', click: () => win?.webContents.send('editor:addMask') },
-      ...[['textOutlines','文字转轮廓','Convert text to outlines'],['newFill','新建填充图层…','New fill layer…'],['editFill','编辑填充图层…','Edit fill layer…'],['newPath','钢笔／新建路径…','Pen / New path…'],['editPath','编辑路径…','Edit path…'],['newVectorMask','新建矢量蒙版…','New vector mask…'],['editVectorMask','编辑矢量蒙版…','Edit vector mask…'],['vectorMaskFromPath','在下方图层创建矢量蒙版','Path to vector mask on layer below']].map(([name,cn,en])=>({id:`layer-${name}`,label:zh?cn:en,enabled:!!session.current&&!session.pending,click:()=>win?.webContents.send(`editor:${name}`)})),
+      { id: 'layer-new', label: zh ? '新建像素层' : 'New pixel layer', click: () => sendNativeCommand('editor:addPixels') },
+      { id: 'layer-group', label: zh ? '新建组' : 'New group', click: () => sendNativeCommand('editor:addGroup') },
+      { id: 'layer-mask', label: zh ? '添加蒙版' : 'Add mask', click: () => sendNativeCommand('editor:addMask') },
+      ...[['textOutlines','文字转轮廓','Convert text to outlines'],['newFill','新建填充图层…','New fill layer…'],['editFill','编辑填充图层…','Edit fill layer…'],['newPath','钢笔／新建路径…','Pen / New path…'],['editPath','编辑路径…','Edit path…'],['newVectorMask','新建矢量蒙版…','New vector mask…'],['editVectorMask','编辑矢量蒙版…','Edit vector mask…'],['vectorMaskFromPath','在下方图层创建矢量蒙版','Path to vector mask on layer below']].map(([name,cn,en])=>({id:`layer-${name}`,label:zh?cn:en,enabled:!!session.current&&!session.pending,click:()=>sendNativeCommand(`editor:${name}`)})),
       { type: 'separator' },
-      ...[['text','新建文字／编辑文字…','New / edit text…'],['shape','新建形状／编辑形状…','New / edit shape…'],['group','编组','Group','Ctrl+G'],['ungroup','解组','Ungroup','Ctrl+Shift+G'],['duplicate','复制图层','Duplicate layers'],['delete','删除图层','Delete layers'],['merge','合并所选图层','Merge selected layers'],['flatten','拼合图像','Flatten image'],['rasterize','栅格化','Rasterize'],['applyMask','应用蒙版','Apply mask']].map(([name,cn,en,accelerator])=>({label:zh?cn:en,accelerator,enabled:!!session.current,click:()=>win?.webContents.send('editor:'+name)})),
+      ...[['text','新建文字／编辑文字…','New / edit text…'],['shape','新建形状／编辑形状…','New / edit shape…'],['group','编组','Group','Ctrl+G'],['ungroup','解组','Ungroup','Ctrl+Shift+G'],['duplicate','复制图层','Duplicate layers'],['delete','删除图层','Delete layers'],['merge','合并所选图层','Merge selected layers'],['flatten','拼合图像','Flatten image'],['rasterize','栅格化','Rasterize'],['applyMask','应用蒙版','Apply mask']].map(([name,cn,en,accelerator])=>({label:zh?cn:en,accelerator,enabled:!!session.current,click:()=>sendNativeCommand('editor:'+name)})),
       { type: 'separator' },
-      { label: zh ? '图层属性' : 'Layer properties', click: () => win?.webContents.send('editor:properties') },
-      { label: zh ? '图层效果' : 'Layer effects', click: () => win?.webContents.send('editor:effects') }
+      { label: zh ? '图层属性' : 'Layer properties', click: () => sendNativeCommand('editor:properties') },
+      { label: zh ? '图层效果' : 'Layer effects', click: () => sendNativeCommand('editor:effects') }
     ] },
-    {label:zh?'滤镜':'Filter',submenu:[{id:'filter-repeat',label:zh?'重复上次滤镜':'Repeat last filter',accelerator:'Ctrl+Alt+F',enabled:!!session.current,click:()=>win?.webContents.send('editor:repeatFilter')},... [['filterStack','可编辑滤镜…','Editable filters…'],['advancedLiquify','高级液化…','Advanced Liquify…']].map(([name,cn,en])=>({id:`filter-${name}`,label:zh?cn:en,enabled:!!session.current&&!session.pending,click:()=>win?.webContents.send(`editor:${name}`)})),{label:zh?'滤镜图库…':'Filter gallery…',enabled:!!session.current,click:()=>win?.webContents.send('editor:filter')}]},
+    {label:zh?'滤镜':'Filter',submenu:[{id:'filter-repeat',label:zh?'重复上次滤镜':'Repeat last filter',accelerator:'Ctrl+Alt+F',enabled:!!session.current,click:()=>sendNativeCommand('editor:repeatFilter')},... [['filterStack','可编辑滤镜…','Editable filters…'],['advancedLiquify','高级液化…','Advanced Liquify…']].map(([name,cn,en])=>({id:`filter-${name}`,label:zh?cn:en,enabled:!!session.current&&!session.pending,click:()=>sendNativeCommand(`editor:${name}`)})),{label:zh?'滤镜图库…':'Filter gallery…',enabled:!!session.current,click:()=>sendNativeCommand('editor:filter')}]},
     { label: zh ? '帮助' : 'Help', submenu: [
-      {id:'command-finder',label:zh?'查找命令…':'Find a command…',accelerator:'Ctrl+Shift+P',click:()=>win?.webContents.send('editor:commandFinder')},
-      {label:zh?'下一个标签页':'Next tab',accelerator:'Ctrl+Tab',click:()=>win?.webContents.send('editor:tabNext')},{label:zh?'上一个标签页':'Previous tab',accelerator:'Ctrl+Shift+Tab',click:()=>win?.webContents.send('editor:tabPrevious')},
-      {id:'history-panel',label:zh?'历史记录…':'History…',enabled:!!session.current,click:()=>win?.webContents.send('editor:historyPanel')},
-      { id: 'project-details', label: zh ? '项目详情与兼容性' : 'Project details and compatibility', click: () => win?.webContents.send('editor:details') }
+      {id:'command-finder',label:zh?'查找命令…':'Find a command…',accelerator:'Ctrl+Shift+P',click:()=>sendNativeCommand('editor:commandFinder')},
+      {label:zh?'下一个标签页':'Next tab',accelerator:'Ctrl+Tab',click:()=>sendNativeCommand('editor:tabNext')},{label:zh?'上一个标签页':'Previous tab',accelerator:'Ctrl+Shift+Tab',click:()=>sendNativeCommand('editor:tabPrevious')},
+      {id:'history-panel',label:zh?'历史记录…':'History…',enabled:!!session.current,click:()=>sendNativeCommand('editor:historyPanel')},
+      { id: 'project-details', label: zh ? '项目详情与兼容性' : 'Project details and compatibility', click: () => sendNativeCommand('editor:details') }
     ] }
-  ]));
+  ]);
+  if(!rendererReady){const disable=menu=>{for(const item of menu.items){if(item.submenu)disable(item.submenu);else if(item.role!=='quit')item.enabled=false;}};disable(menu);}
+  Menu.setApplicationMenu(menu);
 }
 async function projectRequest(start) {
   const pending = start();
@@ -192,7 +196,7 @@ win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 win.webContents.on('will-navigate', (event, url) => { if (url !== HOME) event.preventDefault(); });
 win.webContents.on('will-attach-webview', event => event.preventDefault());
 win.webContents.on('render-process-gone',()=>{void stopBatch().catch(()=>{});});
-win.on('focus',()=>{if(!workspace.busy)win.webContents.send('editor:externalCheck');});
+win.on('focus',()=>{if(rendererReady&&!workspace.busy)win.webContents.send('editor:externalCheck');});
 win.on('close', event => {
   if (closing) return;
   event.preventDefault(); if (closePending) return; closePending = true;
@@ -202,6 +206,7 @@ win.on('close', event => {
 win.on('closed', () => {for(const target of workspace.sessions)target.close(); win = null; });
 app.on('window-all-closed', () => app.quit());
 handler('viewer:viewSettings',async value=>{try{return {settings:value===undefined?await viewPreferences.read():await viewPreferences.write(value)};}catch(error){return {error:error.code??'write'};}});
+handler('viewer:ready',()=>{rendererReady=true;nativeMenu();if(pendingNativeCommand){const channel=pendingNativeCommand;pendingNativeCommand=undefined;sendNativeCommand(channel);}return {};});
 handler('viewer:settings', () => ({ language, version: app.getVersion(), edition: edition.id }));
 handler('viewer:language', async value => {
   if (!['en', 'zh-Hans'].includes(value)) throw new Error('Invalid language');

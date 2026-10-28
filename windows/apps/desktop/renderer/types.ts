@@ -41,6 +41,7 @@ export interface AiAnswer { reply?: string; operations?: Record<string, unknown>
 declare global {
   interface Window {
     viewer: {
+      ready():Promise<Record<string,never>>;
       viewSettings(value?:Record<string,unknown>):Promise<{settings?:Record<string,any>;error?:string}>;
       settings(): Promise<{ language: Language; version: string; edition: 'linux' | 'windows' }>;
       language(value: Language): Promise<{ language: Language }>;

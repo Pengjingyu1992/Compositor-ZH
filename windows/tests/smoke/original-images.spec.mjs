@@ -15,7 +15,6 @@ test('packaged image import preserves ICC 16-bit PNG and orientation through sav
     await writeFile(image, bytes);
     instance = await _electron.launch({ executablePath: smokeExecutable(), args: smokeArgs(), env: smokeEnv(directory) });
     const page = await instance.firstWindow();
-    await expect(page.locator('.welcome')).toBeVisible();
     await instance.evaluate(({ dialog, Menu }, { image, saved }) => {
       dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [image] });
       dialog.showSaveDialog = async () => ({ canceled: false, filePath: saved });

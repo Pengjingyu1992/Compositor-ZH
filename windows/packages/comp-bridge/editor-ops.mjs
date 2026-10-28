@@ -7,6 +7,7 @@ import { bounds, union, arrange, shapeMask, combineMasks, modifyMask, floodMask,
 import { fillPixels, strokePixels, resizePixels, applySelectedFilter, FILTERS } from './raster-tools.mjs';
 import { supportsFillStyle, supportsVectorPath, validRGB, renderFillPixels } from './layer-styles.mjs';
 import{colorRangeMask}from'./color-range.mjs';
+import{readEdgeLevels,validateEdgeSettings,renderEdgeMask,resizeEdgeMask,decontaminateEdges}from'./edge-refinement.mjs';
 const fail = c => { throw new ProjectError(c); };
 const finite = (v,a=-300000,b=300000) => typeof v==='number' && Number.isFinite(v) && v>=a && v<=b;
 const pair = v => Array.isArray(v) && v.length===2 && v.every(n=>finite(n));
@@ -79,6 +80,21 @@ export function editorOperation(data,m,resources,target,op,codecs,descendants) {
   const layerFile=l=>`images/${l.imageFile}`, shift=(ids,dx,dy,carryAll=false)=>{for(const l of m.layers)if(ids.has(l.id.toUpperCase())){l.transform.origin=l.transform.origin.map((v,i)=>v+(i?dy:dx));if(l.maskPlacement&&(carryAll||l.maskLinked!==false))l.maskPlacement.origin=l.maskPlacement.origin.map((v,i)=>v+(i?dy:dx));}};
   const roots=ids=>m.layers.filter(l=>ids.includes(l.id)&&!m.layers.some(p=>p.id!==l.id&&ids.includes(p.id)&&descendants(p.id).has(l.id.toUpperCase())));
   switch(op.kind){
+    case 'refineEdges':{
+      if(!target.imageFile||target.isGroup||target.adjustment)fail('unsupported');
+      const settings=validateEdgeSettings(op.settings),original=resources.get(layerFile(target)),image=codecs.decodePNG(original),levels=readEdgeLevels(op.mask,image.width,image.height),small=renderEdgeMask(levels,op.mask.width,op.mask.height,settings,image.width),mask=resizeEdgeMask(small,op.mask.width,op.mask.height,image.width,image.height),copy=settings.copy||settings.decontaminate>0;
+      let row=target;
+      if(copy){
+        checkPermission(data,{kind:'appearance',id:target.id});if(target.parentID)checkPermission(data,{kind:'add',parentID:m.layers.find(layer=>layer.id.toUpperCase()===target.parentID.toUpperCase())?.id});
+        if(m.layers.some(layer=>layer.maskSourceID?.toUpperCase()===target.id.toUpperCase()))fail('unsupported');
+        row=structuredClone(target);row.id=randomUUID().toUpperCase();row.name=String(op.name??target.name+' — Refined').slice(0,256);row.isVisible=true;row.imageFile=row.id+'.png';
+        m.layers.splice(m.layers.indexOf(target)+1,0,row);target.isVisible=false;
+        resources.set(layerFile(row),settings.decontaminate?codecs.encodePixels(decontaminateEdges(image,mask,settings.decontaminate/100)):original);delete row.editableFilters;
+        if(settings.decontaminate){delete row.text;delete row.shape;delete row.fill;}
+      }
+      const pixels=new Uint8ClampedArray(image.width*image.height*4);for(let i=0;i<mask.length;i++){pixels[i*4]=pixels[i*4+1]=pixels[i*4+2]=mask[i];pixels[i*4+3]=255;}
+      row.maskFile=row.id.toUpperCase()+'.mask.png';row.maskEnabled=true;row.maskLinked=true;delete row.maskPlacement;delete row.vectorMask;resources.set('images/'+row.maskFile,codecs.encodePixels({width:image.width,height:image.height,data:pixels},true));m.activeLayerID=row.id;return true;
+    }
     case 'stroke':case 'fill':case 'gradient':case 'bucket':case 'filter':case 'clear':{
       const mask=op.target==='mask',file=mask?target.maskFile:target.imageFile;if(!file||(!mask&&(target.isGroup||target.adjustment)))fail('unsupported');
       const t=mask?(target.maskPlacement??target.transform):target.transform;

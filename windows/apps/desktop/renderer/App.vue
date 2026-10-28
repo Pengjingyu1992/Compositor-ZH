@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import ColorRangeDialog from './ColorRangeDialog.vue';
+import EdgeRefinementDialog from './EdgeRefinementDialog.vue';
 import BatchExportDialog from './BatchExportDialog.vue';
 import RecentDialog from './RecentDialog.vue';
 import NavigatorPanel from './NavigatorPanel.vue';
@@ -50,6 +51,8 @@ async function openColorRange(){if(!editable.value)return;await request(async()=
 function closeColorRange(){structuredDialog.value='';rangePNG.value=undefined;rangeOwner=undefined;}
 function applyColorRange(settings:Record<string,unknown>){return submitEdit({kind:'selection',action:'colorRange',settings,png:rangePNG.value},rangeOwner,true);}
 function openFilterStack(liquify=false){const row=selected.value;if(!editable.value||!row?.imageFile||!liquify&&(row.text||row.shape||row.fill)||row.isGroup||row.adjustment){error.value='unsupported';return;}structuredLayer.value=row;stackLiquify.value=liquify;structuredDialog.value='stack';}
+function openEdgeRefinement(){if(!editable.value||!selected.value?.imageFile)return;structuredLayer.value=selected.value;structuredDialog.value='refine';}
+const refineCommit=(op:Record<string,unknown>,owner:{id:string;revision:string})=>submitEdit(op,owner,true);
 const workspaceState=ref<WorkspaceState>({tabs:[],activeID:''}),recentState=ref<RecentState>({enabled:false,entries:[]}),newInTab=ref(false),externalNotice=ref<{signature?:string;missing?:boolean}>();
 const ignoredMissing=new Set<string>(),tabViews=new Map<string,{selectedID?:string;ids:string[];zoom:number;left:number;top:number;target:string}>();
 const swatches=ref<string[]>([...DEFAULT_VIEW_SETTINGS.swatches]),navigationViewport=ref({x:0,y:0,w:0,h:0});
@@ -62,6 +65,7 @@ function canCommand(id:string){
   if(['save','saveAs','close','fit','actual','grid','snap','rulers','navigator','historyPanel','properties','unlockedCopy'].includes(id))return true;
   if(['exportAs','exportPSD','gif','eps','copyMerged','grayscaleCopy','batchExport'].includes(id))return source.value==='engine';
   if(!editable.value)return false;
+  if(id==='refineEdges')return !!row?.imageFile;
   if(id==='repeatFilter')return !!row?.imageFile&&!!full.lastFilter;
   if(['expandSelection','contractSelection','featherSelection','cropSelection'].includes(id))return !!p.selection;
   if(id==='addMask')return !!row&&!row.maskFile;if(id==='applyMask')return !!row?.maskFile&&!!row.imageFile;
@@ -390,12 +394,12 @@ onMounted(async () => {
   try{const result=await window.viewer.viewSettings();if(result.settings)applyViewSettings(result.settings);await nextTick();}catch{settingError.value=true;}viewPreferencesReady=true;await refreshWorkspace();
   subscriptions.push(window.viewer.onOpen(open), window.viewer.onReload(reload), window.viewer.onClose(closeProject), window.viewer.onFit(fit), window.viewer.onActual(() => zoom.value = 1));
   subscriptions.push(window.viewer.onImportProgress(value=>{importProgress.value=value;}));
-  const commands: Record<string, () => unknown> = {...full.commands,colorRange:openColorRange,batchExport:()=>{if(editable.value)structuredDialog.value='batch';},newTab:openNewTab,openTab:()=>workspaceAction('open'),tabNext:()=>cycleTab(1),tabPrevious:()=>cycleTab(-1),recentProjects:showRecent,unlockedCopy:copyProject,grayscaleCopy,externalCheck:checkExternal,navigator:()=>{full.options.navigator=!full.options.navigator;},rulers:()=>{full.options.rulers=!full.options.rulers;},palette:()=>{full.options.palette=!full.options.palette;},viewSettings:()=>{structuredDialog.value='viewSettings';},commandFinder:openCommands,historyPanel:showHistoryPanel,textOutlines:()=>edit({kind:'textOutlines'}),filterStack:()=>openFilterStack(),advancedLiquify:()=>openFilterStack(true),newFill:()=>openStructured('fill'),editFill:()=>openStructured('fill',true),newPath:()=>openStructured('path'),editPath:()=>openStructured('path',true),newVectorMask:()=>openStructured('mask'),editVectorMask:()=>openStructured('mask',true),vectorMaskFromPath:maskFromPath,exportAs:()=>{outputDialog.value=true;},new:()=>{newInTab.value=false;newDialog.value=true;},image:importImage,importPSD,save:()=>save(),saveAs:()=>save(true),png:()=>exportImage('png'),gif:()=>exportImage('gif'),eps:()=>exportImage('eps'),exportPSD:()=>{psdDialog.value=true;},recover,undo:()=>history('undo'),redo:()=>history('redo'),addPixels:()=>add('pixels'),addGroup:()=>add('group'),addMask:()=>{if(selected.value)edit({kind:'mask',action:'add'});},details:showDetails,properties:()=>{inspectorTab.value='properties';},effects:showEffects};
+  const commands: Record<string, () => unknown> = {...full.commands,refineEdges:openEdgeRefinement,colorRange:openColorRange,batchExport:()=>{if(editable.value)structuredDialog.value='batch';},newTab:openNewTab,openTab:()=>workspaceAction('open'),tabNext:()=>cycleTab(1),tabPrevious:()=>cycleTab(-1),recentProjects:showRecent,unlockedCopy:copyProject,grayscaleCopy,externalCheck:checkExternal,navigator:()=>{full.options.navigator=!full.options.navigator;},rulers:()=>{full.options.rulers=!full.options.rulers;},palette:()=>{full.options.palette=!full.options.palette;},viewSettings:()=>{structuredDialog.value='viewSettings';},commandFinder:openCommands,historyPanel:showHistoryPanel,textOutlines:()=>edit({kind:'textOutlines'}),filterStack:()=>openFilterStack(),advancedLiquify:()=>openFilterStack(true),newFill:()=>openStructured('fill'),editFill:()=>openStructured('fill',true),newPath:()=>openStructured('path'),editPath:()=>openStructured('path',true),newVectorMask:()=>openStructured('mask'),editVectorMask:()=>openStructured('mask',true),vectorMaskFromPath:maskFromPath,exportAs:()=>{outputDialog.value=true;},new:()=>{newInTab.value=false;newDialog.value=true;},image:importImage,importPSD,save:()=>save(),saveAs:()=>save(true),png:()=>exportImage('png'),gif:()=>exportImage('gif'),eps:()=>exportImage('eps'),exportPSD:()=>{psdDialog.value=true;},recover,undo:()=>history('undo'),redo:()=>history('redo'),addPixels:()=>add('pixels'),addGroup:()=>add('group'),addMask:()=>{if(selected.value)edit({kind:'mask',action:'add'});},details:showDetails,properties:()=>{inspectorTab.value='properties';},effects:showEffects};
   commandActions.value={...commands,open,close:closeProject,fit,actual:()=>{zoom.value=1;}};
   for(const [name,action] of Object.entries(commands))subscriptions.push(window.editor.onCommand(name,()=>{
     if(composing)return;
-    if(painting.value&&!(full.clipboardBusy&&['copy','copyMerged','cut','paste'].includes(name)))return;
     if(['copy','cut','paste','selectAll','undo','redo'].includes(name)&&document.activeElement?.closest('input,textarea,[contenteditable]')){void window.editor.textClipboard(name);return;}
+    if(painting.value&&!(full.clipboardBusy&&['copy','copyMerged','cut','paste'].includes(name)))return;
     if(['undo','redo'].includes(name)&&(newDialog.value||psdDialog.value||outputDialog.value||structuredDialog.value||detailsDialog.value||full.modal))return;
     if(name==='undo'&&!project.value?.canUndo||name==='redo'&&!project.value?.canRedo)return;
     action();
@@ -576,6 +580,7 @@ onUnmounted(() => { stopPlayback();clearTimeout(viewPreferencesTimer); operation
     <ViewSettingsDialog v-if="structuredDialog==='viewSettings'" :language="language" :settings="viewState()" @close="structuredDialog=''" @apply="confirmViewSettings"/>
     <CommandDialog v-if="structuredDialog==='commands'" :language="language" :commands="finderCommands" @close="structuredDialog=''" @run="runCommand"/>
     <HistoryDialog v-if="structuredDialog==='history' && project" :language="language" :project="project" :busy="busy" @close="structuredDialog=''" @jump="jumpHistory"/>
+    <EdgeRefinementDialog v-if="structuredDialog==='refine' && project && structuredLayer" :language="language" :project="project" :layer="structuredLayer" :commit="refineCommit" @running="painting=$event" @close="structuredDialog=''"/>
     <FilterStackDialog v-if="structuredDialog==='stack' && project && structuredLayer" :language="language" :project="project" :layer="structuredLayer" :initial-liquify="stackLiquify" :commit="submitEdit" @close="structuredDialog=''"/>
     <FillDialog v-if="structuredDialog==='fill' && project" :language="language" :project="project" :layer="structuredLayer" :editing="structuredEditing" :commit="submitEdit" @close="structuredDialog=''"/>
     <PathDialog v-if="['path','mask'].includes(structuredDialog) && project" :language="language" :project="project" :layer="structuredLayer" :editing="structuredEditing" :mode="structuredDialog==='mask'?'mask':'path'" :commit="submitEdit" @close="structuredDialog=''"/>

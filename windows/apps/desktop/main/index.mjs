@@ -114,7 +114,7 @@ function nativeMenu() {
       { label: zh ? '图层属性' : 'Layer properties', click: () => sendNativeCommand('editor:properties') },
       { label: zh ? '图层效果' : 'Layer effects', click: () => sendNativeCommand('editor:effects') }
     ] },
-    {label:zh?'滤镜':'Filter',submenu:[{id:'filter-repeat',label:zh?'重复上次滤镜':'Repeat last filter',accelerator:'Ctrl+Alt+F',enabled:!!session.current,click:()=>sendNativeCommand('editor:repeatFilter')},... [['cameraRaw','Camera Raw 滤镜…','Camera Raw Filter…'],['filterStack','可编辑滤镜…','Editable filters…'],['advancedLiquify','高级液化…','Advanced Liquify…']].map(([name,cn,en])=>({id:`filter-${name}`,label:zh?cn:en,enabled:!!session.current&&!session.pending,click:()=>sendNativeCommand(`editor:${name}`)})),{label:zh?'滤镜图库…':'Filter gallery…',enabled:!!session.current,click:()=>sendNativeCommand('editor:filter')}]},
+    {label:zh?'滤镜':'Filter',submenu:[{id:'filter-repeat',label:zh?'重复上次滤镜':'Repeat last filter',accelerator:'Ctrl+Alt+F',enabled:!!session.current,click:()=>sendNativeCommand('editor:repeatFilter')},... [['refineEdges','图层修边…','Refine Layer Edges…'],['cameraRaw','Camera Raw 滤镜…','Camera Raw Filter…'],['filterStack','可编辑滤镜…','Editable filters…'],['advancedLiquify','高级液化…','Advanced Liquify…']].map(([name,cn,en])=>({id:`filter-${name}`,label:zh?cn:en,enabled:!!session.current&&!session.pending,click:()=>sendNativeCommand(`editor:${name}`)})),{label:zh?'滤镜图库…':'Filter gallery…',enabled:!!session.current,click:()=>sendNativeCommand('editor:filter')}]},
     { label: zh ? '帮助' : 'Help', submenu: [
       {id:'command-finder',label:zh?'查找命令…':'Find a command…',accelerator:'Ctrl+Shift+P',click:()=>sendNativeCommand('editor:commandFinder')},
       {label:zh?'下一个标签页':'Next tab',accelerator:'Ctrl+Tab',click:()=>sendNativeCommand('editor:tabNext')},{label:zh?'上一个标签页':'Previous tab',accelerator:'Ctrl+Shift+Tab',click:()=>sendNativeCommand('editor:tabPrevious')},
@@ -321,7 +321,7 @@ handler('editor:textTools',async(action,payload)=>{
 });
 handler('editor:jumpHistory',(id,revision,index)=>projectRequest(async()=>{const result=session.jumpHistory(id,revision,index);nativeMenu();return result;}));
 handler('editor:edit', (id,revision,op)=>{
-  const heavy=o=>['stroke','fill','gradient','bucket','filter','imageSize','applyMask','selectionMask','fillLayer','path','vectorMask','filterStack','textOutlines','styled'].includes(o?.kind)||o?.kind==='selection'||(o?.kind==='batch'&&Array.isArray(o.operations)&&o.operations.some(heavy));
+  const heavy=o=>['refineEdges','stroke','fill','gradient','bucket','filter','imageSize','applyMask','selectionMask','fillLayer','path','vectorMask','filterStack','textOutlines','styled'].includes(o?.kind)||o?.kind==='selection'||(o?.kind==='batch'&&Array.isArray(o.operations)&&o.operations.some(heavy));
   return projectRequest(async()=>{const result=heavy(op)?await session.editAsync(id,revision,op,buildEdit):session.edit(id,revision,op);nativeMenu();return result;});
 });
 const clipboardTokenType='electron application/osclipboard;format="org.compositorzh.clipboard-token"';

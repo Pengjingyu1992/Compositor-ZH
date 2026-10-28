@@ -19,7 +19,11 @@ test('packaged export dialog writes all image formats and print proof leaves the
     await expect(page.getByTestId('save-project')).toBeEnabled();
     await instance.evaluate(({ Menu }) => Menu.getApplicationMenu().getMenuItemById('file-export-as').click());
     const dialog = page.getByRole('dialog'); await expect(dialog).toBeVisible();
-    await page.getByTestId('print-proof').click(); await expect(page.getByTestId('print-proof-image')).toBeVisible();
+    await page.getByTestId('print-proof').click();
+    // The codec job has a 30-second budget; verify its completed state first.
+    await expect(page.getByTestId('output-export')).toBeEnabled({ timeout: 30000 });
+    await expect(dialog.locator('[role=alert]')).toHaveCount(0);
+    await expect(page.getByTestId('print-proof-image')).toBeVisible();
     for (const format of ['jpeg', 'webp', 'avif', 'tiff', 'pdf', 'cmyktiff']) {
       const output = path.join(directory, `output.${format}`);
       await page.getByTestId('output-format').selectOption(format);

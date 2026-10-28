@@ -137,7 +137,11 @@ let navigationObserver:ResizeObserver|undefined,navigationResizeFrame=0;
 function fit() {
   fitToViewport.value=true;
   void nextTick(updateNavigation);
-  if (project.value && stage.value) zoom.value = Math.min(8, Math.max(.01, Math.min((stage.value.clientWidth - 80) / project.value.manifest.width, (stage.value.clientHeight - 80) / project.value.manifest.height)));
+  if(project.value&&stage.value){
+    // Fitting removes scrollbars; their old thickness must not cause a second zoom.
+    const bounds=stage.value.getBoundingClientRect();
+    zoom.value=Math.min(8,Math.max(.01,Math.min((bounds.width-80)/project.value.manifest.width,(bounds.height-80)/project.value.manifest.height)));
+  }
 }
 function setZoom(value:number){if(!Number.isFinite(value))return;fitToViewport.value=false;zoom.value=Math.max(.01,Math.min(8,value));}
 function scale(factor: number) { setZoom(zoom.value * factor); }

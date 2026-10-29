@@ -1,4 +1,5 @@
 export type Language = 'zh-Hans' | 'en';
+export interface NewCanvasDefinition { width: number; height: number; resolution: number; background: 'transparent' | 'white' | 'black' }
 export interface Placement {
   origin: [number, number]; size: [number, number]; rotation: number;
   flipX?: boolean; flipY?: boolean; sampling: string;
@@ -64,7 +65,8 @@ declare global {
       textTools(action:string,payload:Record<string,unknown>):Promise<{error?:string;png?:Uint8Array;fonts?:string[]}>;
       textClipboard(action:string):Promise<void>;
       clipboard(id:string,revision:string,action:string,png?:Uint8Array,info?:{targetID?:string;ids?:string[];origin?:number[]}):Promise<OpenResult>;
-      create(w: number, h: number): Promise<OpenResult>;
+      create(w: number, h: number, options?: { resolution?: number; background?: NewCanvasDefinition['background'] }): Promise<OpenResult>;
+      canvasClipboardSize(): Promise<{ width: number; height: number } | null>;
       edit(id: string, revision: string, op: Record<string, unknown>): Promise<OpenResult>;
       jumpHistory(id:string,revision:string,index:number):Promise<OpenResult>;
       history(id: string, revision: string, direction: string): Promise<OpenResult>;

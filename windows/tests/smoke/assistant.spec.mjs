@@ -108,7 +108,7 @@ test('a delayed answer cannot resize the next project',async()=>{
   const dialog=page.getByRole('dialog');
   await dialog.locator('.new-dimensions input').nth(0).fill('300');
   await dialog.locator('.new-dimensions input').nth(1).fill('200');
-  await dialog.getByRole('button',{name:'创建',exact:true}).click();
+  await dialog.getByTestId('create-canvas').click();
   await expect(page.getByTestId('ai-layer')).toHaveCount(0);
   releaseAnswer();
   await expect(page.locator('.assistant-log')).toContainText('项目已切换');

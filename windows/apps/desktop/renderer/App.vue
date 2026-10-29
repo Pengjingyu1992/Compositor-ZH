@@ -29,11 +29,12 @@ import EffectEditor from './EffectEditor.vue';
 import AiPanel from './AiPanel.vue';
 import { editRejection } from '../../../packages/platform/edit-command.mjs';
 import Icon from './Icon.vue';
+import NewCanvas from './NewCanvas.vue';
 import CompleteControls from './CompleteControls.vue';
 import { useCompleteEditor, TOOL_LIST, TOOL_KEYS } from './useCompleteEditor';
 import { ipcData } from './ipc-data';
 import { visibleLayers } from '../../../packages/editor-adapter/layer-list';
-import type { Language, ViewerProject, OpenResult, LayerRow,WorkspaceState,RecentState } from './types';
+import type { Language, ViewerProject, OpenResult, LayerRow,WorkspaceState,RecentState,NewCanvasDefinition } from './types';
 
 const language = ref<Language>('zh-Hans'), version = ref(''), project = ref<ViewerProject>();
 const edition = ref<'linux' | 'windows'>('windows');
@@ -47,7 +48,8 @@ const stage = ref<HTMLDivElement>(), canvas = ref<HTMLCanvasElement>(), zoom = r
 const fitToViewport=ref(true);
 const source = ref<'engine' | 'saved' | 'none'>('none'), extraIssues = ref<string[]>([]);
 const tool=ref('pan'),color=ref('#bae9d6'),brushSize=ref(24),brushOpacity=ref(100),paintTarget=ref('content');
-const newDialog=ref(false),newWidth=ref(1920),newHeight=ref(1080),psdDialog=ref(false),outputDialog=ref(false),status=ref(''),painting=ref(false);
+const newDialog=ref(false),newCanvasError=ref(''),psdDialog=ref(false),outputDialog=ref(false),status=ref(''),painting=ref(false);
+watch(newDialog,()=>{newCanvasError.value='';});
 const overlay=ref<HTMLCanvasElement>(),artboard=ref<HTMLDivElement>();
 const appearance=ref('system'),showsInspector=ref(true),assistantSettingsOpen=ref(false);
 const chrome=computed(()=>parityMessages[language.value]);
@@ -252,7 +254,16 @@ function recover(){return request(()=>window.editor.recover());}
 function add(type:string,adjustment?:string){return edit({kind:'add',type,adjustment,name:type==='group'?t.value.editor.group:type==='adjustment'?t.value.adjustments[ADJUSTMENTS.indexOf(adjustment!)]:t.value.raster,parentID:selected.value?.isGroup?selected.value.id:selected.value?.parentID});}
 function numberEvent(e:Event){return Number((e.target as HTMLInputElement).value);}
 function transformPair(field:'origin'|'size',index:number,e:Event){if(!selected.value)return;const value=[...(full.selectionTransform??selected.value.transform)[field]];value[index]=numberEvent(e);return edit({kind:'transform',field,value});}
-async function create(){newDialog.value=false;const inTab=newInTab.value;newInTab.value=false;await request(()=>inTab?window.editor.workspace('create',{width:newWidth.value,height:newHeight.value}):window.editor.create(newWidth.value,newHeight.value));}
+async function create(definition:NewCanvasDefinition){
+  newCanvasError.value='';const inTab=newDialog.value&&newInTab.value;
+  await request(async()=>{
+    const {width,height,resolution,background}=definition;
+    const result=await(inTab?window.editor.workspace('create',{width,height,resolution,background}):window.editor.create(width,height,{resolution,background}));
+    if(result.error)newCanvasError.value=labelError(result.error);
+    if(result.project){newDialog.value=false;newInTab.value=false;}
+    return result;
+  });
+}
 async function outputComposite(){
   const p=project.value;stopPlayback();if(frameRendering.value)await frameRenderTask;
   if(!p||!canvas.value||project.value?.id!==p.id||project.value?.revision!==p.revision||source.value!=='engine'||painting.value)throw new Error(t.value.errorTitle);
@@ -398,7 +409,10 @@ watch(modalOpen, async visible => {
     stopPlayback();
     returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     await nextTick();
-    if (modalOpen.value) [...document.querySelectorAll<HTMLElement>('.modal-shade')].at(-1)?.querySelector<HTMLElement>('input:not([disabled]),textarea:not([disabled]),select:not([disabled]),button:not([disabled])')?.focus();
+    if (modalOpen.value) {
+      const modal=[...document.querySelectorAll<HTMLElement>('.modal-shade')].at(-1);
+      (modal?.querySelector<HTMLElement>('[autofocus]:not([disabled])')??modal?.querySelector<HTMLElement>('input:not([disabled]),textarea:not([disabled]),select:not([disabled]),button:not([disabled])'))?.focus();
+    }
   } else if (returnFocus?.isConnected) returnFocus.focus();
 });
 function cancelStroke(){full.cancel();drag=undefined;}
@@ -505,12 +519,7 @@ onUnmounted(() => { stopPlayback();clearTimeout(viewPreferencesTimer); operation
         <div v-if="issues.length" class="notice">{{ source==='saved' ? t.fallback : t.detailsOnly }} {{ issues.map(labelIssue).join(' · ') }}</div>
         <div ref="stage" class="stage" @scroll="updateNavigation" @wheel="wheel" @pointerdown="panStart" @pointermove="panMove" @pointerup="panEnd" @pointercancel="cancelStroke">
           <div v-if="!project && initialized" class="welcome">
-            <form @submit.prevent="create">
-              <h1>{{ t.editor.newCanvas }}</h1><p>{{ ui.transparent }}</p>
-              <div class="new-dimensions"><label>{{ t.editor.width }}<span class="unit-field"><input type="number" v-model.number="newWidth" min="1" max="30000" required><span>px</span></span></label><button class="icon-button" type="button" :aria-label="t.editor.swap" :title="t.editor.swap" @click="[newWidth,newHeight]=[newHeight,newWidth]"><Icon name="swap"/></button><label>{{ t.editor.height }}<span class="unit-field"><input type="number" v-model.number="newHeight" min="1" max="30000" required><span>px</span></span></label></div>
-              <div class="welcome-actions"><button type="button" :disabled="busy" @click="open">{{ t.open }}</button><button class="primary" type="submit" :disabled="busy">{{ t.editor.create }}</button></div>
-            </form>
-            <div class="welcome-secondary"><button class="text-button" :disabled="busy" @click="importImage">{{ t.editor.importImage }}</button><button class="text-button" :disabled="busy" @click="importPSD">{{ t.editor.importPSD }}</button><button class="text-button" :disabled="busy" data-testid="recover" @click="recover">{{ t.editor.recover }}</button></div>
+            <div v-if="!newDialog" class="welcome-content"><NewCanvas :language="language" :disabled="busy" :error="newCanvasError" @create="create" @open="open" @image="importImage"/><div class="welcome-secondary"><button class="text-button" :disabled="busy" @click="importPSD">{{ t.editor.importPSD }}</button><button class="text-button" :disabled="busy" data-testid="recover" @click="recover">{{ t.editor.recover }}</button></div></div>
           </div>
           <div v-else-if="project && source!=='none'" class="canvas-surround" :style="{minWidth:project.manifest.width * zoom + 80 + 'px',minHeight:project.manifest.height * zoom + 80 + 'px'}">
             <div ref="artboard" class="artboard" :class="'tool-'+tool" :style="{width:project.manifest.width * zoom + 'px',height:project.manifest.height * zoom + 'px'}">
@@ -620,7 +629,7 @@ onUnmounted(() => { stopPlayback();clearTimeout(viewPreferencesTimer); operation
     <FilterStackDialog v-if="structuredDialog==='stack' && project && structuredLayer" :language="language" :project="project" :layer="structuredLayer" :initial-liquify="stackLiquify" :commit="submitEdit" @close="structuredDialog=''"/>
     <FillDialog v-if="structuredDialog==='fill' && project" :language="language" :project="project" :layer="structuredLayer" :editing="structuredEditing" :commit="submitEdit" @close="structuredDialog=''"/>
     <PathDialog v-if="['path','mask'].includes(structuredDialog) && project" :language="language" :project="project" :layer="structuredLayer" :editing="structuredEditing" :mode="structuredDialog==='mask'?'mask':'path'" :commit="submitEdit" @close="structuredDialog=''"/>
-    <div v-if="newDialog" class="modal-shade" @click.self="newDialog=false"><form class="dialog" role="dialog" aria-modal="true" :aria-label="t.editor.newCanvas" @submit.prevent="create"><h2>{{ t.editor.newCanvas }}</h2><p>{{ ui.transparent }}</p><div class="new-dimensions"><label>{{ t.editor.width }}<input type="number" v-model.number="newWidth" min="1" max="30000" required></label><button class="icon-button" type="button" :aria-label="t.editor.swap" :title="t.editor.swap" @click="[newWidth,newHeight]=[newHeight,newWidth]"><Icon name="swap"/></button><label>{{ t.editor.height }}<input type="number" v-model.number="newHeight" min="1" max="30000" required></label></div><div class="button-row"><button type="button" @click="newDialog=false">{{ t.editor.cancel }}</button><button class="primary" type="submit">{{ t.editor.create }}</button></div></form></div>
+    <div v-if="newDialog" class="modal-shade" @click.self="newDialog=false"><NewCanvas modal :language="language" :disabled="busy" :error="newCanvasError" @create="create" @close="newDialog=false"/></div>
     <div v-if="psdDialog" class="modal-shade" @click.self="psdDialog=false"><div class="dialog" role="dialog" aria-modal="true" :aria-label="t.editor.conversion"><h2>{{ t.editor.conversion }}</h2><p>{{ t.editor.conversionNote }}</p><p v-if="project?.manifest.animation">{{ language==='en'?'PSD keeps frame folders with current visibility. Save .comp or GIF to retain animation timing.':'PSD 保留帧文件夹和当前帧的可见性。动画时长请保存在 .comp 或 GIF 中。' }}</p><div class="button-row"><button @click="psdDialog=false">{{ t.editor.cancel }}</button><button :disabled="!layeredPSD || !editable" @click="exportImage('psd')">{{ t.editor.layered }}</button><button :disabled="!editable" class="primary" @click="exportImage('psd',true)">{{ t.editor.flattened }}</button></div></div></div>
     <div v-if="detailsDialog" class="modal-shade" @click.self="detailsDialog=false"><section class="dialog details-dialog" role="dialog" aria-modal="true" :aria-label="ui.details"><div class="dialog-heading"><h2>{{ ui.details }}</h2><button class="icon-button" :aria-label="t.close" @click="detailsDialog=false"><Icon name="close"/></button></div><p>{{ t.sourceNote }}</p><p>{{ t.readonly }} · {{ version }}</p><template v-if="project"><p>{{ ui.source }}：{{ source==='engine'?t.engine:source==='saved'?t.saved:t.metadata }}</p><section class="coverage"><h3>{{ t.coverage }}</h3><dl><div><dt>{{ t.simple }}</dt><dd>{{ project.analysis.coverage.simple }}</dd></div><div><dt>{{ t.pixels }}</dt><dd>{{ project.analysis.coverage.pixelFallback }}</dd></div><div><dt>{{ t.preview }}</dt><dd>{{ project.analysis.coverage.previewOnly }}</dd></div></dl><p>{{ t.coverageNote }}</p><button :disabled="busy" data-testid="copy-report" @click="copyReport">{{ t.copyReport }}</button><small>{{ t.reportPrivacy }}</small><small v-if="reportState!=='idle'" role="status">{{ reportState==='copied'?t.reportCopied:t.reportError }}</small></section><details v-if="selected" class="raw-properties"><summary>{{ t.properties }}</summary><pre>{{ formattedProperties }}</pre></details></template><div class="button-row"><button class="primary" @click="detailsDialog=false">{{ t.close }}</button></div></section></div>
   </div>

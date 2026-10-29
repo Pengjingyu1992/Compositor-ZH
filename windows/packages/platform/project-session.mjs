@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { readProject } from '../comp-bridge/project.mjs';
-import { editProject, newProject } from '../comp-bridge/edit.mjs';
+import { editProject } from '../comp-bridge/edit.mjs';
 import { fingerprint, saveProject } from './save-project.mjs';
 import path from 'node:path';
 import {pasteLayers} from './layer-clipboard.mjs';
+import { newCanvasProject } from './new-canvas.mjs';
 
 export class ProjectSession {
   constructor(reader = readProject, options = {}) {
@@ -48,9 +49,9 @@ export class ProjectSession {
     this.discardRecoveryFor = this.current ? { id: this.current.id, documentID: this.current.data.manifest.documentID } : null;
   }
 
-  create(w, h, resolution) {
+  create(w, h, resolution, options = {}) {
     if (this.pending) return { error: 'busy' };
-    try { this.generation++; return this.install(newProject(w, h, resolution)); } catch (e) { return { error: e.code ?? (['limit','selection','source'].includes(e.message)?e.message:'invalid') }; }
+    try { this.generation++; return this.install(newCanvasProject(w, h, { ...options, resolution: resolution ?? options.resolution }, this.options.codecs)); } catch (e) { return { error: e.code ?? (['limit','selection','source'].includes(e.message)?e.message:'invalid') }; }
   }
 
   edit(id, revision, op) {

@@ -3,7 +3,7 @@ import{realpath}from'node:fs/promises';
 import path from'node:path';
 import{ProjectSession}from'./project-session.mjs';
 import{readProject,safeDirectory,ProjectError}from'../comp-bridge/project.mjs';
-import{newProject}from'../comp-bridge/edit.mjs';
+import { newCanvasProject } from './new-canvas.mjs';
 import{fingerprint}from'./save-project.mjs';
 
 export class ProjectWorkspace{
@@ -37,7 +37,7 @@ export class ProjectWorkspace{
     if(!this.active.current){const index=this.entries.findIndex(entry=>entry.id===this.activeID);this.entries.splice(index,1);}
     this.entries.push(entry);this.activeID=entry.id;return this.active.view();
   }
-  create(width,height){this.guard();return this.add(newProject(width,height));}
+  create(width,height,options){this.guard();return this.add(newCanvasProject(width,height,options,this.options.codecs));}
   async open(location){
     this.guard();if(!location)return{canceled:true};const previous=this.active;this.pending=true;previous.pending=true;
     try{

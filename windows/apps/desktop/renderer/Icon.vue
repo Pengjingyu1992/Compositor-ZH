@@ -1,6 +1,9 @@
 <script setup lang="ts">
 defineProps<{ name: string }>();
 const paths: Record<string, string[]> = {
+  arrowRight:['M4 12h16','m14 6 6 6-6 6'],
+  more:['M5 12h.01','M12 12h.01','M19 12h.01'],
+  image:['M3 4h18v16H3Z','M7 8h.01','m3 17 5-6 5 5 3-3 5 5'],
   alignLeft:['M3 3v18','M7 5h13v5H7Z','M7 14h9v5H7Z'],
   alignHcenter:['M12 2v20','M4 5h16v5H4Z','M7 14h10v5H7Z'],
   alignRight:['M21 3v18','M4 5h13v5H4Z','M8 14h9v5H8Z'],

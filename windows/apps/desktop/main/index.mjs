@@ -1,4 +1,5 @@
-import { app, BrowserWindow, Menu, dialog, ipcMain, protocol, clipboard, ClipboardItem, nativeImage, nativeTheme } from 'electron';
+import { app, BrowserWindow, Menu, dialog, ipcMain, protocol, clipboard, ClipboardItem, nativeTheme } from 'electron';
+import { canvasCreation } from '../../../packages/comp-bridge/new-canvas.mjs';
 import { readFile, lstat, open, rename, rm } from 'node:fs/promises';
 import { Worker } from 'node:worker_threads';
 import { createRequire } from 'node:module';
@@ -229,7 +230,26 @@ handler('viewer:dropFiles',(records,payload)=>importImageRecords(records,payload
 handler('viewer:cancelImport',jobID=>{if(imageImportJob?.run.id===jobID)imageImportJob.run.cancel();return {};});
 handler('viewer:reload', async id => { if (!(await canLeave())) return { canceled: true }; return projectRequest(() => session.reload(id)); });
 handler('viewer:close',async()=>{if(!session.current)return{closed:true,workspace:workspace.state()};if(!(await canLeave()))return{closed:false};await clearRecovery();const result=workspace.close(workspace.activeID,true);session=workspace.active;nativeMenu();return{...result,workspace:workspace.state()};});
-handler('editor:new', async (w, h) => { if (!(await canLeave())) return { canceled: true }; return projectRequest(() => Promise.resolve(session.create(w, h))); });
+handler('editor:new', async (w, h, options = {}) => {
+  try { canvasCreation(w, h, options); } catch (error) { return { error: error.code ?? 'invalid' }; }
+  if (!(await canLeave())) return { canceled: true };
+  return projectRequest(() => Promise.resolve(session.create(w, h, options.resolution, { ...options, backgroundName: language === 'en' ? 'Background' : '背景' })));
+});
+// A new-canvas view receives dimensions only: no image bytes, text, storage or network.
+handler('editor:canvasClipboardSize', async () => {
+  try {
+    const items = await clipboard.read();
+    for (const item of items.slice(0,16)) {
+      if (!item.types.includes('image/png')) continue;
+      const blob = await item.getType('image/png');
+      const size = pngDimensions(Buffer.from(await blob.slice(0,33).arrayBuffer()),false,true);
+      canvasCreation(size.width,size.height);
+      return { width:size.width,height:size.height };
+    }
+    return null;
+  }
+  catch { return null; }
+});
 handler('editor:workspace',async(action,payload={})=>{
   if(action==='list')return {workspace:workspace.state()};
   if(action==='recent')return {recent:recentProjects.view()};
@@ -237,7 +257,7 @@ handler('editor:workspace',async(action,payload={})=>{
   if(!['create','open','recentOpen','switch','close','external','ignoreExternal','copy','grayscale'].includes(action))return {error:'invalid'};
   try{return await projectRequest(async()=>{
     let result;
-    if(action==='create'){result=workspace.create(payload.width,payload.height);workspace.active.scheduleRecovery();}
+    if(action==='create'){result=workspace.create(payload.width,payload.height,{resolution:payload.resolution,background:payload.background,backgroundName:language==='en'?'Background':'背景'});workspace.active.scheduleRecovery();}
     else if(action==='open'||action==='recentOpen'){
       workspace.guard();let location;
       if(action==='recentOpen')location=recentProjects.resolve(payload.id);

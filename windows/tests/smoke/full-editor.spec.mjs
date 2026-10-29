@@ -12,7 +12,7 @@ test.beforeEach(async()=>{
  temp=await mkdtemp(path.join(os.tmpdir(),'comp-full-editor-'));
  instance=await _electron.launch({timeout:30000,executablePath:smokeExecutable(),args:smokeArgs(),env:smokeEnv(temp)});page=await instance.firstWindow();await instance.evaluate(({dialog})=>{dialog.showMessageBox=async()=>({response:1});});
  page.on('pageerror',error=>console.error('Full editor:',error.message));
- await page.getByTestId('language').selectOption('zh-Hans');await page.getByTestId('new-canvas').click();const dialog=page.getByRole('dialog');await dialog.locator('.new-dimensions input').nth(0).fill('320');await dialog.locator('.new-dimensions input').nth(1).fill('240');await dialog.getByRole('button',{name:'创建',exact:true}).click();await expect(page.getByTestId('rendered-canvas')).toBeVisible();await page.getByTestId('add-pixels').click();await ready();
+ await page.getByTestId('language').selectOption('zh-Hans');await page.getByTestId('new-canvas').click();const dialog=page.getByRole('dialog');await dialog.locator('.new-dimensions input').nth(0).fill('320');await dialog.locator('.new-dimensions input').nth(1).fill('240');await dialog.getByTestId('create-canvas').click();await expect(page.getByTestId('rendered-canvas')).toBeVisible();await page.getByTestId('add-pixels').click();await ready();
 });
 test.afterEach(async()=>{await instance?.close();await rm(temp,{recursive:true,force:true});});
 async function ready(){await expect(page.getByTestId('layer-opacity')).toBeEnabled();await expect(page.locator('[role=alert]')).toHaveCount(0);}

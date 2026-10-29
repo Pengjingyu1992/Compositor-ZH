@@ -221,8 +221,10 @@ summary { cursor: pointer; font-size: 12px; font-weight: 600; color: var(--text)
 .geometry-overlay { overflow:visible; }
 .transform-handle { pointer-events:auto;fill:#f0f0f0;stroke:#478fab;cursor:crosshair; }
 .grid-overlay { background-image:linear-gradient(to right,rgba(255,255,255,.12) 1px,transparent 1px),linear-gradient(to bottom,rgba(255,255,255,.12) 1px,transparent 1px); }
-.arrange-grid { display:grid;grid-template-columns:1fr 1fr;gap:4px; }
-.arrange-grid button { font-size:11px;min-width:0;white-space:normal; }
+.arrange-grid { display: grid; grid-template-columns: repeat(12,minmax(0,1fr)); gap: 4px; }
+.arrange-grid button { grid-column: span 2; min-width: 0; min-height: 32px; padding: 5px; }
+.arrange-grid button:nth-child(n+7) { grid-column: span 3; }
+.arrange-grid svg { width: 18px; height: 18px; }
 .editor-dialog { max-height:90vh;overflow-y:auto;width:min(680px,92vw); }
 .editor-dialog textarea { width:100%;resize:vertical;min-height:100px;color: var(--text);background: var(--control);border: 1px solid var(--border);border-radius: 5px;padding:9px; }
 .style-fields { display:grid;grid-template-columns:1fr 1fr;gap:8px; }

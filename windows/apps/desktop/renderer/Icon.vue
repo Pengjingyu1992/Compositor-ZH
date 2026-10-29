@@ -1,6 +1,16 @@
 <script setup lang="ts">
 defineProps<{ name: string }>();
 const paths: Record<string, string[]> = {
+  alignLeft:['M3 3v18','M7 5h13v5H7Z','M7 14h9v5H7Z'],
+  alignHcenter:['M12 2v20','M4 5h16v5H4Z','M7 14h10v5H7Z'],
+  alignRight:['M21 3v18','M4 5h13v5H4Z','M8 14h9v5H8Z'],
+  alignTop:['M3 3h18','M5 7h5v13H5Z','M14 7h5v9h-5Z'],
+  alignVcenter:['M2 12h20','M5 4h5v16H5Z','M14 7h5v10h-5Z'],
+  alignBottom:['M3 21h18','M5 4h5v13H5Z','M14 8h5v9h-5Z'],
+  hspread:['M3 3v18','M21 3v18','M7 8h3v8H7Z','M14 5h3v14h-3Z'],
+  vspread:['M3 3h18','M3 21h18','M8 7h8v3H8Z','M5 14h14v3H5Z'],
+  hgap:['M3 5h4v14H3Z','M17 5h4v14h-4Z','M9 12h6','m11 10-2 2 2 2','m13 10 2 2-2 2'],
+  vgap:['M5 3h14v4H5Z','M5 17h14v4H5Z','M12 9v6','m10 11 2-2 2 2','m10 13 2 2 2-2'],
   sidebar:['M3 4h18v16H3Z','M15 4v16'],
   export:['M5 13v8h14v-8','M12 16V2','m7 7 5-5 5 5'],
   appearance:['M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z','M12 3v18','M12 7h6','M12 11h8','M12 15h7'],

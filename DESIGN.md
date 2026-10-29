@@ -30,6 +30,7 @@ Do not theme image pixels, mask grayscale, color-picker spectra, proof previews 
 - Tool rail: scroll the editing tools; keep navigation and foreground/background color controls reachable in a separate footer. A selected tool uses a blue filled rounded control, not a decorative left stripe.
 - Inspector: layers, appearance and property sections have clear neutral grouping. Selected layers use a full background/border. Tab navigation, masks, long layer names and keyboard focus remain functional.
 - Use a single segmented group for inspector tabs. Center the layer empty state with a quiet icon, as in the native panel. Keep property labels, control widths and button-row spacing consistent.
+- Align/distribute actions use two compact icon rows with full accessible names and tooltips. Their order, reference modes and editing operations remain stable.
 - Assistant: start folded for a new profile; respect the user's previously saved folding preference. Settings remain accessible while folded. Expanded content keeps its existing privacy, cancellation and history protections.
 - Dialogs: consistent neutral surfaces, 6–10 px corners, modest shadows, native focus/keyboard behavior, clear cancel/apply actions. Errors remain visible with a next action. Preserve the existing preview and editing workspaces.
 - Workspace settings use one aligned label/control row at a time, with a semantic grid group; neither language may compress fields below a readable width. Color swatches need a visible keyboard focus outline even though the native color input is transparent.

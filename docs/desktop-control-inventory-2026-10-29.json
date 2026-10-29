@@ -1,0 +1,2533 @@
+{
+  "schema": 1,
+  "counting": "Static button declarations; v-for instances and parameter combinations are not separate declarations. Functional coverage is reported by scenario, not inferred from this count.",
+  "buttonDeclarations": 201,
+  "commandCount": 80,
+  "implicitFormSubmits": 0,
+  "components": {
+    "AdjustmentEditor.vue": 1,
+    "AiPanel.vue": 10,
+    "AnimationTimeline.vue": 9,
+    "App.vue": 61,
+    "BatchExportDialog.vue": 3,
+    "CameraRawControls.vue": 10,
+    "ColorFilterControls.vue": 5,
+    "ColorRangeDialog.vue": 3,
+    "CommandDialog.vue": 2,
+    "CompleteControls.vue": 31,
+    "DistortDialog.vue": 6,
+    "EdgeRefinementDialog.vue": 8,
+    "EffectEditor.vue": 1,
+    "FillControls.vue": 2,
+    "FillDialog.vue": 2,
+    "FilterStackDialog.vue": 10,
+    "HistoryDialog.vue": 2,
+    "LiquifyDialog.vue": 9,
+    "NavigatorPanel.vue": 1,
+    "OutputDialog.vue": 6,
+    "PalettePanel.vue": 6,
+    "PathDialog.vue": 8,
+    "RecentDialog.vue": 3,
+    "ViewSettingsDialog.vue": 2
+  },
+  "commands": [
+    {
+      "id": "newTab",
+      "zh": "新建标签页",
+      "en": "New tab",
+      "shortcut": "Ctrl+Alt+N"
+    },
+    {
+      "id": "openTab",
+      "zh": "在新标签页打开项目",
+      "en": "Open in new tab",
+      "shortcut": "Ctrl+Alt+O"
+    },
+    {
+      "id": "recentProjects",
+      "zh": "最近项目",
+      "en": "Recent projects"
+    },
+    {
+      "id": "unlockedCopy",
+      "zh": "创建未锁定副本",
+      "en": "Create unlocked copy"
+    },
+    {
+      "id": "grayscaleCopy",
+      "zh": "创建灰度副本",
+      "en": "Create grayscale copy"
+    },
+    {
+      "id": "new",
+      "zh": "新建画布",
+      "en": "New canvas",
+      "shortcut": "Ctrl+N"
+    },
+    {
+      "id": "open",
+      "zh": "打开项目",
+      "en": "Open project",
+      "shortcut": "Ctrl+O"
+    },
+    {
+      "id": "save",
+      "zh": "保存",
+      "en": "Save",
+      "shortcut": "Ctrl+S"
+    },
+    {
+      "id": "saveAs",
+      "zh": "另存为",
+      "en": "Save as",
+      "shortcut": "Ctrl+Shift+S"
+    },
+    {
+      "id": "close",
+      "zh": "关闭项目",
+      "en": "Close project",
+      "shortcut": "Ctrl+W"
+    },
+    {
+      "id": "batchExport",
+      "zh": "批量导出",
+      "en": "Batch Export"
+    },
+    {
+      "id": "image",
+      "zh": "导入图像",
+      "en": "Import image"
+    },
+    {
+      "id": "importPSD",
+      "zh": "导入 PSD",
+      "en": "Import PSD"
+    },
+    {
+      "id": "exportAs",
+      "zh": "导出为及印刷预览",
+      "en": "Export As / Print proof"
+    },
+    {
+      "id": "exportPSD",
+      "zh": "导出 PSD",
+      "en": "Export PSD"
+    },
+    {
+      "id": "gif",
+      "zh": "导出动画 GIF",
+      "en": "Export animated GIF"
+    },
+    {
+      "id": "eps",
+      "zh": "导出 EPS",
+      "en": "Export EPS"
+    },
+    {
+      "id": "recover",
+      "zh": "恢复副本",
+      "en": "Recover a snapshot"
+    },
+    {
+      "id": "undo",
+      "zh": "撤销",
+      "en": "Undo",
+      "shortcut": "Ctrl+Z"
+    },
+    {
+      "id": "redo",
+      "zh": "重做",
+      "en": "Redo",
+      "shortcut": "Ctrl+Shift+Z"
+    },
+    {
+      "id": "historyPanel",
+      "zh": "历史记录",
+      "en": "History"
+    },
+    {
+      "id": "copy",
+      "zh": "复制",
+      "en": "Copy",
+      "shortcut": "Ctrl+C"
+    },
+    {
+      "id": "copyMerged",
+      "zh": "合并复制",
+      "en": "Copy merged",
+      "shortcut": "Ctrl+Shift+C"
+    },
+    {
+      "id": "cut",
+      "zh": "剪切",
+      "en": "Cut",
+      "shortcut": "Ctrl+X"
+    },
+    {
+      "id": "paste",
+      "zh": "粘贴",
+      "en": "Paste",
+      "shortcut": "Ctrl+V"
+    },
+    {
+      "id": "colorRange",
+      "zh": "色彩范围",
+      "en": "Color Range"
+    },
+    {
+      "id": "selectAll",
+      "zh": "全选",
+      "en": "Select all",
+      "shortcut": "Ctrl+A"
+    },
+    {
+      "id": "deselect",
+      "zh": "取消选择",
+      "en": "Deselect",
+      "shortcut": "Ctrl+D"
+    },
+    {
+      "id": "invertSelection",
+      "zh": "反选",
+      "en": "Invert selection"
+    },
+    {
+      "id": "expandSelection",
+      "zh": "扩展选区",
+      "en": "Expand selection"
+    },
+    {
+      "id": "contractSelection",
+      "zh": "收缩选区",
+      "en": "Contract selection"
+    },
+    {
+      "id": "featherSelection",
+      "zh": "羽化选区",
+      "en": "Feather selection"
+    },
+    {
+      "id": "selectionMask",
+      "zh": "选区转蒙版",
+      "en": "Selection to mask"
+    },
+    {
+      "id": "fill",
+      "zh": "填充前景色",
+      "en": "Fill foreground"
+    },
+    {
+      "id": "clear",
+      "zh": "清除选区",
+      "en": "Clear selection"
+    },
+    {
+      "id": "cropSelection",
+      "zh": "裁剪到选区",
+      "en": "Crop to selection"
+    },
+    {
+      "id": "canvasSize",
+      "zh": "画布大小",
+      "en": "Canvas size"
+    },
+    {
+      "id": "imageSize",
+      "zh": "图像大小",
+      "en": "Image size"
+    },
+    {
+      "id": "trim",
+      "zh": "裁去透明像素",
+      "en": "Trim transparency"
+    },
+    {
+      "id": "flipCanvasH",
+      "zh": "水平翻转画布",
+      "en": "Flip canvas horizontally"
+    },
+    {
+      "id": "flipCanvasV",
+      "zh": "垂直翻转画布",
+      "en": "Flip canvas vertically"
+    },
+    {
+      "id": "addPixels",
+      "zh": "新建像素图层",
+      "en": "New pixel layer"
+    },
+    {
+      "id": "addGroup",
+      "zh": "新建组",
+      "en": "New group"
+    },
+    {
+      "id": "text",
+      "zh": "新建或编辑文字",
+      "en": "New / edit text"
+    },
+    {
+      "id": "textOutlines",
+      "zh": "文字转轮廓",
+      "en": "Convert text to outlines"
+    },
+    {
+      "id": "shape",
+      "zh": "新建或编辑形状",
+      "en": "New / edit shape"
+    },
+    {
+      "id": "newFill",
+      "zh": "新建填充图层",
+      "en": "New fill layer"
+    },
+    {
+      "id": "editFill",
+      "zh": "编辑填充图层",
+      "en": "Edit fill layer"
+    },
+    {
+      "id": "newPath",
+      "zh": "钢笔或新建路径",
+      "en": "Pen / New path"
+    },
+    {
+      "id": "editPath",
+      "zh": "编辑路径",
+      "en": "Edit path"
+    },
+    {
+      "id": "addMask",
+      "zh": "添加蒙版",
+      "en": "Add mask"
+    },
+    {
+      "id": "newVectorMask",
+      "zh": "新建矢量蒙版",
+      "en": "New vector mask"
+    },
+    {
+      "id": "editVectorMask",
+      "zh": "编辑矢量蒙版",
+      "en": "Edit vector mask"
+    },
+    {
+      "id": "vectorMaskFromPath",
+      "zh": "路径转下方图层蒙版",
+      "en": "Path to mask on layer below"
+    },
+    {
+      "id": "distort",
+      "zh": "透视与自由扭曲",
+      "en": "Perspective / Free Distort"
+    },
+    {
+      "id": "group",
+      "zh": "编组",
+      "en": "Group",
+      "shortcut": "Ctrl+G"
+    },
+    {
+      "id": "ungroup",
+      "zh": "解组",
+      "en": "Ungroup",
+      "shortcut": "Ctrl+Shift+G"
+    },
+    {
+      "id": "duplicate",
+      "zh": "复制图层",
+      "en": "Duplicate layers"
+    },
+    {
+      "id": "delete",
+      "zh": "删除图层",
+      "en": "Delete layers"
+    },
+    {
+      "id": "merge",
+      "zh": "合并所选图层",
+      "en": "Merge selected layers"
+    },
+    {
+      "id": "flatten",
+      "zh": "拼合图像",
+      "en": "Flatten image"
+    },
+    {
+      "id": "rasterize",
+      "zh": "栅格化",
+      "en": "Rasterize"
+    },
+    {
+      "id": "applyMask",
+      "zh": "应用蒙版",
+      "en": "Apply mask"
+    },
+    {
+      "id": "properties",
+      "zh": "图层属性",
+      "en": "Layer properties"
+    },
+    {
+      "id": "effects",
+      "zh": "图层效果",
+      "en": "Layer effects"
+    },
+    {
+      "id": "refineEdges",
+      "zh": "图层修边",
+      "en": "Refine Layer Edges"
+    },
+    {
+      "id": "cameraRaw",
+      "zh": "Camera Raw 滤镜",
+      "en": "Camera Raw Filter"
+    },
+    {
+      "id": "filter",
+      "zh": "滤镜图库",
+      "en": "Filter gallery"
+    },
+    {
+      "id": "repeatFilter",
+      "zh": "重复上次滤镜",
+      "en": "Repeat last filter",
+      "shortcut": "Ctrl+Alt+F"
+    },
+    {
+      "id": "filterStack",
+      "zh": "可编辑滤镜",
+      "en": "Editable filters"
+    },
+    {
+      "id": "advancedLiquify",
+      "zh": "高级液化",
+      "en": "Advanced Liquify"
+    },
+    {
+      "id": "navigator",
+      "zh": "导航缩略图",
+      "en": "Navigator"
+    },
+    {
+      "id": "rulers",
+      "zh": "标尺",
+      "en": "Rulers"
+    },
+    {
+      "id": "palette",
+      "zh": "颜色面板",
+      "en": "Color panel"
+    },
+    {
+      "id": "viewSettings",
+      "zh": "网格与标尺设置",
+      "en": "Grid and ruler settings"
+    },
+    {
+      "id": "fit",
+      "zh": "适合窗口",
+      "en": "Fit to window",
+      "shortcut": "Ctrl+0"
+    },
+    {
+      "id": "actual",
+      "zh": "实际大小",
+      "en": "Actual size",
+      "shortcut": "Ctrl+1"
+    },
+    {
+      "id": "grid",
+      "zh": "显示网格",
+      "en": "Show grid"
+    },
+    {
+      "id": "snap",
+      "zh": "吸附",
+      "en": "Snap"
+    },
+    {
+      "id": "details",
+      "zh": "项目详情与兼容性",
+      "en": "Project details and compatibility"
+    }
+  ],
+  "buttons": [
+    {
+      "component": "AdjustmentEditor.vue",
+      "line": 46,
+      "inForm": false,
+      "attributes": {
+        "type": "button",
+        "bind:disabled": "disabled",
+        "on:click": "resetCurve"
+      }
+    },
+    {
+      "component": "AiPanel.vue",
+      "line": 234,
+      "inForm": false,
+      "attributes": {
+        "data-testid": "ai-settings",
+        "on:click": "settingsOpen = true"
+      }
+    },
+    {
+      "component": "AiPanel.vue",
+      "line": 235,
+      "inForm": false,
+      "attributes": {
+        "class": "icon-button",
+        "bind:aria-label": "open ? t.collapse : t.expand",
+        "bind:title": "open ? t.collapse : t.expand",
+        "data-testid": "ai-fold",
+        "bind:aria-expanded": "open",
+        "aria-controls": "assistant-body",
+        "on:click": "open = !open"
+      }
+    },
+    {
+      "component": "AiPanel.vue",
+      "line": 239,
+      "inForm": false,
+      "attributes": {
+        "for": "layer in layers",
+        "bind:key": "layer.id",
+        "type": "button",
+        "class": "assistant-chip",
+        "bind:class": "{ marked: marked === layer.id, off: !layer.isVisible }",
+        "bind:title": "layer.name",
+        "data-testid": "ai-layer",
+        "on:click": "marked = marked === layer.id ? '' : layer.id"
+      }
+    },
+    {
+      "component": "AiPanel.vue",
+      "line": 248,
+      "inForm": true,
+      "attributes": {
+        "class": "primary",
+        "type": "submit",
+        "bind:disabled": "asking || !project || busy || !prompt.trim()",
+        "data-testid": "ai-send"
+      }
+    },
+    {
+      "component": "AiPanel.vue",
+      "line": 249,
+      "inForm": true,
+      "attributes": {
+        "type": "button",
+        "bind:disabled": "asking || !project || !editable",
+        "data-testid": "ai-undo",
+        "on:click": "step('undo')"
+      }
+    },
+    {
+      "component": "AiPanel.vue",
+      "line": 250,
+      "inForm": true,
+      "attributes": {
+        "type": "button",
+        "bind:disabled": "asking || !project || !editable",
+        "data-testid": "ai-redo",
+        "on:click": "step('redo')"
+      }
+    },
+    {
+      "component": "AiPanel.vue",
+      "line": 265,
+      "inForm": true,
+      "attributes": {
+        "type": "button",
+        "class": "icon-button",
+        "bind:disabled": "testing || !stored.hasKey",
+        "bind:title": "t.cancelKey",
+        "bind:aria-label": "t.cancelKey",
+        "on:click": "clearKey"
+      }
+    },
+    {
+      "component": "AiPanel.vue",
+      "line": 266,
+      "inForm": true,
+      "attributes": {
+        "type": "button",
+        "bind:disabled": "testing",
+        "data-testid": "ai-test",
+        "on:click": "testConnection"
+      }
+    },
+    {
+      "component": "AiPanel.vue",
+      "line": 268,
+      "inForm": true,
+      "attributes": {
+        "type": "button",
+        "on:click": "settingsOpen = false"
+      }
+    },
+    {
+      "component": "AiPanel.vue",
+      "line": 269,
+      "inForm": true,
+      "attributes": {
+        "class": "primary",
+        "type": "submit",
+        "bind:disabled": "testing",
+        "data-testid": "ai-save-settings"
+      }
+    },
+    {
+      "component": "AnimationTimeline.vue",
+      "line": 27,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "disabled && !playing",
+        "on:click": "emit('play')"
+      }
+    },
+    {
+      "component": "AnimationTimeline.vue",
+      "line": 28,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "disabled",
+        "on:click": "edit('add')"
+      }
+    },
+    {
+      "component": "AnimationTimeline.vue",
+      "line": 29,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "disabled",
+        "on:click": "edit('duplicate')"
+      }
+    },
+    {
+      "component": "AnimationTimeline.vue",
+      "line": 30,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "disabled || track.frames.length < 2",
+        "on:click": "edit('delete')"
+      }
+    },
+    {
+      "component": "AnimationTimeline.vue",
+      "line": 31,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "disabled || index < 1",
+        "on:click": "edit('move', {direction:-1})"
+      }
+    },
+    {
+      "component": "AnimationTimeline.vue",
+      "line": 32,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "disabled || index === track.frames.length-1",
+        "on:click": "edit('move', {direction:1})"
+      }
+    },
+    {
+      "component": "AnimationTimeline.vue",
+      "line": 35,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "disabled",
+        "on:click": "emit('export')"
+      }
+    },
+    {
+      "component": "AnimationTimeline.vue",
+      "line": 38,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "disabled",
+        "on:click": "edit('create')"
+      }
+    },
+    {
+      "component": "AnimationTimeline.vue",
+      "line": 41,
+      "inForm": false,
+      "attributes": {
+        "for": "(frame, i) in track.frames",
+        "bind:key": "frame.groupID",
+        "bind:disabled": "disabled",
+        "bind:aria-pressed": "frame.groupID===active",
+        "on:click": "emit('frame',frame.groupID)"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 449,
+      "inForm": false,
+      "attributes": {
+        "class": "icon-button",
+        "bind:disabled": "busy || painting",
+        "bind:title": "t.editor.newCanvas + ' · Ctrl+N'",
+        "bind:aria-label": "t.editor.newCanvas",
+        "data-testid": "new-canvas",
+        "on:click": "newInTab=false;newDialog=true"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 450,
+      "inForm": false,
+      "attributes": {
+        "class": "icon-button",
+        "bind:disabled": "busy || painting",
+        "bind:title": "t.open + ' · Ctrl+O'",
+        "bind:aria-label": "t.open",
+        "data-testid": "open-project",
+        "on:click": "open"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 451,
+      "inForm": false,
+      "attributes": {
+        "class": "icon-button",
+        "bind:disabled": "!project || busy || painting",
+        "bind:title": "t.editor.save + ' · Ctrl+S'",
+        "bind:aria-label": "t.editor.save",
+        "data-testid": "save-project",
+        "on:click": "save()"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 453,
+      "inForm": false,
+      "attributes": {
+        "if": "!workspaceState.tabs.length && (project || busy)",
+        "class": "icon-button tab-close",
+        "bind:title": "t.close + ' · Ctrl+W'",
+        "bind:aria-label": "t.close",
+        "data-testid": "close-project",
+        "bind:disabled": "painting",
+        "on:click": "closeProject"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 455,
+      "inForm": false,
+      "attributes": {
+        "class": "icon-button",
+        "bind:disabled": "!project?.canUndo || busy || painting",
+        "bind:title": "t.editor.undo + ' · Ctrl+Z'",
+        "bind:aria-label": "t.editor.undo",
+        "data-testid": "undo",
+        "on:click": "history('undo')"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 456,
+      "inForm": false,
+      "attributes": {
+        "class": "icon-button",
+        "bind:disabled": "!project?.canRedo || busy || painting",
+        "bind:title": "t.editor.redo + ' · Ctrl+Shift+Z'",
+        "bind:aria-label": "t.editor.redo",
+        "data-testid": "redo",
+        "on:click": "history('redo')"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 459,
+      "inForm": false,
+      "attributes": {
+        "role": "tab",
+        "bind:title": "tab.name",
+        "bind:aria-selected": "tab.active",
+        "bind:tabindex": "tab.active?0:-1",
+        "bind:disabled": "busy||painting||frameRendering",
+        "bind:data-tab-id": "tab.id",
+        "on:click": "switchTab(tab.id)"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 459,
+      "inForm": false,
+      "attributes": {
+        "class": "tab-close",
+        "bind:data-testid": "tab.active?'close-project':undefined",
+        "bind:disabled": "painting||frameRendering||(!tab.active&&busy)",
+        "bind:aria-label": "(language==='en'?'Close tab · ':'关闭标签页 · ')+tab.name",
+        "on:click": "tab.active?closeProject():closeTab(tab.id)"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 459,
+      "inForm": false,
+      "attributes": {
+        "class": "new-tab",
+        "data-testid": "new-tab",
+        "bind:disabled": "busy||painting||frameRendering",
+        "bind:aria-label": "language==='en'?'New tab':'新建标签页'",
+        "on:click": "openNewTab"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 463,
+      "inForm": false,
+      "attributes": {
+        "class": "icon-button",
+        "bind:disabled": "!project",
+        "bind:title": "t.fit + ' · Ctrl+0'",
+        "bind:aria-label": "t.fit",
+        "on:click": "fit"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 464,
+      "inForm": false,
+      "attributes": {
+        "class": "icon-button",
+        "bind:disabled": "!project",
+        "bind:aria-label": "ui.zoomOut",
+        "on:click": "scale(.8)"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 465,
+      "inForm": false,
+      "attributes": {
+        "class": "zoom-value",
+        "bind:disabled": "!project",
+        "title": "100% · Ctrl+1",
+        "on:click": "setZoom(1)"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 466,
+      "inForm": false,
+      "attributes": {
+        "class": "icon-button",
+        "bind:disabled": "!project",
+        "bind:aria-label": "ui.zoomIn",
+        "on:click": "scale(1.25)"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 469,
+      "inForm": false,
+      "attributes": {
+        "class": "icon-button",
+        "bind:disabled": "busy||painting",
+        "bind:aria-label": "chrome.inspector",
+        "bind:title": "chrome.inspector",
+        "bind:aria-expanded": "showsInspector",
+        "aria-controls": "project-inspector",
+        "data-testid": "toggle-inspector",
+        "on:click": "toggleInspector"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 470,
+      "inForm": false,
+      "attributes": {
+        "class": "icon-button",
+        "bind:disabled": "!project||source!=='engine'||busy||painting",
+        "bind:aria-label": "chrome.exportDocument",
+        "bind:title": "chrome.exportDocument",
+        "data-testid": "export-document",
+        "on:click": "outputDialog=true"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 473,
+      "inForm": false,
+      "attributes": {
+        "class": "icon-button",
+        "bind:disabled": "busy||painting",
+        "bind:aria-label": "chrome.appearanceSettings",
+        "bind:title": "chrome.appearanceSettings",
+        "data-testid": "interface-settings",
+        "on:click": "structuredDialog='viewSettings'"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 474,
+      "inForm": false,
+      "attributes": {
+        "class": "icon-button",
+        "bind:aria-label": "ui.details",
+        "bind:title": "ui.details",
+        "data-testid": "project-details",
+        "on:click": "showDetails"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 476,
+      "inForm": false,
+      "attributes": {
+        "data-testid": "cancel-import",
+        "on:click": "cancelImageImport"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 477,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "busy",
+        "on:click": "reload"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 477,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "busy",
+        "on:click": "ignoreExternal"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 478,
+      "inForm": false,
+      "attributes": {
+        "class": "icon-button",
+        "bind:aria-label": "t.editor.cancel",
+        "on:click": "error='';settingError=false"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 485,
+      "inForm": false,
+      "attributes": {
+        "class": "icon-button",
+        "bind:disabled": "!editable",
+        "bind:title": "t.editor.flipH",
+        "bind:aria-label": "t.editor.flipH",
+        "on:click": "edit({kind:'transform',field:'flipX',value:!(full.selectionTransform??selected.transform).flipX})"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 486,
+      "inForm": false,
+      "attributes": {
+        "class": "icon-button",
+        "bind:disabled": "!editable",
+        "bind:title": "t.editor.flipV",
+        "bind:aria-label": "t.editor.flipV",
+        "on:click": "edit({kind:'transform',field:'flipY',value:!(full.selectionTransform??selected.transform).flipY})"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 494,
+      "inForm": false,
+      "attributes": {
+        "for": "key in tools.filter(key=>!['pan','zoom'].includes(key))",
+        "bind:key": "key",
+        "class": "icon-button tool-button",
+        "bind:class": "{active:tool===key}",
+        "bind:aria-pressed": "tool===key",
+        "bind:disabled": "painting || (key!=='pan' && !editable)",
+        "bind:title": "toolLabel(key) + ' (' + toolKeys[key] + ')'",
+        "bind:aria-label": "toolLabel(key)",
+        "on:click": "tool=key"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 495,
+      "inForm": false,
+      "attributes": {
+        "class": "icon-button tool-button",
+        "bind:disabled": "painting||!editable",
+        "bind:title": "full.labels.pen+' (P)'",
+        "bind:aria-label": "full.labels.pen",
+        "on:click": "openStructured('path')"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 497,
+      "inForm": false,
+      "attributes": {
+        "for": "key in tools.filter(key=>['pan','zoom'].includes(key))",
+        "bind:key": "key",
+        "class": "icon-button tool-button",
+        "bind:class": "{active:tool===key}",
+        "bind:aria-pressed": "tool===key",
+        "bind:disabled": "painting || (key!=='pan' && !editable)",
+        "bind:title": "toolLabel(key) + ' (' + toolKeys[key] + ')'",
+        "bind:aria-label": "toolLabel(key)",
+        "on:click": "tool=key"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 500,
+      "inForm": false,
+      "attributes": {
+        "class": "icon-button",
+        "bind:title": "full.labels.swap+' (X)'",
+        "bind:aria-label": "full.labels.swap",
+        "on:click": "[color,full.background]=[full.background,color]"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 501,
+      "inForm": false,
+      "attributes": {
+        "class": "icon-button",
+        "bind:title": "full.labels.defaults+' (D)'",
+        "bind:aria-label": "full.labels.defaults",
+        "on:click": "color='#000000';full.background='#ffffff'"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 510,
+      "inForm": true,
+      "attributes": {
+        "class": "icon-button",
+        "type": "button",
+        "bind:aria-label": "t.editor.swap",
+        "bind:title": "t.editor.swap",
+        "on:click": "[newWidth,newHeight]=[newHeight,newWidth]"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 511,
+      "inForm": true,
+      "attributes": {
+        "type": "button",
+        "bind:disabled": "busy",
+        "on:click": "open"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 511,
+      "inForm": true,
+      "attributes": {
+        "class": "primary",
+        "type": "submit",
+        "bind:disabled": "busy"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 513,
+      "inForm": false,
+      "attributes": {
+        "class": "text-button",
+        "bind:disabled": "busy",
+        "on:click": "importImage"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 513,
+      "inForm": false,
+      "attributes": {
+        "class": "text-button",
+        "bind:disabled": "busy",
+        "on:click": "importPSD"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 513,
+      "inForm": false,
+      "attributes": {
+        "class": "text-button",
+        "bind:disabled": "busy",
+        "data-testid": "recover",
+        "on:click": "recover"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 541,
+      "inForm": false,
+      "attributes": {
+        "class": "icon-button",
+        "bind:disabled": "!project",
+        "bind:aria-label": "ui.search",
+        "bind:title": "ui.search",
+        "bind:aria-expanded": "searchOpen",
+        "data-testid": "toggle-layer-search",
+        "on:click": "toggleSearch"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 547,
+      "inForm": false,
+      "attributes": {
+        "if": "query",
+        "class": "icon-button",
+        "bind:aria-label": "t.clearSearch",
+        "on:click": "query=''"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 551,
+      "inForm": false,
+      "attributes": {
+        "class": "icon-button visibility-toggle",
+        "bind:disabled": "!editable",
+        "bind:title": "(row.isVisible ? ui.hideLayer : ui.showLayer) + ' · ' + row.name",
+        "bind:aria-label": "(row.isVisible ? ui.hideLayer : ui.showLayer) + ' · ' + row.name",
+        "on:click": "edit({kind:'appearance',id:row.id,field:'isVisible',value:!row.isVisible})"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 552,
+      "inForm": false,
+      "attributes": {
+        "if": "row.isGroup",
+        "class": "icon-button fold",
+        "bind:disabled": "!!query.trim()",
+        "bind:aria-label": "collapsed.has(row.id.toUpperCase()) && !query.trim() ? t.expand : t.collapse",
+        "bind:aria-expanded": "!!query.trim() || !collapsed.has(row.id.toUpperCase())",
+        "on:click": "toggleGroup(row)"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 553,
+      "inForm": false,
+      "attributes": {
+        "class": "layer-select",
+        "bind:disabled": "painting||busy||frameRendering||animationPlaying",
+        "bind:aria-pressed": "selected?.id===row.id",
+        "on:click": "selectLayer(row,$event)"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 557,
+      "inForm": false,
+      "attributes": {
+        "if": "row.maskFile",
+        "class": "mask-thumbnail thumbnail",
+        "bind:class": "{active:selected?.id===row.id && paintTarget==='mask'}",
+        "bind:title": "ui.maskThumbnail + ' · ' + row.name",
+        "bind:aria-label": "ui.maskThumbnail + ' · ' + row.name",
+        "bind:disabled": "painting||busy||frameRendering||animationPlaying",
+        "on:click": "selectLayer(row,$event,'mask')"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 561,
+      "inForm": false,
+      "attributes": {
+        "class": "icon-button",
+        "bind:disabled": "!editable",
+        "bind:title": "t.editor.addPixels",
+        "bind:aria-label": "t.editor.addPixels",
+        "data-testid": "add-pixels",
+        "on:click": "add('pixels')"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 562,
+      "inForm": false,
+      "attributes": {
+        "class": "icon-button",
+        "bind:disabled": "!editable",
+        "bind:title": "t.editor.addGroup",
+        "bind:aria-label": "t.editor.addGroup",
+        "on:click": "add('group')"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 563,
+      "inForm": false,
+      "attributes": {
+        "class": "icon-button",
+        "bind:disabled": "!editable || !selected || !!selected.maskFile",
+        "bind:title": "t.editor.addMask",
+        "bind:aria-label": "t.editor.addMask",
+        "data-testid": "add-mask",
+        "on:click": "edit({kind:'mask',action:'add'})"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 565,
+      "inForm": false,
+      "attributes": {
+        "class": "icon-button",
+        "bind:disabled": "!editable || !selected",
+        "bind:title": "t.editor.delete",
+        "bind:aria-label": "t.editor.delete",
+        "data-testid": "delete-layer",
+        "on:click": "full.remove()"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 570,
+      "inForm": false,
+      "attributes": {
+        "for": "tab in ['properties','adjustments','effects']",
+        "bind:key": "tab",
+        "role": "tab",
+        "bind:tabindex": "inspectorTab===tab?0:-1",
+        "bind:aria-selected": "inspectorTab===tab",
+        "bind:aria-controls": "'panel-'+tab",
+        "bind:class": "{active:inspectorTab===tab}",
+        "bind:id": "'tab-'+tab",
+        "on:click": "inspectorTab=tab"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 580,
+      "inForm": false,
+      "attributes": {
+        "class": "icon-button",
+        "bind:disabled": "!editable",
+        "bind:title": "t.editor.flipH",
+        "bind:aria-label": "t.editor.flipH",
+        "on:click": "edit({kind:'transform',field:'flipX',value:!(full.selectionTransform??selected.transform).flipX})"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 580,
+      "inForm": false,
+      "attributes": {
+        "class": "icon-button",
+        "bind:disabled": "!editable",
+        "bind:title": "t.editor.flipV",
+        "bind:aria-label": "t.editor.flipV",
+        "on:click": "edit({kind:'transform',field:'flipY',value:!(full.selectionTransform??selected.transform).flipY})"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 585,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "!editable",
+        "on:click": "full.duplicate()"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 585,
+      "inForm": false,
+      "attributes": {
+        "class": "icon-button",
+        "bind:disabled": "!editable",
+        "bind:title": "t.editor.up",
+        "bind:aria-label": "t.editor.up",
+        "on:click": "edit({kind:'reorder',direction:1})"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 585,
+      "inForm": false,
+      "attributes": {
+        "class": "icon-button",
+        "bind:disabled": "!editable",
+        "bind:title": "t.editor.down",
+        "bind:aria-label": "t.editor.down",
+        "on:click": "edit({kind:'reorder',direction:-1})"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 587,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "!editable",
+        "data-testid": "invert-mask",
+        "on:click": "edit({kind:'mask',action:'invert'})"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 587,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "!editable",
+        "on:click": "edit({kind:'mask',action:'remove'})"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 623,
+      "inForm": true,
+      "attributes": {
+        "class": "icon-button",
+        "type": "button",
+        "bind:aria-label": "t.editor.swap",
+        "bind:title": "t.editor.swap",
+        "on:click": "[newWidth,newHeight]=[newHeight,newWidth]"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 623,
+      "inForm": true,
+      "attributes": {
+        "type": "button",
+        "on:click": "newDialog=false"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 623,
+      "inForm": true,
+      "attributes": {
+        "class": "primary",
+        "type": "submit"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 624,
+      "inForm": false,
+      "attributes": {
+        "on:click": "psdDialog=false"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 624,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "!layeredPSD || !editable",
+        "on:click": "exportImage('psd')"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 624,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "!editable",
+        "class": "primary",
+        "on:click": "exportImage('psd',true)"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 625,
+      "inForm": false,
+      "attributes": {
+        "class": "icon-button",
+        "bind:aria-label": "t.close",
+        "on:click": "detailsDialog=false"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 625,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "busy",
+        "data-testid": "copy-report",
+        "on:click": "copyReport"
+      }
+    },
+    {
+      "component": "App.vue",
+      "line": 625,
+      "inForm": false,
+      "attributes": {
+        "class": "primary",
+        "on:click": "detailsDialog=false"
+      }
+    },
+    {
+      "component": "BatchExportDialog.vue",
+      "line": 32,
+      "inForm": false,
+      "attributes": {
+        "if": "busy",
+        "data-testid": "batch-cancel",
+        "on:click": "cancel"
+      }
+    },
+    {
+      "component": "BatchExportDialog.vue",
+      "line": 32,
+      "inForm": false,
+      "attributes": {
+        "on:click": "emit('close')"
+      }
+    },
+    {
+      "component": "BatchExportDialog.vue",
+      "line": 32,
+      "inForm": false,
+      "attributes": {
+        "class": "primary",
+        "data-testid": "batch-export",
+        "bind:disabled": "busy",
+        "on:click": "run"
+      }
+    },
+    {
+      "component": "CameraRawControls.vue",
+      "line": 32,
+      "inForm": false,
+      "attributes": {
+        "for": "[id,en,cn] in groups",
+        "bind:key": "id",
+        "type": "button",
+        "bind:data-testid": "'raw-group-'+id",
+        "bind:aria-pressed": "group===id",
+        "on:click": "group=id"
+      }
+    },
+    {
+      "component": "CameraRawControls.vue",
+      "line": 32,
+      "inForm": false,
+      "attributes": {
+        "type": "button",
+        "on:click": "reset"
+      }
+    },
+    {
+      "component": "CameraRawControls.vue",
+      "line": 32,
+      "inForm": false,
+      "attributes": {
+        "if": "group==='color'",
+        "type": "button",
+        "bind:disabled": "!source",
+        "data-testid": "raw-auto-wb",
+        "on:click": "autoWB"
+      }
+    },
+    {
+      "component": "CameraRawControls.vue",
+      "line": 35,
+      "inForm": false,
+      "attributes": {
+        "type": "button",
+        "on:click": "presetCurve()"
+      }
+    },
+    {
+      "component": "CameraRawControls.vue",
+      "line": 35,
+      "inForm": false,
+      "attributes": {
+        "type": "button",
+        "on:click": "presetCurve(1)"
+      }
+    },
+    {
+      "component": "CameraRawControls.vue",
+      "line": 35,
+      "inForm": false,
+      "attributes": {
+        "type": "button",
+        "on:click": "presetCurve(2)"
+      }
+    },
+    {
+      "component": "CameraRawControls.vue",
+      "line": 35,
+      "inForm": false,
+      "attributes": {
+        "if": "index>0&&index<points.length-1",
+        "type": "button",
+        "on:click": "points.splice(index,1);emit('refresh')"
+      }
+    },
+    {
+      "component": "CameraRawControls.vue",
+      "line": 36,
+      "inForm": false,
+      "attributes": {
+        "type": "button",
+        "on:click": "options.visualizePoint=options.visualizePoint===point?-1:point;emit('refresh')"
+      }
+    },
+    {
+      "component": "CameraRawControls.vue",
+      "line": 36,
+      "inForm": false,
+      "attributes": {
+        "type": "button",
+        "on:click": "value.mixer.points.splice(point,1);point=0;options.visualizePoint=-1;emit('refresh')"
+      }
+    },
+    {
+      "component": "CameraRawControls.vue",
+      "line": 39,
+      "inForm": false,
+      "attributes": {
+        "type": "button",
+        "on:click": "value.geometry.guides=[];emit('refresh')"
+      }
+    },
+    {
+      "component": "ColorFilterControls.vue",
+      "line": 14,
+      "inForm": false,
+      "attributes": {
+        "type": "button",
+        "on:click": "preset()"
+      }
+    },
+    {
+      "component": "ColorFilterControls.vue",
+      "line": 14,
+      "inForm": false,
+      "attributes": {
+        "type": "button",
+        "on:click": "preset(5)"
+      }
+    },
+    {
+      "component": "ColorFilterControls.vue",
+      "line": 14,
+      "inForm": false,
+      "attributes": {
+        "type": "button",
+        "on:click": "preset(18,'Square')"
+      }
+    },
+    {
+      "component": "ColorFilterControls.vue",
+      "line": 23,
+      "inForm": false,
+      "attributes": {
+        "type": "button",
+        "on:click": "value.channelMixer.coefficients=[...IDENTITY_MIXER]"
+      }
+    },
+    {
+      "component": "ColorFilterControls.vue",
+      "line": 27,
+      "inForm": false,
+      "attributes": {
+        "type": "button",
+        "on:click": "file?.click()"
+      }
+    },
+    {
+      "component": "ColorRangeDialog.vue",
+      "line": 22,
+      "inForm": false,
+      "attributes": {
+        "data-testid": "range-sample",
+        "on:click": "takeSample()"
+      }
+    },
+    {
+      "component": "ColorRangeDialog.vue",
+      "line": 22,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "busy",
+        "on:click": "emit('close')"
+      }
+    },
+    {
+      "component": "ColorRangeDialog.vue",
+      "line": 22,
+      "inForm": false,
+      "attributes": {
+        "class": "primary",
+        "data-testid": "range-apply",
+        "bind:disabled": "busy||computing||!loaded||!include.length||!!error",
+        "on:click": "apply"
+      }
+    },
+    {
+      "component": "CommandDialog.vue",
+      "line": 19,
+      "inForm": false,
+      "attributes": {
+        "bind:id": "'command-'+index",
+        "role": "option",
+        "bind:aria-selected": "active===index",
+        "bind:disabled": "!command.enabled",
+        "tabindex": "-1",
+        "bind:data-command": "command.id",
+        "on:pointermove": "active=index",
+        "on:click": "emit('run',command.id)"
+      }
+    },
+    {
+      "component": "CommandDialog.vue",
+      "line": 19,
+      "inForm": false,
+      "attributes": {
+        "on:click": "emit('close')"
+      }
+    },
+    {
+      "component": "CompleteControls.vue",
+      "line": 38,
+      "inForm": false,
+      "attributes": {
+        "if": "selected?.shape",
+        "on:click": "e.openStyle('shape')"
+      }
+    },
+    {
+      "component": "CompleteControls.vue",
+      "line": 39,
+      "inForm": false,
+      "attributes": {
+        "if": "tool==='type'",
+        "bind:disabled": "disabled",
+        "on:click": "e.openStyle('text')"
+      }
+    },
+    {
+      "component": "CompleteControls.vue",
+      "line": 40,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "!e.cropBox",
+        "data-testid": "apply-crop",
+        "on:click": "e.applyCrop()"
+      }
+    },
+    {
+      "component": "CompleteControls.vue",
+      "line": 40,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "!e.cropBox",
+        "on:click": "e.cancel()"
+      }
+    },
+    {
+      "component": "CompleteControls.vue",
+      "line": 40,
+      "inForm": false,
+      "attributes": {
+        "on:click": "e.cropSelection()"
+      }
+    },
+    {
+      "component": "CompleteControls.vue",
+      "line": 44,
+      "inForm": false,
+      "attributes": {
+        "for": "[op,key] in aligns",
+        "bind:key": "op",
+        "bind:disabled": "disabled || !e.ids.length",
+        "bind:title": "l[key]",
+        "on:click": "e.align(op)"
+      }
+    },
+    {
+      "component": "CompleteControls.vue",
+      "line": 44,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "disabled || !e.ids.length",
+        "on:click": "e.group()"
+      }
+    },
+    {
+      "component": "CompleteControls.vue",
+      "line": 44,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "disabled || !selected?.isGroup",
+        "on:click": "emit('edit',{kind:'ungroup'})"
+      }
+    },
+    {
+      "component": "CompleteControls.vue",
+      "line": 45,
+      "inForm": false,
+      "attributes": {
+        "for": "key in ['all','none','invert']",
+        "bind:key": "key",
+        "bind:disabled": "disabled",
+        "on:click": "e.selection(key)"
+      }
+    },
+    {
+      "component": "CompleteControls.vue",
+      "line": 45,
+      "inForm": false,
+      "attributes": {
+        "for": "key in ['expand','contract','feather']",
+        "bind:key": "key",
+        "bind:disabled": "disabled",
+        "on:click": "e.selection(key)"
+      }
+    },
+    {
+      "component": "CompleteControls.vue",
+      "line": 45,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "disabled || !selected?.imageFile",
+        "on:click": "e.fill()"
+      }
+    },
+    {
+      "component": "CompleteControls.vue",
+      "line": 45,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "disabled || !selected?.imageFile",
+        "on:click": "e.fill('clear')"
+      }
+    },
+    {
+      "component": "CompleteControls.vue",
+      "line": 45,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "disabled || !selected || selected.maskFile",
+        "on:click": "emit('edit',{kind:'selectionMask'})"
+      }
+    },
+    {
+      "component": "CompleteControls.vue",
+      "line": 46,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "disabled",
+        "data-testid": "canvas-size",
+        "on:click": "e.openSize('canvasSize')"
+      }
+    },
+    {
+      "component": "CompleteControls.vue",
+      "line": 46,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "disabled",
+        "data-testid": "image-size",
+        "on:click": "e.openSize('imageSize')"
+      }
+    },
+    {
+      "component": "CompleteControls.vue",
+      "line": 46,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "disabled",
+        "on:click": "e.trim()"
+      }
+    },
+    {
+      "component": "CompleteControls.vue",
+      "line": 48,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "disabled",
+        "on:click": "e.addGuide()"
+      }
+    },
+    {
+      "component": "CompleteControls.vue",
+      "line": 48,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "disabled",
+        "on:click": "e.clearGuides()"
+      }
+    },
+    {
+      "component": "CompleteControls.vue",
+      "line": 49,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "disabled || !selected?.imageFile",
+        "data-testid": "open-filter",
+        "on:click": "e.openFilter()"
+      }
+    },
+    {
+      "component": "CompleteControls.vue",
+      "line": 49,
+      "inForm": false,
+      "attributes": {
+        "if": "selected?.text||selected?.shape",
+        "bind:disabled": "disabled",
+        "on:click": "e.openStyle(selected.text?'text':'shape')"
+      }
+    },
+    {
+      "component": "CompleteControls.vue",
+      "line": 49,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "disabled || !selected?.imageFile",
+        "on:click": "emit('edit',{kind:'rasterize'})"
+      }
+    },
+    {
+      "component": "CompleteControls.vue",
+      "line": 49,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "disabled || !selected?.maskFile || !selected.imageFile",
+        "on:click": "emit('edit',{kind:'applyMask'})"
+      }
+    },
+    {
+      "component": "CompleteControls.vue",
+      "line": 50,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "disabled || !e.ids.length",
+        "on:click": "e.duplicate()"
+      }
+    },
+    {
+      "component": "CompleteControls.vue",
+      "line": 50,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "disabled || e.ids.length<2",
+        "data-testid": "merge-layers",
+        "on:click": "e.merge()"
+      }
+    },
+    {
+      "component": "CompleteControls.vue",
+      "line": 50,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "disabled",
+        "on:click": "e.merge(true)"
+      }
+    },
+    {
+      "component": "CompleteControls.vue",
+      "line": 55,
+      "inForm": true,
+      "attributes": {
+        "class": "icon-button",
+        "type": "button",
+        "bind:title": "l.swap",
+        "on:click": "[e.size.width,e.size.height]=[e.size.height,e.size.width]"
+      }
+    },
+    {
+      "component": "CompleteControls.vue",
+      "line": 56,
+      "inForm": true,
+      "attributes": {
+        "type": "button",
+        "on:click": "e.styleRange('color')"
+      }
+    },
+    {
+      "component": "CompleteControls.vue",
+      "line": 56,
+      "inForm": true,
+      "attributes": {
+        "type": "button",
+        "on:click": "e.styleRange('font')"
+      }
+    },
+    {
+      "component": "CompleteControls.vue",
+      "line": 61,
+      "inForm": true,
+      "attributes": {
+        "type": "button",
+        "bind:disabled": "e.previewBusy || (e.modal==='filter' && e.filter.kind==='Camera Raw Filter' && !e.rawValid) || (e.modal==='filter' && e.filter.kind==='Color Lookup' && !e.filter.colorLUT.table)",
+        "data-testid": "update-preview",
+        "on:click": "e.updatePreview()"
+      }
+    },
+    {
+      "component": "CompleteControls.vue",
+      "line": 62,
+      "inForm": true,
+      "attributes": {
+        "type": "button",
+        "on:click": "e.closeModal()"
+      }
+    },
+    {
+      "component": "CompleteControls.vue",
+      "line": 62,
+      "inForm": true,
+      "attributes": {
+        "class": "primary",
+        "type": "submit",
+        "data-testid": "apply-editor",
+        "bind:disabled": "e.previewBusy || (e.modal==='filter' && e.filter.kind==='Camera Raw Filter' && !e.rawValid) || (e.modal==='text' && !e.text.content) || (e.modal==='filter' && e.filter.kind==='Color Lookup' && !e.filter.colorLUT.table)"
+      }
+    },
+    {
+      "component": "DistortDialog.vue",
+      "line": 50,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "busy||applying||!valid",
+        "on:click": "fit"
+      }
+    },
+    {
+      "component": "DistortDialog.vue",
+      "line": 50,
+      "inForm": false,
+      "attributes": {
+        "data-testid": "distort-reset",
+        "bind:disabled": "busy||applying",
+        "on:click": "reset"
+      }
+    },
+    {
+      "component": "DistortDialog.vue",
+      "line": 50,
+      "inForm": false,
+      "attributes": {
+        "data-testid": "distort-undo",
+        "bind:disabled": "!past.length||applying",
+        "on:click": "history('undo')"
+      }
+    },
+    {
+      "component": "DistortDialog.vue",
+      "line": 50,
+      "inForm": false,
+      "attributes": {
+        "data-testid": "distort-redo",
+        "bind:disabled": "!future.length||applying",
+        "on:click": "history('redo')"
+      }
+    },
+    {
+      "component": "DistortDialog.vue",
+      "line": 52,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "applying",
+        "on:click": "close"
+      }
+    },
+    {
+      "component": "DistortDialog.vue",
+      "line": 52,
+      "inForm": false,
+      "attributes": {
+        "class": "primary",
+        "data-testid": "distort-apply",
+        "bind:disabled": "busy||computing||applying||!valid||!!error",
+        "on:click": "apply"
+      }
+    },
+    {
+      "component": "EdgeRefinementDialog.vue",
+      "line": 38,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "busy||working",
+        "on:click": "fitting=true"
+      }
+    },
+    {
+      "component": "EdgeRefinementDialog.vue",
+      "line": 38,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "busy||working",
+        "on:click": "zoom=sourceWidth/width;fitting=false"
+      }
+    },
+    {
+      "component": "EdgeRefinementDialog.vue",
+      "line": 38,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "busy||working",
+        "on:click": "scale(.8)"
+      }
+    },
+    {
+      "component": "EdgeRefinementDialog.vue",
+      "line": 38,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "busy||working",
+        "on:click": "scale(1.25)"
+      }
+    },
+    {
+      "component": "EdgeRefinementDialog.vue",
+      "line": 38,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "!canUndo||working||busy||applying",
+        "data-testid": "edge-undo",
+        "on:click": "history('undo')"
+      }
+    },
+    {
+      "component": "EdgeRefinementDialog.vue",
+      "line": 38,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "!canRedo||working||busy||applying",
+        "data-testid": "edge-redo",
+        "on:click": "history('redo')"
+      }
+    },
+    {
+      "component": "EdgeRefinementDialog.vue",
+      "line": 38,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "applying",
+        "on:click": "close"
+      }
+    },
+    {
+      "component": "EdgeRefinementDialog.vue",
+      "line": 38,
+      "inForm": false,
+      "attributes": {
+        "class": "primary",
+        "data-testid": "edge-apply",
+        "bind:disabled": "busy||working||computing||applying||!valid||!!error",
+        "on:click": "apply"
+      }
+    },
+    {
+      "component": "EffectEditor.vue",
+      "line": 12,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "disabled",
+        "on:click": "emit('edit',{effect,remove:true})"
+      }
+    },
+    {
+      "component": "FillControls.vue",
+      "line": 19,
+      "inForm": false,
+      "attributes": {
+        "type": "button",
+        "bind:disabled": "value.stops.length<=2",
+        "on:click": "remove(index)"
+      }
+    },
+    {
+      "component": "FillControls.vue",
+      "line": 19,
+      "inForm": false,
+      "attributes": {
+        "type": "button",
+        "bind:disabled": "value.stops.length>=32",
+        "on:click": "add()"
+      }
+    },
+    {
+      "component": "FillDialog.vue",
+      "line": 18,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "busy",
+        "on:click": "emit('close')"
+      }
+    },
+    {
+      "component": "FillDialog.vue",
+      "line": 18,
+      "inForm": false,
+      "attributes": {
+        "class": "primary",
+        "data-testid": "apply-fill-layer",
+        "bind:disabled": "busy||!!error",
+        "on:click": "apply()"
+      }
+    },
+    {
+      "component": "FilterStackDialog.vue",
+      "line": 44,
+      "inForm": false,
+      "attributes": {
+        "data-testid": "stack-add",
+        "bind:disabled": "nodes.length>=32",
+        "on:click": "add()"
+      }
+    },
+    {
+      "component": "FilterStackDialog.vue",
+      "line": 44,
+      "inForm": false,
+      "attributes": {
+        "bind:aria-pressed": "selected===index",
+        "on:click": "selected=index"
+      }
+    },
+    {
+      "component": "FilterStackDialog.vue",
+      "line": 44,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "!current||selected===0",
+        "on:click": "move(-1)"
+      }
+    },
+    {
+      "component": "FilterStackDialog.vue",
+      "line": 44,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "!current||selected===nodes.length-1",
+        "on:click": "move(1)"
+      }
+    },
+    {
+      "component": "FilterStackDialog.vue",
+      "line": 44,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "!current",
+        "on:click": "remove()"
+      }
+    },
+    {
+      "component": "FilterStackDialog.vue",
+      "line": 44,
+      "inForm": false,
+      "attributes": {
+        "if": "current.kind==='Advanced Liquify'",
+        "data-testid": "edit-saved-liquify",
+        "on:click": "editLiquify()"
+      }
+    },
+    {
+      "component": "FilterStackDialog.vue",
+      "line": 44,
+      "inForm": false,
+      "attributes": {
+        "if": "current.coverage",
+        "on:click": "current.coverage=null"
+      }
+    },
+    {
+      "component": "FilterStackDialog.vue",
+      "line": 44,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "!valid",
+        "data-testid": "stack-preview-refresh",
+        "on:click": "refresh()"
+      }
+    },
+    {
+      "component": "FilterStackDialog.vue",
+      "line": 44,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "applying",
+        "on:click": "emit('close')"
+      }
+    },
+    {
+      "component": "FilterStackDialog.vue",
+      "line": 44,
+      "inForm": false,
+      "attributes": {
+        "class": "primary",
+        "data-testid": "apply-filter-stack",
+        "bind:disabled": "busy||applying||!valid||!!liquifySource",
+        "on:click": "apply()"
+      }
+    },
+    {
+      "component": "HistoryDialog.vue",
+      "line": 11,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "busy||entry.index===project.historyIndex",
+        "bind:aria-current": "entry.index===project.historyIndex?'step':undefined",
+        "bind:data-history-index": "entry.index",
+        "on:click": "emit('jump',entry.index)"
+      }
+    },
+    {
+      "component": "HistoryDialog.vue",
+      "line": 11,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "busy",
+        "on:click": "emit('close')"
+      }
+    },
+    {
+      "component": "LiquifyDialog.vue",
+      "line": 31,
+      "inForm": false,
+      "attributes": {
+        "type": "button",
+        "bind:disabled": "busy||working",
+        "on:click": "fit=true"
+      }
+    },
+    {
+      "component": "LiquifyDialog.vue",
+      "line": 31,
+      "inForm": false,
+      "attributes": {
+        "type": "button",
+        "bind:disabled": "busy||working",
+        "on:click": "scale(.8)"
+      }
+    },
+    {
+      "component": "LiquifyDialog.vue",
+      "line": 31,
+      "inForm": false,
+      "attributes": {
+        "type": "button",
+        "bind:disabled": "busy||working",
+        "data-testid": "liquify-actual",
+        "on:click": "zoom=1;fit=false"
+      }
+    },
+    {
+      "component": "LiquifyDialog.vue",
+      "line": 31,
+      "inForm": false,
+      "attributes": {
+        "type": "button",
+        "bind:disabled": "busy||working",
+        "data-testid": "liquify-zoom-in",
+        "on:click": "scale(1.25)"
+      }
+    },
+    {
+      "component": "LiquifyDialog.vue",
+      "line": 31,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "busy||working||!canUndo",
+        "on:click": "send('undo')"
+      }
+    },
+    {
+      "component": "LiquifyDialog.vue",
+      "line": 31,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "busy||working||!canRedo",
+        "on:click": "send('redo')"
+      }
+    },
+    {
+      "component": "LiquifyDialog.vue",
+      "line": 31,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "busy||working",
+        "on:click": "send('reset')"
+      }
+    },
+    {
+      "component": "LiquifyDialog.vue",
+      "line": 31,
+      "inForm": false,
+      "attributes": {
+        "on:click": "emit('close')"
+      }
+    },
+    {
+      "component": "LiquifyDialog.vue",
+      "line": 31,
+      "inForm": false,
+      "attributes": {
+        "class": "primary",
+        "data-testid": "apply-liquify",
+        "bind:disabled": "busy||working||!!error",
+        "on:click": "send('save')"
+      }
+    },
+    {
+      "component": "NavigatorPanel.vue",
+      "line": 14,
+      "inForm": false,
+      "attributes": {
+        "class": "icon-button",
+        "bind:aria-label": "t.close",
+        "on:click": "emit('close')"
+      }
+    },
+    {
+      "component": "OutputDialog.vue",
+      "line": 24,
+      "inForm": false,
+      "attributes": {
+        "type": "button",
+        "bind:disabled": "busy",
+        "on:click": "$emit('close')"
+      }
+    },
+    {
+      "component": "OutputDialog.vue",
+      "line": 34,
+      "inForm": false,
+      "attributes": {
+        "on:click": "chooseProfile()"
+      }
+    },
+    {
+      "component": "OutputDialog.vue",
+      "line": 34,
+      "inForm": false,
+      "attributes": {
+        "on:click": "chooseProfile(true)"
+      }
+    },
+    {
+      "component": "OutputDialog.vue",
+      "line": 34,
+      "inForm": false,
+      "attributes": {
+        "data-testid": "print-proof",
+        "on:click": "proof()"
+      }
+    },
+    {
+      "component": "OutputDialog.vue",
+      "line": 36,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "busy",
+        "on:click": "$emit('close')"
+      }
+    },
+    {
+      "component": "OutputDialog.vue",
+      "line": 36,
+      "inForm": false,
+      "attributes": {
+        "class": "primary",
+        "data-testid": "output-export",
+        "bind:disabled": "busy",
+        "on:click": "save()"
+      }
+    },
+    {
+      "component": "PalettePanel.vue",
+      "line": 20,
+      "inForm": false,
+      "attributes": {
+        "class": "icon-button",
+        "bind:aria-label": "t.close",
+        "on:click": "emit('close')"
+      }
+    },
+    {
+      "component": "PalettePanel.vue",
+      "line": 20,
+      "inForm": false,
+      "attributes": {
+        "bind:aria-pressed": "target==='foreground'",
+        "on:click": "target='foreground'"
+      }
+    },
+    {
+      "component": "PalettePanel.vue",
+      "line": 20,
+      "inForm": false,
+      "attributes": {
+        "bind:aria-pressed": "target==='background'",
+        "on:click": "target='background'"
+      }
+    },
+    {
+      "component": "PalettePanel.vue",
+      "line": 20,
+      "inForm": false,
+      "attributes": {
+        "for": "(swatch,index) in swatches",
+        "bind:key": "index",
+        "bind:aria-label": "swatch",
+        "bind:aria-pressed": "selected===index",
+        "bind:style": "{background:swatch}",
+        "bind:disabled": "disabled",
+        "on:click": "selected=index;change(swatch)",
+        "on:keydown": "selected=index;remove()"
+      }
+    },
+    {
+      "component": "PalettePanel.vue",
+      "line": 20,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "disabled||swatches.length>=64",
+        "on:click": "add()"
+      }
+    },
+    {
+      "component": "PalettePanel.vue",
+      "line": 20,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "disabled||selected<0",
+        "on:click": "remove()"
+      }
+    },
+    {
+      "component": "PathDialog.vue",
+      "line": 42,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "busy",
+        "on:click": "drawing=!drawing"
+      }
+    },
+    {
+      "component": "PathDialog.vue",
+      "line": 42,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "busy",
+        "on:click": "newContour()"
+      }
+    },
+    {
+      "component": "PathDialog.vue",
+      "line": 42,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "busy",
+        "on:click": "drawing=false"
+      }
+    },
+    {
+      "component": "PathDialog.vue",
+      "line": 42,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "busy||!vector.contours[contour].anchors.length",
+        "on:click": "vector.contours[contour].closed=true;drawing=false"
+      }
+    },
+    {
+      "component": "PathDialog.vue",
+      "line": 48,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "busy",
+        "on:click": "removeAnchor()"
+      }
+    },
+    {
+      "component": "PathDialog.vue",
+      "line": 48,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "busy",
+        "on:click": "removeHandles()"
+      }
+    },
+    {
+      "component": "PathDialog.vue",
+      "line": 49,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "busy",
+        "on:click": "emit('close')"
+      }
+    },
+    {
+      "component": "PathDialog.vue",
+      "line": 49,
+      "inForm": false,
+      "attributes": {
+        "class": "primary",
+        "data-testid": "apply-path",
+        "bind:disabled": "busy||!valid",
+        "on:click": "apply()"
+      }
+    },
+    {
+      "component": "RecentDialog.vue",
+      "line": 8,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "busy",
+        "bind:data-recent-id": "entry.id",
+        "on:click": "emit('open',entry.id)"
+      }
+    },
+    {
+      "component": "RecentDialog.vue",
+      "line": 8,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "busy",
+        "data-testid": "clear-recent",
+        "on:click": "change('clearRecent')"
+      }
+    },
+    {
+      "component": "RecentDialog.vue",
+      "line": 8,
+      "inForm": false,
+      "attributes": {
+        "bind:disabled": "busy",
+        "on:click": "emit('close')"
+      }
+    },
+    {
+      "component": "ViewSettingsDialog.vue",
+      "line": 9,
+      "inForm": true,
+      "attributes": {
+        "type": "button",
+        "on:click": "emit('close')"
+      }
+    },
+    {
+      "component": "ViewSettingsDialog.vue",
+      "line": 9,
+      "inForm": true,
+      "attributes": {
+        "class": "primary",
+        "type": "submit",
+        "data-testid": "apply-view-settings",
+        "bind:disabled": "!valid"
+      }
+    }
+  ]
+}

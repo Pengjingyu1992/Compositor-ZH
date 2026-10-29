@@ -1,0 +1,125 @@
+{
+  "schema": 1,
+  "platform": "Linux x64",
+  "gpu": "SwiftShader software GPU",
+  "fixture": "Synthetic Full HD selection and 1280x720 open/close cycles",
+  "units": {
+    "times": "milliseconds",
+    "memory": "MiB, sum of sampled Electron process working sets"
+  },
+  "budgets": {
+    "pointerDownMS": 350,
+    "pointerMoveP95MS": 120
+  },
+  "baseline": {
+    "sourceCommit": "fd995ec",
+    "applicationSHA256": "79fcd80f08df5709712b549db41264e2d8700be4c3a3a0975e332e9d029997ce",
+    "pointer": {
+      "canvas": [
+        1920,
+        1080
+      ],
+      "startupMS": 8184.288825,
+      "pointerDownMS": [
+        5659.700000017881
+      ],
+      "pointerMoveP95MS": 4480.200000017881,
+      "pointerMoveMaxMS": 4480.200000017881
+    }
+  },
+  "fixedApplicationSHA256": "ec87bea10d1ce1c5ce1f1e4d4da8cccb9925277293c00bb3771309a8ada1c9a0",
+  "fixedTargeted": {
+    "pointer": {
+      "canvas": [
+        1920,
+        1080
+      ],
+      "startupMS": 5873.249382000009,
+      "pointerDownMS": [
+        18.80000001192093
+      ],
+      "pointerMoveP95MS": 11.099999994039536,
+      "pointerMoveMaxMS": 11.099999994039536
+    },
+    "resources": {
+      "canvas": [
+        1280,
+        720
+      ],
+      "cycles": [
+        {
+          "cycle": 1,
+          "openMS": 5646.506225999998,
+          "workingSetMiB": 819.0234375,
+          "workersOpen": 1,
+          "workersClosed": 0
+        },
+        {
+          "cycle": 2,
+          "openMS": 3891.895039999974,
+          "workingSetMiB": 848.15625,
+          "workersOpen": 1,
+          "workersClosed": 0
+        },
+        {
+          "cycle": 3,
+          "openMS": 3314.385577000008,
+          "workingSetMiB": 848.71484375,
+          "workersOpen": 1,
+          "workersClosed": 0
+        }
+      ],
+      "peakSampledWorkingSetMiB": 848.71484375
+    }
+  },
+  "fixedFullRun": {
+    "pointer": {
+      "canvas": [
+        1920,
+        1080
+      ],
+      "startupMS": 9120.109637999965,
+      "pointerDownMS": [
+        13.700000017881393
+      ],
+      "pointerMoveP95MS": 43,
+      "pointerMoveMaxMS": 43
+    },
+    "resources": {
+      "canvas": [
+        1280,
+        720
+      ],
+      "cycles": [
+        {
+          "cycle": 1,
+          "openMS": 6688.455476000032,
+          "workingSetMiB": 821.875,
+          "workersOpen": 1,
+          "workersClosed": 0
+        },
+        {
+          "cycle": 2,
+          "openMS": 3668.165173000016,
+          "workingSetMiB": 826.5234375,
+          "workersOpen": 1,
+          "workersClosed": 0
+        },
+        {
+          "cycle": 3,
+          "openMS": 3512.0120369999786,
+          "workingSetMiB": 844.94921875,
+          "workersOpen": 1,
+          "workersClosed": 0
+        }
+      ],
+      "peakSampledWorkingSetMiB": 844.94921875
+    }
+  },
+  "limitations": [
+    "Event-handler time is not frame rate or end-to-end latency.",
+    "Shared-runner timings vary; startup improvement was not established.",
+    "Working-set sums can double-count shared pages; three cycles do not prove no long-term leaks.",
+    "Windows is independently checked against the same budgets; its metrics are in CI artifacts."
+  ]
+}

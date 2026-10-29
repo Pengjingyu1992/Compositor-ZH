@@ -546,7 +546,7 @@ onUnmounted(() => { stopPlayback();clearTimeout(viewPreferencesTimer); operation
           </div>
           <div v-if="project && searchOpen" class="layer-search"><Icon name="search"/><input v-model="query" :placeholder="t.search" :aria-label="t.search" maxlength="256" data-testid="layer-search"><button v-if="query" class="icon-button" :aria-label="t.clearSearch" @click="query=''"><Icon name="close"/></button></div>
           <div class="layer-list">
-            <p v-if="!project" class="muted">{{ t.empty }}</p><p v-else-if="!rows.length" class="muted">{{ query ? t.noMatches : ui.noLayers }}</p>
+            <div v-if="!project || !rows.length" class="layer-empty"><Icon :name="query?'search':'layer'"/><p>{{ !project ? t.empty : query ? t.noMatches : ui.noLayers }}</p></div>
             <div v-for="row in rows" :key="row.id" class="layer-row" :class="{selected:full.ids.includes(row.id),hidden:!row.effectiveVisible}" :style="{paddingLeft:6 + row.depth * 12 + 'px'}">
               <button class="icon-button visibility-toggle" :disabled="!editable" :title="(row.isVisible ? ui.hideLayer : ui.showLayer) + ' · ' + row.name" :aria-label="(row.isVisible ? ui.hideLayer : ui.showLayer) + ' · ' + row.name" @click="edit({kind:'appearance',id:row.id,field:'isVisible',value:!row.isVisible})"><Icon :name="row.isVisible?'eye':'eyeOff'"/></button>
               <button v-if="row.isGroup" class="icon-button fold" :disabled="!!query.trim()" :aria-label="collapsed.has(row.id.toUpperCase()) && !query.trim() ? t.expand : t.collapse" :aria-expanded="!!query.trim() || !collapsed.has(row.id.toUpperCase())" @click="toggleGroup(row)"><Icon name="chevron"/></button><span v-else class="fold-spacer"></span>

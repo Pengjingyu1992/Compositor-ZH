@@ -1,8 +1,8 @@
-/* Native macOS reference: neutral semantic chrome, 40 px tool header,
+/* Shared desktop chrome informed by macOS: neutral surfaces, 40 px tool header,
    52 px tool rail, 32 px tools and capsule project tabs. */
 :root {
   color-scheme: light dark;
-  font-family: "Segoe UI", "Microsoft YaHei UI", "PingFang SC", "Noto Sans CJK SC", system-ui, sans-serif;
+  font-family: system-ui, "Segoe UI", "Microsoft YaHei UI", "PingFang SC", "Noto Sans CJK SC", sans-serif;
   font-size: 13px;
   line-height: 1.5;
   color: var(--text);
@@ -183,7 +183,7 @@ summary { cursor: pointer; font-size: 12px; font-weight: 600; color: var(--text)
 .notice, .error { flex-shrink: 0; padding: 8px 13px; font-size: 12px; line-height: 1.6; background: var(--warning-background); color: var(--warning); }
 .error { display: flex; align-items: center; justify-content: space-between; background: var(--error-background); color: var(--error); }
 .no-preview { max-width: 450px; margin: auto; padding: 30px; color: var(--muted); line-height: 1.8; }
-.drop-target { position: fixed; inset: 12px; display: grid; place-items: center; z-index: 10; border: 2px dashed var(--accent); border-radius: 9px; background: #1b352eec; color: #d0f3e3; font-size: 20px; pointer-events: none; }
+.drop-target { position: fixed; inset: 12px; display: grid; place-items: center; z-index: 10; padding: 32px; border: 2px solid var(--accent); border-radius: 10px; background: color-mix(in srgb, var(--surface-raised) 96%, transparent); color: var(--text); font-size: 18px; font-weight: 500; text-align: center; pointer-events: none; box-shadow: inset 0 0 0 4px var(--selection); }
 .modal-shade { position: fixed; inset: 0; z-index: 8; display: grid; place-items: center; background: #0008; }
 .dialog { width: 470px; max-width: calc(100vw - 48px); max-height: calc(100dvh - 48px); overflow: auto; padding: 24px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface-raised); box-shadow: 0 15px 60px var(--shadow); }
 .dialog h2 { margin: 0 0 10px; font-size: 20px; font-weight: 600; }
@@ -290,12 +290,16 @@ main { min-width: 0; }
 .welcome-actions button { min-width: 112px; min-height: 34px; border-radius: 7px; }
 .welcome-secondary { justify-content: flex-end; gap: 18px; }
 .new-dimensions label { color: var(--muted); }
-aside { width: 280px; background: var(--surface); overflow-y: auto; overscroll-behavior: contain; }
-.inspector-panel { min-height: 140px; flex-shrink: 0; }
+aside { width: 280px; background: var(--surface); overflow: hidden; }
+.inspector-panel { min-height: 0; flex-shrink: 1; }
 .panel-heading { height: 36px; padding-left: 12px; }
 .layers-panel { height: 46%; min-height: 190px; }
 .layer-appearance { padding: 8px 10px 7px; border-color: var(--border); }
 .layer-list { padding: 3px 5px; }
+.layer-list:has(> .layer-empty) { display: flex; }
+.layer-empty { display: flex; flex-direction: column; align-items: center; gap: 10px; margin: auto; padding: 16px; color: var(--muted); text-align: center; font-size: 12px; }
+.layer-empty > svg { width: 25px; height: 25px; }
+.layer-empty p { margin: 0; line-height: 1.7; }
 .layer-row { margin: 1px 0; padding: 0 5px; gap: 3px; min-height: 43px; border: 1px solid transparent; border-radius: 5px; }
 .layer-row.selected { background: var(--selection); border-color: var(--selection-border); box-shadow: none; }
 .layer-select { gap: 8px; padding: 5px 2px; }
@@ -304,14 +308,21 @@ aside { width: 280px; background: var(--surface); overflow-y: auto; overscroll-b
 .thumbnail { width: 30px; height: 30px; border-color: var(--border-strong); border-radius: 4px; }
 .mask-thumbnail { width: 25px; height: 25px; min-height: 25px; }
 .layer-actions { height: 36px; gap: 1px; padding: 3px 6px; }
-.inspector-tabs { height: 36px; background: var(--surface); padding: 4px 7px; gap: 3px; border: 0; }
-.inspector-tabs button { min-height: 27px; height: 27px; border-radius: 5px; padding: 3px 7px; border: 1px solid transparent; }
-.inspector-tabs button.active { color: var(--text); background: var(--surface-raised); border-color: var(--border-strong); box-shadow: 0 1px 2px var(--shadow); }
+.inspector-tabs { height: 30px; margin: 7px 9px; background: var(--canvas); padding: 2px; gap: 2px; border: 1px solid var(--border); border-radius: 7px; }
+.inspector-tabs button { min-height: 24px; height: 24px; border-radius: 4px; padding: 2px 6px; border: 0; }
+.inspector-tabs button.active { color: var(--text); background: var(--surface-raised); box-shadow: 0 1px 3px var(--shadow); }
 .inspector { padding: 10px 12px; }
 .transform-grid { gap: 8px; }
 .transform-grid label input:not([type=checkbox]) { width: 68px; text-align: right; }
 .property-section { border-color: var(--border); }
+.property-section summary small { margin-left: 4px; font-size: 11px; font-weight: 400; color: var(--muted); }
+.complete-panel > .property-section { padding-block: 10px; }
+.complete-panel .property-section > label { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 12px; }
+.complete-panel .property-section > label:has(input[type=checkbox]) { justify-content: flex-start; }
+.complete-panel .property-section > label > select { max-width: 156px; }
+.complete-panel .button-row { margin-top: 8px; }
 .unit-field { border-color: var(--border); background: var(--control); border-radius: 6px; }
+.color-swatch:focus-within { outline: 2px solid var(--accent); outline-offset: 3px; }
 .statusbar { height: 26px; gap: 14px; background: var(--surface); color: var(--muted); font-size: 11px; }
 .statusbar .badge { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .preview-status { color: var(--muted); }

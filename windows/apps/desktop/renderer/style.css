@@ -272,7 +272,7 @@ input, select, textarea { font-variant-numeric: tabular-nums; }
 .tool-heading { min-width: 70px; font-size: 12px; padding-right: 12px; border-color: var(--border); }
 .tool-heading svg { width: 17px; height: 17px; }
 .tool-hint, .optionsbar label { color: var(--muted); }
-main { min-width: 0; }
+main { min-width: 0; container: editor-workspace / size; }
 .toolrail { width: 52px; padding: 0; gap: 0; overflow-x: hidden; overflow-y: auto; background: var(--surface); }
 .toolrail-scroll { flex: 1; min-height: 36px; width: 100%; overflow-y: auto; scrollbar-width: thin; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 9px 0; overscroll-behavior: contain; }
 .toolrail-footer { flex: 0 0 auto; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 0 0 8px; }
@@ -323,6 +323,15 @@ aside { width: 280px; background: var(--surface); overflow: hidden; }
 .complete-panel .property-section > label:has(input[type=checkbox]) { justify-content: flex-start; }
 .complete-panel .property-section > label > select { max-width: 156px; }
 .complete-panel .button-row { margin-top: 8px; }
+/* When the assistant or timeline leaves too little height for both panels,
+   scroll the whole sidebar instead of clipping its properties or nesting them. */
+@container editor-workspace (max-height: 320px) {
+  aside { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+  .layers-panel { height: 224px; }
+  .layer-list { overscroll-behavior: auto; }
+  .inspector-panel { flex: 0 0 auto; }
+  .inspector { flex: 0 0 auto; overflow: visible; }
+}
 .unit-field { border-color: var(--border); background: var(--control); border-radius: 6px; }
 .color-swatch:focus-within { outline: 2px solid var(--accent); outline-offset: 3px; }
 .statusbar { height: 26px; gap: 14px; background: var(--surface); color: var(--muted); font-size: 11px; }

@@ -61,7 +61,7 @@ test('workspace settings keep labels and controls readable in both languages and
   }
 });
 
-test('compact inspector has one scroll surface, swatches show keyboard focus, and dragging uses the interface theme', async () => {
+test('compact inspector avoids an extra outer scrollbar, swatches show keyboard focus, and dragging uses the interface theme', async () => {
   await page.getByTestId('open-project').click();
   await expect(page.getByTestId('save-project')).toBeEnabled();
   await page.locator('.layer-select').filter({ hasText: 'Coral / 珊瑚' }).click();
@@ -104,4 +104,25 @@ test('compact inspector has one scroll surface, swatches show keyboard focus, an
   expect.soft(await page.locator('.drop-target').evaluate(el => getComputedStyle(el).color)).toBe(await page.locator('body').evaluate(el => getComputedStyle(el).color));
   await page.locator('.shell').dispatchEvent('dragleave');
   await expect(page.locator('.drop-target')).toHaveCount(0);
+});
+
+test('a short workspace with the assistant open keeps inspector actions reachable by mouse scrolling', async () => {
+  await page.getByTestId('open-project').click();
+  await expect(page.getByTestId('save-project')).toBeEnabled();
+  await page.locator('.layer-select').filter({ hasText: 'Coral / 珊瑚' }).click();
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setContentSize(880, 540));
+  await page.getByTestId('ai-fold').click();
+  await expect(page.getByTestId('ai-prompt')).toBeVisible();
+  await capture('short-assistant-before-scroll');
+  const sidebar = page.locator('aside');
+  await page.locator('.layer-list').hover();
+  await page.mouse.wheel(0, 3000);
+  await expect(page.getByTestId('merge-layers')).toBeInViewport({ ratio: 1 });
+  await capture('short-assistant-after-scroll');
+  await page.mouse.wheel(0, -3000);
+  await expect(page.getByTestId('add-pixels')).toBeInViewport({ ratio: 1 });
+  await page.getByTestId('ai-fold').click();
+  await expect(page.getByTestId('ai-prompt')).toHaveCount(0);
+  await expect.poll(() => sidebar.evaluate(el => el.scrollHeight <= el.clientHeight)).toBe(true);
+  await expect(page.getByTestId('undo')).toBeDisabled();
 });

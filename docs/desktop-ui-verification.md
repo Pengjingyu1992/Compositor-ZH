@@ -23,3 +23,10 @@
 原生 macOS 目录相对本次 UI 工作之前的 `e94b347` 无改动。附带触发的原生 `Verify` 工作流中 Xcode 单元任务报退出码 65；此前 `e94b347` 的[原生任务](https://github.com/Pengjingyu1992/Compositor-ZH/actions/runs/40705695395) 同样报 65，本轮[原生任务](https://github.com/Pengjingyu1992/Compositor-ZH/actions/runs/40738734010)不计为通过。本轮未定位其根因，也没有为此修改 macOS。
 
 代码与云端安装包属于开发分支，未新建发行标签、发布正式版或更改 macOS／全局 Latest。真实设备的高 DPI、输入法、压感与硬件 GPU 验收仍待完成；整体功能对齐的剩余项见 [功能对照表](windows-linux-macos-parity.md)。
+
+
+## macOS 40.41 UI 细节复核 · `59edcc7`
+
+[本轮完整对比、20 张截图与隐私审查](desktop-ui-refinement-2026-10-29.md) 记录设置表单、分段标签、空状态、颜色焦点、拖入提示、对齐图标与短工作区滚动修正。最终 Windows [40813707029](https://github.com/Pengjingyu1992/Compositor-ZH/actions/runs/40813707029) 成功，106 项 GUI 通过、3 项 Linux 专属跳过；Linux [40813706930](https://github.com/Pengjingyu1992/Compositor-ZH/actions/runs/40813706930) 成功，109/109 GUI。两平台类型、251 项单元、独立读取、安装包、许可证、校验值和包隐私审查通过。
+
+Mac 对照直接读取 `main` 的 `f8b1457` 固定提交；本轮原生 macOS 文件未修改，未更新 macOS 发行或全局 Latest。中间候选在助手展开时把属性区挤成 0 的失败和后续修正均保留在报告中。

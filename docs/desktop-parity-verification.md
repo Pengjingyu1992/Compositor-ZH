@@ -65,3 +65,10 @@ Windows/Linux 构建产物可在上述成功的 GitHub Actions 运行页下载�
 修复全高清选区快照／遮罩重绘造成的秒级主线程停顿，以及动画播放期间蒙版缩略图误切绘制目标。盘点 201 处按钮模板和 80 条命令，新增按钮矩阵、指针性能与资源释放检查，并修正保存完成和原生命令投递的测试同步。最终 Linux 云端 106/106 GUI、Windows 云端 103 项 GUI（3 项 Linux 专属跳过）、251 项单元与两平台安装包／隐私审查通过。
 
 本机先期整轮 105/105 与后续保存／编辑补查 24/24 通过，另保留早期失败与中断，不合并为一次完整运行。静态清单、数值样本、覆盖范围、最终 CI 和实机限制见 [功能与性能检查报告](desktop-functional-performance-review-2026-10-29.md)。原生 macOS、正式发行和全局 Latest 未改动。
+
+
+## macOS 40.41 UI 细节复核 · `59edcc7`
+
+[本轮完整对比、20 张截图与隐私审查](desktop-ui-refinement-2026-10-29.md) 记录设置表单、分段标签、空状态、颜色焦点、拖入提示、对齐图标与短工作区滚动修正。最终 Windows [40813707029](https://github.com/Pengjingyu1992/Compositor-ZH/actions/runs/40813707029) 成功，106 项 GUI 通过、3 项 Linux 专属跳过；Linux [40813706930](https://github.com/Pengjingyu1992/Compositor-ZH/actions/runs/40813706930) 成功，109/109 GUI。两平台类型、251 项单元、独立读取、安装包、许可证、校验值和包隐私审查通过。
+
+Mac 对照直接读取 `main` 的 `f8b1457` 固定提交；本轮原生 macOS 文件未修改，未更新 macOS 发行或全局 Latest。中间候选在助手展开时把属性区挤成 0 的失败和后续修正均保留在报告中。

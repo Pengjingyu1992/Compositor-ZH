@@ -1,0 +1,73 @@
+{
+  "applicationCommit": "59edcc7",
+  "application": {
+    "sha256": "1859f0af98d8e9f17fd234bc01af5dd00149a6fd15418327dd7639ff14c16eda",
+    "entries": 213,
+    "textFiles": 161,
+    "privatePatternMatches": 0,
+    "forbiddenFiles": 0
+  },
+  "unitTests": {
+    "passed": 251,
+    "failed": 0,
+    "skipped": 0
+  },
+  "typecheck": "passed",
+  "sourceReview": {
+    "desktopFiles": 226,
+    "bilingualKeys": 767,
+    "privatePatternMatches": 0
+  },
+  "controlInventory": {
+    "buttonDeclarations": 201,
+    "commandEntries": 80,
+    "implicitFormSubmits": 0,
+    "runtimeCoveragePercentage": null
+  },
+  "screenshotMetadata": {
+    "files": 20,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "textOrExifChunks": 0
+  },
+  "localGUIRuns": [
+    {
+      "suite": "native-ui and ui-refinement",
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "suite": "desktop-boundaries",
+      "startTime": "2026-10-29T03:42:22.826Z",
+      "duration": 33370.327,
+      "expected": 7,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    }
+  ],
+  "platformCI": {
+    "Windows": {
+      "run": "https://github.com/Pengjingyu1992/Compositor-ZH/actions/runs/40813707029",
+      "status": "success",
+      "guiPassed": 106,
+      "guiFailed": 0,
+      "guiSkipped": 3,
+      "artifact": "compositor-windows-x64",
+      "artifactDigest": "ff9e75b39de1add7eaf624275f71d3c1118d0a18f15915e3b633f2668f7baae2"
+    },
+    "Linux": {
+      "run": "https://github.com/Pengjingyu1992/Compositor-ZH/actions/runs/40813706930",
+      "status": "success",
+      "guiPassed": 109,
+      "guiFailed": 0,
+      "guiSkipped": 0,
+      "artifact": "compositor-linux-x64",
+      "artifactDigest": "306c296d06c68a6bf961dfa86f89e9ae49016b41d471cb920aa86fa8c035c583"
+    }
+  }
+}

@@ -16,7 +16,12 @@ test.beforeEach(async()=>{
 });
 test.afterEach(async()=>{await instance?.close();await rm(temp,{recursive:true,force:true});});
 async function ready(){await expect(page.getByTestId('layer-opacity')).toBeEnabled();await expect(page.locator('[role=alert]')).toHaveCount(0);}
-async function command(name){await instance.evaluate(({BrowserWindow},name)=>BrowserWindow.getAllWindows()[0].webContents.send('editor:'+name),name);}
+async function command(name){
+ // send() queues cross-process delivery. Observe delivery before checking idle controls.
+ await page.evaluate(name=>{window.nativeCommandAck=new Promise(resolve=>{const stop=window.editor.onCommand(name,()=>{stop();queueMicrotask(resolve);});});},name);
+ await instance.evaluate(({BrowserWindow},name)=>BrowserWindow.getAllWindows()[0].webContents.send('editor:'+name),name);
+ await page.evaluate(()=>window.nativeCommandAck);
+}
 async function draw(tool,from=[.2,.2],to=[.65,.6],alt=false){await page.locator('.toolrail').getByRole('button',{name:tool,exact:true}).click();const b=await page.locator('.artboard').boundingBox();if(alt)await page.keyboard.down('Alt');await page.mouse.move(b.x+b.width*from[0],b.y+b.height*from[1]);await page.mouse.down();await page.mouse.move(b.x+b.width*to[0],b.y+b.height*to[1],{steps:8});await page.mouse.up();if(alt)await page.keyboard.up('Alt');await ready();}
 async function save(name='saved.comp'){const file=path.join(temp,name);await instance.evaluate(({dialog},file)=>{dialog.showSaveDialog=async()=>({canceled:false,filePath:file});},file);await page.getByTestId('save-project').click();await waitForSaved(page);await ready();return file;}
 test('all 17 tools and native selection/image/filter menus are reachable',async()=>{
@@ -44,7 +49,8 @@ test('multiple layers arrange/group/duplicate/ungroup and clipboard paste',async
  await draw('形状',[.1,.1],[.3,.3]);await draw('形状',[.5,.5],[.8,.8]);const rows=page.locator('.layer-select');await rows.nth(1).click();await rows.nth(2).click({modifiers:['Control']});await page.getByRole('button',{name:'右对齐',exact:true}).last().click();await ready();await command('group');await ready();await command('duplicate');await ready();await command('ungroup');await ready();await expect(page.locator('.layer-row')).toHaveCount(6);
  await rows.last().click();await command('copy');await command('paste');await ready();await expect(page.locator('.layer-row')).toHaveCount(7);await save();
 });
-test('lasso and wand create a feathered mask; content lock blocks menu edits',async()=>{
+for(const commandDelay of [0,1000])test('lasso and wand create a feathered mask; content lock blocks menu edits'+(commandDelay?' with delayed native delivery':''),async()=>{
+ if(commandDelay)await instance.evaluate(({BrowserWindow},delay)=>{const contents=BrowserWindow.getAllWindows()[0].webContents,send=contents.send.bind(contents);contents.send=(channel,...args)=>{if(channel.startsWith('editor:')){setTimeout(()=>{if(!contents.isDestroyed())send(channel,...args);},delay);return;}send(channel,...args);};},commandDelay);
  await page.getByRole('button',{name:'套索',exact:true}).click();const b=await page.locator('.artboard').boundingBox();const point=(x,y)=>[b.x+b.width*x,b.y+b.height*y];await page.mouse.move(...point(.15,.15));await page.mouse.down();await page.mouse.move(...point(.85,.15),{steps:6});await page.mouse.move(...point(.5,.85),{steps:6});await page.mouse.up();await ready();await command('fill');await ready();
  const alpha=await page.getByTestId('rendered-canvas').evaluate(c=>[...c.getContext('2d').getImageData(160,100,1,1).data]);expect(alpha[3]).toBe(255);await command('deselect');await ready();await draw('魔棒',[.5,.4],[.5,.4]);await command('featherSelection');await ready();await command('selectionMask');await ready();const file=await save();const m=JSON.parse(await readFile(path.join(file,'manifest.json'))),mask=PNG.sync.read(await readFile(path.join(file,'images',m.layers[0].maskFile)));expect([mask.width,mask.height]).toEqual([320,240]);expect(mask.data[0]).toBe(0);expect(mask.data[(100*320+160)*4]).toBe(255);
  await page.getByText('锁定仅在本次打开中有效',{exact:true}).click();await page.getByLabel('锁定内容',{exact:true}).check();await ready();await command('fill');await expect(page.locator('[role=alert]')).toContainText('图层已锁定');await page.locator('[role=alert]').getByRole('button',{name:'取消'}).click();await page.getByLabel('锁定内容',{exact:true}).uncheck();await ready();await save();const saved=JSON.parse(await readFile(path.join(file,'manifest.json')));expect(saved).not.toHaveProperty('locks');

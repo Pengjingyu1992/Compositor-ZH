@@ -57,6 +57,12 @@ test('presets, print units, resolution and backgrounds create and save actual do
   for (const unit of ['cm', 'mm', 'in', 'px']) {
     await page.getByTestId('canvas-unit').selectOption(unit);
     await expect(page.getByTestId('canvas-preview-dimensions')).toHaveText('5120 × 2880 px');
+    const labelSpace = await page.getByTestId('canvas-unit').evaluate(el=>{
+      const style=getComputedStyle(el),context=document.createElement('canvas').getContext('2d');context.font=style.font;
+      return el.clientWidth-parseFloat(style.paddingLeft)-parseFloat(style.paddingRight)-context.measureText(el.selectedOptions[0].textContent).width;
+    });
+    expect(labelSpace, 'The selected unit needs room for the native dropdown indicator').toBeGreaterThanOrEqual(28);
+    if(unit==='cm')await capture('units-centimeters');
   }
   await page.getByTestId('canvas-width').fill('30000'); await page.getByTestId('canvas-height').fill('30000');
   await expect(page.getByTestId('create-canvas')).toBeDisabled();

@@ -144,7 +144,7 @@ onUnmounted(() => { alive = false; });
 .dimension-labels, .canvas-card .new-dimensions { display: grid; grid-template-columns: minmax(0,1fr) 26px minmax(0,1fr); align-items: center; gap: 8px; margin: 0; }
 .dimension-labels { min-height: 22px; font-size: 11px; font-weight: 500; }
 .dimension-labels > div { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
-.dimension-labels select { width: 84px; height: 22px; padding: 1px 4px; font-size: 11px; }
+.dimension-labels select { width: 100px; min-width: 96px; height: 22px; padding: 1px 4px; font-size: 11px; }
 .canvas-dimension { display: flex; align-items: center; gap: 6px; min-width: 0; height: 30px; padding: 0 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--control); }
 .canvas-dimension:focus-within { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .new-canvas-view .canvas-card .canvas-dimension input { flex: 1; width: 0; min-width: 0; height: 28px; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; font-size: 12px; outline: none; }

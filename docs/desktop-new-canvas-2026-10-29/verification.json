@@ -1,0 +1,78 @@
+{
+  "applicationCommit": "b674ae5",
+  "application": {
+    "sha256": "6ad9b19c90c26041e9f692d8b581c091bc57f7aecf966924eec32466f04b446b",
+    "entries": 215,
+    "textFiles": 163,
+    "privatePatternMatches": 0,
+    "forbiddenFiles": 0
+  },
+  "unitTests": {
+    "passed": 255,
+    "failed": 0,
+    "skipped": 0
+  },
+  "typecheck": "passed",
+  "sourceReview": {
+    "desktopFiles": 231,
+    "bilingualKeys": 796,
+    "privatePatternMatches": 0
+  },
+  "controlInventory": {
+    "buttonDeclarations": 201,
+    "commandEntries": 80,
+    "implicitFormSubmits": 0
+  },
+  "clipboardSuggestion": {
+    "imageType": "image/png",
+    "headerBytesRead": 33,
+    "rendererPayload": [
+      "width",
+      "height"
+    ],
+    "clipboardTextRead": false,
+    "imageBytesSentToRenderer": false,
+    "networkUse": false,
+    "clipboardContentsPersisted": false
+  },
+  "localGUIRuns": [
+    {
+      "phase": "beforeUnitLabelFix",
+      "startTime": "2026-10-29T04:52:17.866Z",
+      "duration": 122199.98400000001,
+      "expected": 20,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    {
+      "phase": "final",
+      "startTime": "2026-10-29T05:10:03.230Z",
+      "duration": 36363.326,
+      "expected": 5,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    }
+  ],
+  "platformCI": {
+    "Linux": {
+      "run": "https://github.com/Pengjingyu1992/Compositor-ZH/actions/runs/40821959146",
+      "status": "success",
+      "guiPassed": 113,
+      "guiFailed": 0,
+      "guiSkipped": 0,
+      "artifact": "compositor-linux-x64",
+      "artifactDigest": "0dd517fc8db43b07722fa42a9404cc3ba3b60e87d47a04bee02250e40ff44dfd"
+    },
+    "Windows": {
+      "run": "https://github.com/Pengjingyu1992/Compositor-ZH/actions/runs/40821959039",
+      "status": "success",
+      "guiPassed": 110,
+      "guiFailed": 0,
+      "guiSkipped": 3,
+      "artifact": "compositor-windows-x64",
+      "artifactDigest": "ae229b25538b2cc56da2653388e57747348abcf6f3417e2828dc53c9a30078e0"
+    }
+  }
+}

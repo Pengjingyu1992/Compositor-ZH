@@ -1,0 +1,81 @@
+{
+  "platform": "Linux x64",
+  "syntheticDataOnly": true,
+  "referenceMacOSCommit": "f8b1457435c414a666db2e22d7f051ce19833a77",
+  "phases": {
+    "baseline": {
+      "commit": "d980310",
+      "applicationSHA256": "1859f0af98d8e9f17fd234bc01af5dd00149a6fd15418327dd7639ff14c16eda"
+    },
+    "final": {
+      "commit": "b674ae5",
+      "applicationSHA256": "6ad9b19c90c26041e9f692d8b581c091bc57f7aecf966924eec32466f04b446b"
+    },
+    "beforeUnitLabelFix": {
+      "commit": "b8b10dc",
+      "applicationSHA256": "abeee7ea2ded9f5f1da0a76809bfeddfbd8a935e3fe05ce3c0ff3b6a7c792f27"
+    }
+  },
+  "screenshots": [
+    {
+      "file": "dialog-compact-after.png",
+      "sha256": "9db6908eaacb58eaf4050ed7b6c1e01c8c8bbe7415debf47cfe4e38921be7216",
+      "phase": "final"
+    },
+    {
+      "file": "dialog-compact-before.png",
+      "sha256": "75cd635a8dad55c9603c354385da612d626cb04939d6afb5a5fe496bf7cba2eb",
+      "phase": "baseline"
+    },
+    {
+      "file": "dialog-dark-after.png",
+      "sha256": "bb8a2883b1fb9397499f5154921ff6a16aa677235c1aaa621b81692f5664b84f",
+      "phase": "final"
+    },
+    {
+      "file": "dialog-dark-before.png",
+      "sha256": "f35845641e9176c00d4fc8688c2a621d642354b1b9f173a6104e483c05b2bf30",
+      "phase": "baseline"
+    },
+    {
+      "file": "units-centimeters-after.png",
+      "sha256": "912f6cc212f5d9e0f2768d086a89c7b86564abef092edc81356bb83231a5bee2",
+      "phase": "final"
+    },
+    {
+      "file": "units-centimeters-before.png",
+      "sha256": "a589d038bf4f4cabcbf3c2c7e5c9a459eefaeace757b3626c71f16fa30226267",
+      "phase": "beforeUnitLabelFix"
+    },
+    {
+      "file": "welcome-compact-actions-after.png",
+      "sha256": "032e4b401b7039c42e8ce9d556a02e55cfbe31824fef60958a9196c6fe132222",
+      "phase": "final"
+    },
+    {
+      "file": "welcome-compact-after.png",
+      "sha256": "6ac5ae52375e89b31f1401bba32676d0af7d1df1b788d50484fb046c042c0c5b",
+      "phase": "final"
+    },
+    {
+      "file": "welcome-compact-before.png",
+      "sha256": "b2048887c037e27118e60e63a1f79f85d2ff75da9910d784f83596b81ccabc14",
+      "phase": "baseline"
+    },
+    {
+      "file": "welcome-light-after.png",
+      "sha256": "4954f79d1b71d02adbac7868211891df686e81077cfd0d692727e44b47e42afe",
+      "phase": "final"
+    },
+    {
+      "file": "welcome-light-before.png",
+      "sha256": "54a9cb4e5cf55ffdfd37907ac599a73d5086f2119018e68b2d885a196a0fe445",
+      "phase": "baseline"
+    },
+    {
+      "file": "white-print-after.png",
+      "sha256": "5d291d34dc0496051c48199806add363651e721da69b1b153265e17ba96bfeb8",
+      "phase": "final"
+    }
+  ]
+}

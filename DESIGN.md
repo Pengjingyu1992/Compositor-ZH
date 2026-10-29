@@ -38,6 +38,8 @@ Do not theme image pixels, mask grayscale, color-picker spectra, proof previews 
 
 ## Verification and boundaries
 
+The welcome canvas card and New Canvas dialog share `NewCanvas.vue`, grounded in macOS 40.41's pinned `NewCanvasSheet.swift`. Use a 560 px card with settings/preview columns, 18 px padding and 12 px corners; stack in narrow workspaces and keep the actions reachable by scrolling. Include the three quick presets, 12 native preset sizes, four units, 72/300 DPI, background choices and a live ratio preview. Reset new-dialog defaults rather than carrying print units into the next canvas. Respect the shared 16-megapixel surface budget; create real background pixels and save the requested DPI. Clipboard suggestions return dimensions only, ignore late responses after user input, and never request clipboard text.
+
 Run and inspect the actual app at desktop and compact desktop sizes, in light and dark appearance, with Chinese and English labels. Check visible focus, all tools, inspector visibility, long titles, independent scroll areas, assistant expansion/persistence, local appearance persistence and unchanged source projects. Capture a first pass, record concrete findings, then make only the most useful corrections and capture again.
 
 Support `prefers-reduced-motion`; do not add animation to high-frequency painting or keyboard commands. Use existing icons and dependencies. No remote fonts, images, analytics or external design models. Synthetic artwork only.

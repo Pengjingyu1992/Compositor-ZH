@@ -1,0 +1,93 @@
+{
+  "sourceCommit": "424c7a5fd6fa3ac25ae4606311ae43e9c5c39b88",
+  "baselineCommit": "ffda5ebe67f8eb2bfc3923766b840eb657339c24",
+  "unit": {
+    "passed": 255,
+    "failed": 0,
+    "skipped": 0
+  },
+  "targetedGUI": {
+    "passed": 14,
+    "failed": 0,
+    "skipped": 0,
+    "flaky": 0,
+    "durationMs": 76204.597
+  },
+  "privacy": {
+    "applicationSHA256": "03d92ae8328bca727f91f38a84060661ab581a9c5cbc3dc0724871f0d81c7f60",
+    "entries": 215,
+    "textFiles": 163,
+    "privatePatternMatches": 0,
+    "forbiddenFiles": 0
+  },
+  "date": "2026-11-01",
+  "issue": {
+    "number": 5,
+    "initialOpenIssueCount": 1,
+    "stateAtReview": "OPEN",
+    "closingReference": "Fixes #5",
+    "closureRequiresDefaultBranchMerge": true
+  },
+  "sourceReview": {
+    "desktopFiles": 232,
+    "bilingualKeys": 796,
+    "privatePatternMatches": 0
+  },
+  "nativeMacFilesChanged": false,
+  "localLogFlagCheck": {
+    "platform": "Linux cloud only",
+    "visibleEditor": true,
+    "localLogCreated": true,
+    "logBytes": 643,
+    "logContentsPublished": false
+  },
+  "platformCI": {
+    "windows": {
+      "runId": 41272352614,
+      "url": "https://github.com/Pengjingyu1992/Compositor-ZH/actions/runs/41272352614",
+      "sourceCommit": "424c7a5fd6fa3ac25ae4606311ae43e9c5c39b88",
+      "status": "success",
+      "gui": {
+        "passed": 111,
+        "failed": 0,
+        "skipped": 3
+      },
+      "artifactName": "compositor-windows-x64",
+      "artifactSizeMB": 270,
+      "actionsArtifactSHA256": "08cccad48752b9584a56ff8c8ffd26f2e4c15970a66f0a3f727657aa70924614"
+    },
+    "linux": {
+      "runId": 41272352657,
+      "url": "https://github.com/Pengjingyu1992/Compositor-ZH/actions/runs/41272352657",
+      "sourceCommit": "424c7a5fd6fa3ac25ae4606311ae43e9c5c39b88",
+      "status": "success",
+      "gui": {
+        "passed": 114,
+        "failed": 0,
+        "skipped": 0
+      },
+      "artifactName": "compositor-linux-x64",
+      "artifactSizeMB": 355,
+      "actionsArtifactSHA256": "40522633452d42ddc2158ef1f2887920dc9654294a21badd589b714eb7fc8168"
+    }
+  },
+  "nativeMacCI": {
+    "runId": 41272352633,
+    "status": "failure",
+    "xcodeTestExitCode": 65,
+    "baselineRunId": 40823795259,
+    "baselineStatus": "failure",
+    "exactCauseInvestigated": false
+  },
+  "baselineRegression": {
+    "passed": 0,
+    "failed": 1,
+    "secondInstanceNotificationReceived": true,
+    "windowVisible": false
+  },
+  "publication": {
+    "branch": "codex/desktop-macos-parity",
+    "defaultBranchMerged": false,
+    "releaseCreated": false
+  }
+}

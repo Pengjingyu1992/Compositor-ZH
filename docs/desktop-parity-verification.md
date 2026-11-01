@@ -79,3 +79,9 @@ Mac 对照直接读取 `main` 的 `f8b1457` 固定提交；本轮原生 macOS �
 [完整对比、12 张截图与隐私审查](desktop-new-canvas-2026-10-29.md)：欢迎页和新建弹窗共用 Mac 风格卡片，增加尺寸预设、四种单位、72/300 DPI、三种背景和实时预览；背景像素及 DPI 实际保存，取消替换保留草稿和原项目。剪贴板尺寸建议只读取 PNG 头，晚到响应不覆盖手动输入。共享版保留 1,600 万像素上限。
 
 最终 Windows [40821959039](https://github.com/Pengjingyu1992/Compositor-ZH/actions/runs/40821959039) 成功，110 项 GUI 通过、3 项 Linux 专属跳过；Linux [40821959146](https://github.com/Pengjingyu1992/Compositor-ZH/actions/runs/40821959146) 成功，113/113 GUI。两平台类型、255 项单元、独立读取、安装包、许可证、校验值和包隐私审查通过。原生 Mac 文件和发行未修改，开发分支产物未替换全局 Latest。
+
+## 启动 Issue #5 · `424c7a5` · 2026-11-01
+
+[处理记录与隐私审查](desktop-issues-2026-11-01.md)：修复单实例再次启动无法显示隐藏窗口的问题，真实启动第二个打包进程验证原窗口、未保存修改与撤销历史保留；补齐 Windows 启动排查、可选本地日志、分项人工验收和反馈表单。
+
+Windows [41272352614](https://github.com/Pengjingyu1992/Compositor-ZH/actions/runs/41272352614) 成功，111 项 GUI 通过、3 项 Linux 专属跳过；Linux [41272352657](https://github.com/Pengjingyu1992/Compositor-ZH/actions/runs/41272352657) 成功，114/114 GUI。两平台类型、255 项核心测试、安装包及包审查通过。本地针对性 GUI 14/14；失败基线和实际设备验收边界见记录。原生 Mac 未修改，其已有 Verify 失败单独记录。修复在开发分支，Issue 等待含 `Fixes #5` 的提交合入默认分支后自动关闭。

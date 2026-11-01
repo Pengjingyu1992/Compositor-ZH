@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        请先阅读 [启动排查与最短人工验收流程](https://github.com/Pengjingyu1992/Compositor-ZH/blob/codex/desktop-macos-parity/docs/windows-install.md#启动排查与反馈)。
+        请先阅读 [启动排查与最短人工验收流程](https://github.com/Pengjingyu1992/Compositor-ZH/blob/main/docs/windows-install.md#启动排查与反馈)。
         此表单发布后公开可见。不要填写用户名、机器名、个人文件路径、密钥或个人作品；日志为可选项，先检查和删去隐私信息。
         “存在进程”“窗口可见”“画布渲染”“保存重开”是不同的验证阶段。未执行的步骤请明确写“未测试”。
   - type: input

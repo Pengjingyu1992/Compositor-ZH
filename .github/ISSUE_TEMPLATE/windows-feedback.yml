@@ -1,0 +1,77 @@
+name: Windows 启动与功能反馈
+description: 报告可复现的 Windows 启动、画布或编辑问题；请仅使用合成作品。
+title: "[Windows] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请先阅读 [启动排查与最短人工验收流程](https://github.com/Pengjingyu1992/Compositor-ZH/blob/codex/desktop-macos-parity/docs/windows-install.md#启动排查与反馈)。
+        此表单发布后公开可见。不要填写用户名、机器名、个人文件路径、密钥或个人作品；日志为可选项，先检查和删去隐私信息。
+        “存在进程”“窗口可见”“画布渲染”“保存重开”是不同的验证阶段。未执行的步骤请明确写“未测试”。
+  - type: input
+    id: app-version
+    attributes:
+      label: 应用版本与来源
+      description: 填写版本号、发行标签或提交号，以及 EXE 安装、ZIP 便携或 Actions 构建。
+    validations:
+      required: true
+  - type: input
+    id: windows-build
+    attributes:
+      label: Windows 版本、OS build 与架构
+      description: 从 winver 查看版本和 OS build；只填版本信息，不附含账号的整屏截图。
+      placeholder: Windows 11 Pro，OS build …，x64
+    validations:
+      required: true
+  - type: textarea
+    id: graphics
+    attributes:
+      label: GPU、驱动与显示环境
+      description: 显卡型号、驱动版本、缩放百分比、显示器数量、是否远程桌面；不清楚的项目写未知。
+    validations:
+      required: true
+  - type: textarea
+    id: checksum
+    attributes:
+      label: 下载包校验
+      description: 下载文件名、SHA-256、是否与该包的 SHA256SUMS.txt 一致；从源码启动则写不适用。
+    validations:
+      required: true
+  - type: dropdown
+    id: startup-stage
+    attributes:
+      label: 最后实际确认的阶段
+      description: 选择你已经亲自核对的阶段；不能仅凭后台进程判断窗口或画布成功。
+      options:
+        - 无进程或立即退出
+        - 只有进程，窗口不可见
+        - 编辑器窗口可见，尚未确认画布
+        - 画布已正确渲染
+        - 项目已保存、关闭并重开核对
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 启动方式、复现步骤与结果
+      description: 正常双击、快捷方式或命令行？此前是否已有隐藏或最小化实例？列出合成作品的最短步骤、预期和实际结果、出现频率。
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 分项人工验收
+      description: 每项填写通过、失败或未测试；中文字符串填入不等于真实 IME 测试。
+      value: |
+        绘画：未测试
+        中文输入法：未测试
+        撤销/重做：未测试
+        保存、关闭并重开核对：未测试
+        PNG 导出与独立查看：未测试
+        PSD 导出与 Photoshop/Photopea 人工打开：未测试
+        实际 GPU / 高 DPI / 多显示器：未测试
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 可选的合成截图或日志摘录
+      description: 只贴与故障相关的少量日志；删去用户名、路径、网址、账号及密钥。不要上传应用数据、恢复目录、个人工程或原图。

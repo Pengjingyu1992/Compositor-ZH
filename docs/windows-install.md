@@ -75,6 +75,61 @@ Get-FileHash .\Compositor-Windows-0.3.0-alpha.1-x64.exe -Algorithm SHA256
 
 与发行页 SHA256SUMS.txt 比较；ZIP 同样校验。
 
+## 启动排查与反馈
+
+本节对应 [Issue #5](https://github.com/Pengjingyu1992/Compositor-ZH/issues/5)。反馈时请注明使用的是公开安装包还是开发分支构建；`0.3.0-alpha.1` 的启动结果不能代替较新源码的验收。
+
+### 进程存在，但窗口看不见
+
+1. 先用任务栏、Alt+Tab、Win+Tab 查找编辑器窗口。多显示器用户可选中窗口后按 Win+Shift+左/右方向键，将窗口移回当前显示器。
+2. 从原安装目录正常双击 `Compositor.exe` 或其快捷方式。开发分支已补充单实例唤醒：恢复最小化窗口、显示隐藏窗口，再请求焦点；仍使用原有窗口和未保存文档。Windows 的前台焦点策略可能只让任务栏闪烁，此时点击任务栏窗口即可。旧公开安装包未必含此修复。
+3. 检查快捷方式的目标、起始目录和“运行方式”；诊断时使用“常规窗口”，不要使用 PowerShell 的 `Start-Process -WindowStyle Hidden`。此前 Issue 中的隐藏窗口由这种诊断启动方式引起，不能据此判定普通双击启动会崩溃。
+4. 如果旧版本仍无法唤醒，先确认没有未保存作品，再通过任务管理器核对可执行文件位置，只结束这次启动的叠绘进程，随后正常启动。不要删除应用数据、恢复副本或整个项目目录，也不要批量结束其他 Electron 应用。
+
+没有进程或进程立即退出时，先核对下载 SHA-256、ZIP 是否完整解压、系统架构和 Windows 安全中心记录。保留系统保护；请报告具体提示，不要以关闭 Defender 作为排查步骤。
+
+### 获取可选的本地启动日志
+
+应用没有默认开启的诊断日志上传。需要日志时，先通过应用正常退出已有实例，确保本次启动参数应用到新进程。在便携包的完整解压目录或安装目录打开 PowerShell，执行：
+
+```powershell
+$compositorExe = (Resolve-Path '.\Compositor.exe').Path
+$compositorLog = Join-Path $env:TEMP ('compositor-startup-' + [guid]::NewGuid().ToString('N') + '.log')
+Start-Process -FilePath $compositorExe -ArgumentList @('--enable-logging=file', ('--log-file="{0}"' -f $compositorLog))
+```
+
+只用合成画布复现；关闭应用后，可在同一个 PowerShell 中执行 `notepad $compositorLog` 查看。这个文件是本机 Chromium/Electron 诊断输出，并非完整操作记录；若应用在日志初始化前退出，可能没有文件。不要把“没有日志”当作启动成功。排查结束后由你决定是否删除该文件；正常双击启动不会自动沿用这些日志参数。
+
+日志可能包含本机用户名、文件路径、网址、机器或驱动信息。公开反馈前请手动检查和删去这些信息；仅摘录与故障有关的错误及相邻少量上下文。不要附整个应用数据目录、恢复目录、个人 `.comp` 项目、原图、AI 提示词或 API 密钥。截图仅使用合成作品，并裁去桌面、账号和无关窗口。本流程不要求上传日志，也不增加遥测。
+
+### 最短人工验收流程
+
+使用本机普通目录与合成作品，逐项记录“通过 / 失败 / 未测试”，失败时写明停在哪一步：
+
+1. 正常启动，确认可见的编辑器窗口；新建 256 × 192 px 透明画布，确认棋盘和实时预览。仅看到任务管理器进程不算窗口或画布通过。
+2. 添加像素层，用画笔画一条线；撤销、重做，确认线条与历史一致。
+3. 添加文字，使用实际中文输入法输入“叠绘测试”，检查候选框、确认输入和画布文字。自动化填入中文字符串不能代替输入法验收。
+4. Ctrl+S 保存为新的 `synthetic-check.comp` 文件夹；确认未保存标记消失。关闭项目，再打开整个 `.comp` 文件夹，核对线条、中文与图层；只有完成重开核对才算保存往返通过。
+5. 导出 PNG 和分层 PSD，用独立查看器检查 PNG 尺寸与内容；如有 Photoshop/Photopea，再人工打开 PSD 核对图层与外观。不能运行的外部应用验收填写“未测试”。
+6. 单独记录实际 GPU、高 DPI、多显示器及最小化/隐藏后的再次启动结果；前五步通过不代表这些设备组合全部通过。
+
+### 反馈模板
+
+新增的 [Windows 启动与功能反馈表单](../.github/ISSUE_TEMPLATE/windows-feedback.yml) 合入默认分支后，可通过仓库的 New issue 入口使用；在此之前，请将下表复制到 Issue。无需提供用户名、机器名、个人路径或个人作品。
+
+| 字段 | 请填写 |
+| --- | --- |
+| 应用版本与来源 | 版本号、发行标签或提交号、EXE 安装 / ZIP 便携 / Actions 构建 |
+| Windows 与架构 | `winver` 中的版本和 OS build、x64；勿附包含账号信息的整屏截图 |
+| GPU / 驱动 | 显卡型号与驱动版本；多显卡请注明本次使用哪块 |
+| 显示环境 | 缩放百分比、显示器数量，是否在远程桌面中运行 |
+| 包校验 | 下载文件名、SHA-256、与该包校验文件是否一致 |
+| 启动阶段 | 无进程 / 只有进程 / 编辑器窗口可见 / 画布渲染成功 / 保存并重开成功 |
+| 启动方式 | 正常双击 / 快捷方式 / 命令行；此前是否已有隐藏或最小化实例 |
+| 复现 | 合成作品的最短步骤、预期结果、实际结果、出现频率 |
+| 人工验收 | 绘画、中文 IME、撤销重做、保存重开、PNG、PSD 分别写通过/失败/未测试 |
+| 可选证据 | 已检查和删去隐私的少量日志、仅含合成作品的窗口截图 |
+
 ## 开发构建（Windows）
 
 ```powershell
@@ -91,6 +146,8 @@ npm run package:win
 ## English summary
 
 Install the x64 EXE or fully extract the ZIP from the [Windows editor download page](https://github.com/Pengjingyu1992/Compositor-ZH/releases/tag/windows-v0.3.0-alpha.1). The editor needs no Node.js or API key; the optional AI assistant uses your own key. Verify SHA-256; packages are unsigned. Target: Windows 10 22H2 / Windows 11 x64; hardware, IME, high-DPI and real Photoshop acceptance remain pending.
+
+For startup problems, use the feedback table above or the [Windows feedback form](../.github/ISSUE_TEMPLATE/windows-feedback.yml) once it reaches the default branch. Report the app version/build source, Windows build, architecture, GPU/driver, display scaling, package checksum and last verified stage: process only, visible editor, rendered canvas, or save/reopen. The development branch now explicitly shows hidden windows on a second launch. Exit existing instances normally before enabling the optional local log described above; avoid hidden-window launches. Review and redact any log excerpts before sharing, and use synthetic projects only. Real IME, hardware and external PSD checks must be recorded separately from automated tests.
 
 Use 17 tools: selections, crop/resize, Chinese text, editable shapes, gradients/bucket, painting/masks, clone/healing/smear, navigation and eyedropper. Multi-select, align/distribute, group/duplicate/merge, 21 filters, adjustments/effects, clipboard, undo/redo, Save/Save As, recovery and PSD/PNG conversion are available. Unknown data is retained. Text/shapes save parameters with pixels; painting rasterizes them. Locks are session-only. Unsupported compositions remain read-only with explicit saved-preview fallback. All 24 blends use sRGB, with image-quality calibration pending; spatial filters/effects use bounded approximations.
 

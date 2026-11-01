@@ -55,7 +55,12 @@ const headers = {
   'X-Content-Type-Options': 'nosniff',
   'Cache-Control': 'no-store'
 };
-app.on('second-instance', () => { if (win?.isMinimized()) win.restore(); win?.focus(); });
+app.on('second-instance', () => {
+  if (!win || win.isDestroyed()) return;
+  if (win.isMinimized()) win.restore();
+  if (!win.isVisible()) win.show();
+  win.focus();
+});
 function allowedSender(event) {
   return win && event.sender === win.webContents && event.senderFrame === win.webContents.mainFrame && event.senderFrame.url === HOME;
 }

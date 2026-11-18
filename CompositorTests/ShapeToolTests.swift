@@ -80,6 +80,91 @@ struct ShapeToolTests {
         #expect(session.document?.layers.count == 1)
     }
 
+    @Test func newShapesAndTextGoAboveExistingFolderContents() throws {
+        let session = makeSession()
+        session.groupSelectedLayers()
+        let folder = try #require(session.activeLayerID)
+        session.addBlankLayer()
+        session.groupSelectedLayers()
+        let nested = try #require(session.activeLayerID)
+        let previous = try #require(session.document?.renderLayers.map(\.id))
+
+        session.selectLayer(folder)
+        drag(session, from: CGPoint(x: 10, y: 10), to: CGPoint(x: 60, y: 60))
+        let shape = try #require(session.activeLayerID)
+        #expect(session.activeLayer?.liveShape != nil && session.activeLayer?.parentID == folder)
+        #expect(session.document?.renderLayers.map(\.id) == previous + [shape])
+        session.undo()
+        #expect(session.document?.renderLayers.map(\.id) == previous)
+
+        session.selectLayer(folder)
+        session.beginText(at: CGPoint(x: 10, y: 60), newLayer: true)
+        var draft = try #require(session.textDraft)
+        draft.style.content = "Top of folder"
+        #expect(session.applyText(draft))
+        let text = try #require(session.activeLayerID)
+        #expect(session.activeLayer?.liveText != nil && session.activeLayer?.parentID == folder)
+        #expect(session.document?.renderLayers.map(\.id) == previous + [text])
+        #expect(session.document?.layers.first(where: { $0.id == nested })?.parentID == folder)
+    }
+
+    @Test(arguments: [false, true])
+    func shapePreviewShowsWithAHiddenLayerOrFolderSelected(selectFolder: Bool) throws {
+        let session = makeSession()
+        if selectFolder {
+            let pixels = try BrushRaster.context(width: 100, height: 80, mask: false)
+            pixels.setFillColor(CGColor(red: 0, green: 0, blue: 1, alpha: 1))
+            pixels.fill(CGRect(x: 0, y: 0, width: 100, height: 80))
+            let image = try #require(pixels.makeImage())
+            session.document?.layers[0].asset = ImportedImage(image: image, thumbnail: image, name: "Blue")
+            session.groupSelectedLayers()
+        } else {
+            session.document?.layers[0].isVisible = false
+        }
+        let size = CGSize(width: 100, height: 80)
+        let canvas = CanvasView(session: session)
+        canvas.frame = CGRect(origin: .zero, size: size)
+        session.viewport.resize(to: size, backingScale: 1, documentSize: size)
+        session.zoom(to: 1)
+        session.beginShape(at: CGPoint(x: 10, y: 10))
+        session.dragShape(to: CGPoint(x: 90, y: 70), square: false, fromCenter: false)
+        _ = try #require(session.shapeDraft)
+
+        func centerPixel(_ image: CGImage) throws -> [UInt8] {
+            let pixel = try BrushRaster.context(width: 1, height: 1, mask: false)
+            BrushRaster.draw(image, in: CGRect(x: -50, y: -40, width: 100, height: 80), mask: false, context: pixel)
+            let bytes = try #require(pixel.data).assumingMemoryBound(to: UInt8.self)
+            return Array(UnsafeBufferPointer(start: bytes, count: 3))
+        }
+        func cpuFrame() throws -> CGImage {
+            let cpu = try BrushRaster.context(width: 100, height: 80, mask: false)
+            cpu.translateBy(x: 0, y: size.height)
+            cpu.scaleBy(x: 1, y: -1)
+            NSGraphicsContext.saveGraphicsState()
+            defer { NSGraphicsContext.restoreGraphicsState() }
+            NSGraphicsContext.current = NSGraphicsContext(cgContext: cpu, flipped: true)
+            canvas.allowsGPU = false
+            canvas.draw(canvas.bounds)
+            return try #require(cpu.makeImage())
+        }
+        func gpuFrame(_ renderer: GPUCanvasRenderer) throws -> CGImage {
+            let frame = try #require(canvas.gpuFrame(size: size))
+            return try #require(renderer.context.createCGImage(frame, from: CGRect(origin: .zero, size: size),
+                                                               format: .RGBA8, colorSpace: renderer.space))
+        }
+        let cpuPreview = try centerPixel(cpuFrame())
+        let renderer = GPUCanvasRenderer.shared
+        let gpuPreview = try renderer.map { try centerPixel(gpuFrame($0)) }
+        session.finishShape()
+        #expect(session.activeLayer?.liveShape != nil)
+        #expect(try centerPixel(cpuFrame()) == [255, 0, 0])
+        #expect(cpuPreview == [255, 0, 0])
+        if let renderer {
+            #expect(try centerPixel(gpuFrame(renderer)) == [255, 0, 0])
+            #expect(gpuPreview == [255, 0, 0])
+        }
+    }
+
     /// A corner radius cuts the rectangle's corners; one larger than half the shorter side makes a pill.
     @Test func roundedRectanglesFollowTheRadiusAndClampToAPill() async throws {
         let session = makeSession()

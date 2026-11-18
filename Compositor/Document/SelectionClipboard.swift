@@ -147,12 +147,12 @@ extension EditorSession {
         guard canPaste, let document else { return }
         let pasteboard = NSPasteboard.general
         if let clip = pixelClipboard, pasteboard.changeCount == clip.changeCount {
-            addPixelLayer(clip.image, at: clip.origin, name: nextLayerName(), editName: "Paste")
+            addPixelLayer(clip.image, at: clip.origin, name: nextLayerName(), editName: "Paste", atTopOfFolder: false)
         } else if let external = NSImage(pasteboard: pasteboard)?.cgImage(forProposedRect: nil, context: nil, hints: nil),
                   let image = try? Self.sRGBCopy(of: external) {
             let origin = CGPoint(x: floor((document.size.width - CGFloat(image.width)) / 2),
                                  y: floor((document.size.height - CGFloat(image.height)) / 2))
-            addPixelLayer(image, at: origin, name: nextLayerName(), editName: "Paste")
+            addPixelLayer(image, at: origin, name: nextLayerName(), editName: "Paste", atTopOfFolder: false)
         } else { NSSound.beep() }
     }
 
@@ -257,22 +257,24 @@ extension EditorSession {
         return placeLayer(copy, in: parent, above: target, atBottom: atBottom)
     }
 
-    /// Inserts pixels as a new layer above the active one (inside its folder), all in one undo
-    /// step. Pasting drops the selection, as in Photoshop; a drawn shape keeps it.
-    func addPixelLayer(_ image: CGImage, at origin: CGPoint, name: String, editName: String, dropsSelection: Bool = true, shape: LayerShape? = nil, text: LayerText? = nil, fill: LayerFill? = nil) {
+    /// Inserts pixels above the active layer or inside the selected folder, in one undo step.
+    func addPixelLayer(_ image: CGImage, at origin: CGPoint, name: String, editName: String,
+                       dropsSelection: Bool = true, shape: LayerShape? = nil, text: LayerText? = nil,
+                       fill: LayerFill? = nil, atTopOfFolder: Bool = true) {
         guard let document, let thumbnail = try? PixelInvert.thumbnail(of: image) else { return }
         var layer = ImageLayer(asset: ImportedImage(image: image, thumbnail: thumbnail, name: name), origin: origin)
         layer.name = name
         layer.shape = shape
         layer.text = text
         layer.fill = fill
-        layer.parentID = activeLayer?.isGroup == true ? activeLayerID : activeLayer?.parentID
-        let index = document.layers.firstIndex { $0.id == activeLayerID }.map { $0 + 1 } ?? document.layers.count
+        let placement = newLayerPlacement(in: document.layers, atTopOfFolder: atTopOfFolder)
+        layer.parentID = placement.parent
         finishOpacityEdit()
         beginEdit(editName)
-        self.document?.layers.insert(layer, at: index)
+        self.document?.layers.insert(layer, at: placement.index)
         if dropsSelection { self.document?.selection = nil }
         activeLayerID = layer.id
+        revealActiveLayer()
         endEdit()
     }
 

@@ -822,30 +822,27 @@ final class EditorSession {
         editingRefusal() == nil
     }
 
+    /// New layers go above the active layer or above all children of a selected folder.
+    func newLayerPlacement(in layers: [ImageLayer], atTopOfFolder: Bool = true) -> (parent: UUID?, index: Int) {
+        guard let activeIndex = layers.firstIndex(where: { $0.id == activeLayerID }) else { return (nil, layers.count) }
+        let active = layers[activeIndex]
+        guard active.isGroup else { return (active.parentID, activeIndex + 1) }
+        if atTopOfFolder, let topmostChild = layers.lastIndex(where: { $0.parentID == active.id }) {
+            // A nested folder is itself a child, and all its descendants render together.
+            return (active.id, max(activeIndex, topmostChild) + 1)
+        }
+        return (active.id, activeIndex + 1)
+    }
+
     func addBlankLayer() {
         guard canEditLayers, let document else { return }
         var layer = ImageLayer(name: nextLayerName(), blankSize: document.size)
-        layer.parentID = activeLayer?.isGroup == true ? activeLayerID : activeLayer?.parentID
+        let placement = newLayerPlacement(in: document.layers)
+        layer.parentID = placement.parent
         if let parent = layer.parentID { collapsedGroupIDs.remove(parent) }
-        var insertion = document.layers.firstIndex { $0.id == activeLayerID }.map { $0 + 1 } ?? document.layers.count
-        // With a folder selected the layer goes to the top of the folder: just above its last (topmost) contents.
-        if activeLayer?.isGroup == true, let folder = activeLayerID {
-            let parents = Dictionary(uniqueKeysWithValues: document.layers.map { ($0.id, $0.parentID) })
-            func isInside(_ id: UUID) -> Bool {
-                var parent = parents[id] ?? nil
-                var steps = 0
-                while let current = parent, steps < 64 {
-                    if current == folder { return true }
-                    parent = parents[current] ?? nil
-                    steps += 1
-                }
-                return false
-            }
-            if let topmost = document.layers.lastIndex(where: { isInside($0.id) }) { insertion = max(insertion, topmost + 1) }
-        }
         beginEdit("New Blank Layer")
         defer { endEdit() }
-        self.document?.layers.insert(layer, at: insertion)
+        self.document?.layers.insert(layer, at: placement.index)
         activeLayerID = layer.id
     }
 

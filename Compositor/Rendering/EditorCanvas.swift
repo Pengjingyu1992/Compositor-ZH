@@ -25,6 +25,7 @@ final class CanvasView: NSView, NSDraggingSource {
     var inlineTextEditor: InlineTextEditor?
     /// The text being typed, rendered as the layer will hold it, remade only when its style changes.
     private var draftTextCache: (style: LayerTextStyle, image: CGImage)?
+    private let newLayerDraftID = UUID()
     /// The effects rendered for the text being edited, and what they were rendered from.
     private var draftEffects: (image: CGImage, effects: LayerEffects, transform: LayerTransform, rendered: CGImage, inset: CGFloat)?
     /// Which layer and text `draftEffects` were made for, so they can stand in once the edit is committed.
@@ -970,7 +971,22 @@ final class CanvasView: NSView, NSDraggingSource {
         LayerRenderer.draw(mask.asset.image, transform: placed, center: center(placed.center), scale: scale, in: context)
     }
 
-    private func drawLayers(_ document: CanvasDocument, scale: CGFloat, center: @escaping (CGPoint) -> CGPoint, in context: CGContext, onSurface: Bool = false) {
+    /// Add the draft to a render-only copy so it inherits the committed layer's stacking and folder masks.
+    private func documentWithLayerDraft(_ document: CanvasDocument) -> CanvasDocument {
+        let hasShape = session.shapeDraft.map { draft in
+            draft.kind == .line ? (draft.rect.width > 0 || draft.rect.height > 0) : !draft.rect.isEmpty
+        } ?? false
+        let hasNewText = session.textDraft.map { $0.layerID == nil && !$0.style.content.isEmpty } ?? false
+        guard hasShape || (hasNewText && draftText != nil) else { return document }
+        let placement = session.newLayerPlacement(in: document.layers)
+        let layer = ImageLayer(id: newLayerDraftID, asset: nil, name: "", isVisible: true,
+                               transform: LayerTransform(origin: .zero, size: document.size), parentID: placement.parent)
+        var preview = document
+        preview.layers.insert(layer, at: placement.index)
+        return preview
+    }
+
+    private func drawLayers(_ source: CanvasDocument, scale: CGFloat, center: @escaping (CGPoint) -> CGPoint, in context: CGContext, onSurface: Bool = false) {
         // Pixels being moved, or a gradient: the tiles drawn below follow the drag only once something reads them (see
         // PixelMove and GradientEdit).
         if let move = session.pixelMove {
@@ -992,35 +1008,47 @@ final class CanvasView: NSView, NSDraggingSource {
             }
         }
         if let layer = session.maskAloneLayer, let mask = layer.mask {
-            drawMaskAlone(mask, of: layer, document: document, scale: scale, center: center, in: context)
+            drawMaskAlone(mask, of: layer, document: source, scale: scale, center: center, in: context)
             return
         }
-        handOffTextEffects(document)
-        session.effectsPreviews.prepare(layers: document.layers)
+        handOffTextEffects(source)
+        session.effectsPreviews.prepare(layers: source.layers)
         // Color Burn and Color Dodge are blended by hand against the pixels under them, which needs a surface to
         // read back (see SeparableBlend).
-        if !onSurface, document.layers.contains(where: { $0.adjustment != nil
+        if !onSurface, source.layers.contains(where: { $0.adjustment != nil
             || SeparableBlend.needsSurface(session.displayedBlendMode(for: $0)) }) {
-            let visible = document.effectiveVisibleIDs
-            let padding = document.layers.filter { visible.contains($0.id) }
+            let visible = source.effectiveVisibleIDs
+            let padding = source.layers.filter { visible.contains($0.id) }
                 .compactMap(\.adjustment).map(\.samplingMargin).max() ?? 0
             AdjustmentSurface.draw(in: context, padding: padding * scale) {
-                self.drawLayers(document, scale: scale, center: center, in: $0, onSurface: true)
+                self.drawLayers(source, scale: scale, center: center, in: $0, onSurface: true)
             }
             return
         }
+        let document = documentWithLayerDraft(source)
         let byID = Dictionary(uniqueKeysWithValues: document.layers.map { ($0.id, $0) })
+        let renderIDs = document.renderLayers.map(\.id)
+        func drawNewText(opacity: Double = 1, in context: CGContext) {
+            guard session.textDraft?.layerID == nil, let text = draftText else { return }
+            LayerRenderer.draw(text.image, transform: text.transform, center: center(text.transform.center),
+                               scale: scale, opacity: opacity, in: context)
+        }
         func drawOwn(_ id: UUID, _ context: CGContext) {
             guard let layer = byID[id] else { return }
+            let opacity = layer.effectiveOpacity(in: byID)
+            if id == newLayerDraftID {
+                drawShapeDraft(scale: scale, center: center, opacity: opacity, in: context)
+                drawNewText(opacity: opacity, in: context)
+                return
+            }
             // Text being edited draws as it will be committed, in its place among the layers.
             if layer.id == session.textDraft?.layerID {
                 guard let shown = editedText(layer) else { return }
                 LayerRenderer.draw(shown.image, transform: shown.transform, center: center(shown.transform.center), scale: scale,
-                    opacity: layer.effectiveOpacity(in: byID), blendMode: blendMode(of: layer), mask: nil, in: context)
+                    opacity: opacity, blendMode: blendMode(of: layer), mask: nil, in: context)
                 return
             }
             // A folder the layer sits in dims it along with everything else inside (see LayerOpacity).
-            let opacity = layer.effectiveOpacity(in: byID)
             let mode = session.displayedBlendMode(for: layer)
             if SeparableBlend.needsSurface(mode), normalBlendLayerID != id {
                 normalBlendLayerID = id
@@ -1173,23 +1201,7 @@ final class CanvasView: NSView, NSDraggingSource {
                     mask: mask, in: context)
             }
         }
-        // The shape being dragged out previews where its layer will go — above the active layer — rather than over
-        // everything, so the layers above it cover it as they will once it is made.
-        func drawOwnWithDraft(_ id: UUID, _ context: CGContext) {
-            drawOwn(id, context)
-            guard id == session.activeLayerID else { return }
-            drawShapeDraft(scale: scale, center: center, in: context)
-            drawNewText(context)
-        }
-        // New text goes where its layer will: just above the active layer, or on top when that isn't drawn (a
-        // folder, a hidden layer, or none).
-        var drewNewText = false
-        func drawNewText(_ context: CGContext) {
-            guard !drewNewText, session.textDraft?.layerID == nil, let text = draftText else { return }
-            drewNewText = true
-            LayerRenderer.draw(text.image, transform: text.transform, center: center(text.transform.center), scale: scale, in: context)
-        }
-        let live = LiveMaskRenderer(bounds: context.boundingBoxOfClipPath, source: { byID[$0]?.maskSourceID }, drawOwn: drawOwnWithDraft)
+        let live = LiveMaskRenderer(bounds: context.boundingBoxOfClipPath, source: { byID[$0]?.maskSourceID }, drawOwn: drawOwn)
         live.adjustment = { byID[$0]?.adjustment }
         live.adjustmentOpacity = { byID[$0]?.effectiveOpacity(in: byID) ?? 1 }
         // Adjustments run on the surface's pixels, one per screen pixel (see AdjustmentSurface).
@@ -1213,8 +1225,8 @@ final class CanvasView: NSView, NSDraggingSource {
                 FolderMaskClip(image: image, transform: layer.transform).apply(scale: scale, center: center(layer.transform.center), in: ctx)
             }
         }
-        live.prepareStacks(document.renderLayers.map(\.id), parent: { byID[$0]?.parentID }, blend: { byID[$0].map { session.displayedBlendMode(for: $0) } ?? .normal })
-        FolderMaskClip.draw(document.renderLayers.map(\.id), parent: { byID[$0]?.parentID }, clip: { id in
+        live.prepareStacks(renderIDs, parent: { byID[$0]?.parentID }, blend: { byID[$0].map { session.displayedBlendMode(for: $0) } ?? .normal })
+        FolderMaskClip.draw(renderIDs, parent: { byID[$0]?.parentID }, clip: { id in
             guard let folder = byID[id], let mask = folder.mask, mask.isEnabled else { return nil }
             if let edit = liveMaskEdit(for: folder.id),
                let clip = liveFolderMaskClip(edit, area: area, scale: scale, center: center, in: context) {
@@ -1225,7 +1237,8 @@ final class CanvasView: NSView, NSDraggingSource {
             let origin = center(transform.center)
             return { clip.apply(scale: scale, center: origin, in: $0) }
         }, in: context) { live.drawComposite($0, in: context) }
-        drawNewText(context)
+        // Keep typed text visible while editing inside a hidden folder.
+        if !renderIDs.contains(newLayerDraftID) { drawNewText(in: context) }
     }
 
     /// Text being edited, as it shows among the layers: as it will be committed, with its effects around it. They stay
@@ -1262,7 +1275,7 @@ final class CanvasView: NSView, NSDraggingSource {
     }
 
     /// The shape being dragged out with the Shape tool, drawn in the color it will be made in.
-    private func drawShapeDraft(scale: CGFloat, center: (CGPoint) -> CGPoint, in context: CGContext) {
+    private func drawShapeDraft(scale: CGFloat, center: (CGPoint) -> CGPoint, opacity: Double = 1, in context: CGContext) {
         // A flat or upright line has a box with no height or width, which is not "empty" for this purpose.
         guard let draft = session.shapeDraft,
               draft.kind == .line ? (draft.rect.width > 0 || draft.rect.height > 0) : !draft.rect.isEmpty else { return }
@@ -1270,6 +1283,7 @@ final class CanvasView: NSView, NSDraggingSource {
         let rect = CGRect(x: middle.x - draft.rect.width * scale / 2, y: middle.y - draft.rect.height * scale / 2,
                           width: draft.rect.width * scale, height: draft.rect.height * scale)
         context.saveGState()
+        context.setAlpha(opacity)
         context.setFillColor(session.foregroundColor.nsColor.cgColor)
         if draft.kind == .line {
             guard let ends = session.shapeLineEnds else { context.restoreGState(); return }
@@ -2784,9 +2798,10 @@ extension CanvasView {
 
     /// The layers composited as `drawLayers` composites them, over nothing. Nil when a layer needs the Core Graphics
     /// canvas.
-    private func gpuLayers(_ document: CanvasDocument, placement: GPUPlacement) -> CIImage? {
-        handOffTextEffects(document)
-        session.effectsPreviews.prepare(layers: document.layers)
+    private func gpuLayers(_ source: CanvasDocument, placement: GPUPlacement) -> CIImage? {
+        handOffTextEffects(source)
+        session.effectsPreviews.prepare(layers: source.layers)
+        let document = documentWithLayerDraft(source)
         let byID = Dictionary(uniqueKeysWithValues: document.layers.map { ($0.id, $0) })
         let ids = document.renderLayers.map(\.id)
         // Clipping stacks, as `LiveMaskRenderer.prepareStacks` finds them.
@@ -2987,6 +3002,11 @@ extension CanvasView {
         // One layer's pixels, placed, through its own mask and at its opacity — what `drawOwn` draws.
         func own(_ layer: ImageLayer) -> CIImage? {
             let opacity = layer.effectiveOpacity(in: byID)
+            if layer.id == newLayerDraftID {
+                if let shape = shapeDraftImage(placement: placement) { return GPUBlend.faded(shape, opacity) }
+                guard let text = draftText, let image = placement.place(text.image, transform: text.transform) else { return nil }
+                return GPUBlend.faded(image, opacity)
+            }
             // Text being edited, as it will be committed.
             if layer.id == session.textDraft?.layerID {
                 guard let shown = editedText(layer) else { return nil }
@@ -3162,19 +3182,6 @@ extension CanvasView {
             return image.applyingFilter("CIBlendWithAlphaMask", parameters: [kCIInputBackgroundImageKey: CIImage.empty(),
                                                                              kCIInputMaskImageKey: coverage])
         }
-        // A shape being dragged out and new text go where their layers will: just above the active layer, or new text on
-        // top when that isn't drawn (see `drawLayers`).
-        var drewNewText = false
-        func drafts(after id: UUID, over image: CIImage) -> CIImage {
-            guard id == session.activeLayerID else { return image }
-            var result = image
-            if let shape = shapeDraftImage(placement: placement) { result = shape.composited(over: result) }
-            if session.textDraft?.layerID == nil, let text = draftText, let placed = placement.place(text.image, transform: text.transform) {
-                result = placed.composited(over: result)
-                drewNewText = true
-            }
-            return result
-        }
         var result = CIImage.empty()
         for id in ids where !stacked.contains(id) {
             guard let layer = byID[id] else { continue }
@@ -3193,7 +3200,6 @@ extension CanvasView {
                 }
                 var group = base.applyingFilter("CIColorMatrix", parameters: [
                     "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 0), "inputBiasVector": CIVector(x: 0, y: 0, z: 0, w: 1)])
-                group = drafts(after: id, over: group)
                 for childID in children {
                     guard let child = byID[childID] else { continue }
                     if let adjustment = child.adjustment {
@@ -3202,7 +3208,6 @@ extension CanvasView {
                     } else if let image = own(child) {
                         group = GPUBlend.blend(image, over: group, mode: session.displayedBlendMode(for: child))
                     } else if unsupported { return nil }
-                    group = drafts(after: childID, over: group)
                 }
                 let stack = group.applyingFilter("CIBlendWithAlphaMask", parameters: [kCIInputBackgroundImageKey: CIImage.empty(),
                                                                                        kCIInputMaskImageKey: base])
@@ -3213,9 +3218,8 @@ extension CanvasView {
             if let image = live(layer) {
                 result = GPUBlend.blend(clippedByFolders(id, image), over: result, mode: mode)
             } else if unsupported { return nil }
-            result = drafts(after: id, over: result)
         }
-        if !drewNewText, session.textDraft?.layerID == nil, let text = draftText,
+        if !ids.contains(newLayerDraftID), session.textDraft?.layerID == nil, let text = draftText,
            let placed = placement.place(text.image, transform: text.transform) {
             result = placed.composited(over: result)
         }

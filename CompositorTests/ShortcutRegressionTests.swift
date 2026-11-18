@@ -1,4 +1,5 @@
 import AppKit
+import Observation
 import SwiftUI
 #if !SHORTCUT_CLT_CHECKS
 import Testing
@@ -156,6 +157,23 @@ struct ShortcutRegressionChecks {
         check("Color Range keeps correct color", color.selection?.path.contains(CGPoint(x: 50, y: 5)) == true && color.selection?.path.contains(CGPoint(x: 5, y: 5)) == false)
         color.undo()
         check("Color Range undo", color.selection == nil)
+        let wand = try colorFixture()
+        wand.cancelColorRange()
+        wand.selectTool(.wand)
+        await wand.magicWand(at: CGPoint(x: 5, y: 5), mode: .replace)
+        check("Magic Wand leaves a selection for Deselect", wand.selection != nil)
+        wand.isProjectBusy = true
+        var selectionPermissionInvalidated = false
+        withObservationTracking {
+            check("Deselect is gated while selection is running", !wand.canEditSelection)
+        } onChange: {
+            Task { @MainActor in selectionPermissionInvalidated = true }
+        }
+        wand.isProjectBusy = false
+        try await Task.sleep(for: .milliseconds(2))
+        check("Quick unchanged selection refreshes Deselect", selectionPermissionInvalidated && wand.canEditSelection)
+        wand.deselect()
+        check("Deselect clears the selection after quick work", wand.selection == nil)
         let cancelled = try colorFixture()
         cancelled.cancelColorRange()
         cancelled.selectAll()

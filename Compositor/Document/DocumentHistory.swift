@@ -145,6 +145,14 @@ final class DocumentHistory {
         // Selecting, navigating, and no-op edits must preserve redo history.
         guard before.document != document else { return }
         revision = UUID()
+        // Opening the first image or creating the canvas establishes the undo baseline.
+        if before.document == nil {
+            past.removeAll()
+            future.removeAll()
+            wasTrimmed = false
+            droppedLatestUndo = false
+            return
+        }
         past.append(Entry(name: pendingName, before: before,
             after: Snapshot(document: document, activeLayerID: selection, revision: revision),
             resources: Resources([before.document, document])))

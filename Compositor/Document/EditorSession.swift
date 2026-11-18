@@ -174,23 +174,30 @@ final class EditorSession {
             updateBusyIndicator()
         }
     }
-    /// True once `isProjectBusy` has lasted longer than `busyIndicatorDelay`.
-    private(set) var showsBusy = false
+    /// The busy indicator is delayed, but menus can read edit availability during a quick operation.
+    /// Observe its completion so those menus become enabled even when no document state changed.
+    var showsBusy: Bool {
+        _ = quickOperationsEnded
+        return busyShowing
+    }
+    private var busyShowing = false
+    private var quickOperationsEnded = 0
     static let busyIndicatorDelay: Duration = .milliseconds(250)
     @ObservationIgnored private var busyIndicatorTask: Task<Void, Never>?
     private func updateBusyIndicator() {
         if isProjectBusy {
-            guard busyIndicatorTask == nil, !showsBusy else { return }
+            guard busyIndicatorTask == nil, !busyShowing else { return }
             busyIndicatorTask = Task { @MainActor [weak self] in
                 try? await Task.sleep(for: Self.busyIndicatorDelay)
                 guard let self, !Task.isCancelled, self.isProjectBusy else { return }
-                self.showsBusy = true
+                self.busyShowing = true
                 self.busyIndicatorTask = nil
             }
         } else {
+            if busyIndicatorTask != nil { quickOperationsEnded &+= 1 }
             busyIndicatorTask?.cancel()
             busyIndicatorTask = nil
-            if showsBusy { showsBusy = false }
+            if busyShowing { busyShowing = false }
         }
     }
     private var projectWaiters: [CheckedContinuation<Void, Never>] = []

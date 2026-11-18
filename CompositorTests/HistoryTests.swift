@@ -7,7 +7,7 @@ import Testing
 struct HistoryTests {
     @Test func everyLayerEditRoundTripsWithSelection() throws {
         let session = EditorSession()
-        var states: [(CanvasDocument?, UUID?)] = [(nil, nil)]
+        var states: [(CanvasDocument?, UUID?)] = []
         func capture() { states.append((session.document, session.activeLayerID)) }
         session.createDocument(width: 800, height: 600); capture()
         session.addBlankLayer(); capture()
@@ -84,21 +84,25 @@ struct HistoryTests {
     @Test func historyBlockedDuringImportsAndDialogs() {
         let session = EditorSession()
         session.createDocument(width: 40, height: 40)
+        let initial = session.document
+        #expect(!session.canUndo && session.isModified)
+        session.addBlankLayer()
+        let edited = session.document
         session.isImporting = true
         session.undo()
-        #expect(session.document != nil)
+        #expect(session.document == edited)
         session.isImporting = false
         session.showsNewDocument = true
         session.undo()
-        #expect(session.document != nil)
+        #expect(session.document == edited)
         session.showsNewDocument = false
         session.undo()
         session.showsImporter = true
         session.redo()
-        #expect(session.document == nil)
+        #expect(session.document == initial)
         session.showsImporter = false
         session.redo()
-        #expect(session.document != nil)
+        #expect(session.document == edited)
     }
 
     @Test func batchImportIsOneEntryAndFailuresDoNotAddHistory() async throws {
@@ -106,6 +110,8 @@ struct HistoryTests {
         defer { try? FileManager.default.removeItem(at: url) }
         let missing = url.appendingPathExtension("missing")
         let session = EditorSession()
+        session.createDocument(width: 64, height: 32)
+        let initial = session.document
         await session.importImages([url, missing, url])
         #expect(session.history.undoCount == 1)
         let imported = session.document
@@ -113,7 +119,7 @@ struct HistoryTests {
         #expect(imported?.layers.count == 2)
         session.importError = nil
         session.undo()
-        #expect(session.document == nil)
+        #expect(session.document == initial)
         session.redo()
         #expect(session.document == imported)
         #expect(session.activeLayerID == selection)
@@ -130,11 +136,12 @@ struct HistoryTests {
         async let first: Void = session.importImages([url])
         async let second: Void = session.importImages([url])
         _ = await (first, second)
-        #expect(session.history.undoCount == 2)
+        #expect(session.history.undoCount == 1)
+        #expect(session.isModified)
         session.undo()
         #expect(session.document?.layers.count == 1)
         session.undo()
-        #expect(session.document == nil)
+        #expect(session.document?.layers.count == 1 && !session.canUndo)
     }
 
     @Test func historyBoundsEntriesAndUniqueRetainedPixels() async throws {

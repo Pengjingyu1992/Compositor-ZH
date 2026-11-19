@@ -72,9 +72,20 @@ import Testing
         session.confirmConversions = { _ in true }
         await session.importImages([fixture])
         check("accept creates layered canvas", session.document?.layers.count == 1 && session.document?.size == CGSize(width: 3, height: 2) && session.importError == nil)
-        check("import makes one undo step", session.canUndo)
+        let importedCanvas = session.document
+        check("first PSD import establishes the undo baseline", !session.canUndo)
         session.undo()
-        check("undo restores empty canvas", session.document == nil && session.canRedo)
+        check("undo stops at the imported canvas", session.document == importedCanvas && !session.canRedo)
+
+        let existing = EditorSession()
+        existing.createDocument(width: 6, height: 4, emptyLayer: true)
+        let originalCanvas = existing.document
+        existing.confirmConversions = { _ in true }
+        await existing.importImages([fixture])
+        check("PSD import into an existing canvas is one undo step", existing.importError == nil
+            && existing.document?.layers.count == 3 && existing.activeLayer?.isGroup == true && existing.history.undoCount == 1)
+        existing.undo()
+        check("undo restores the existing canvas", existing.document == originalCanvas && existing.canRedo)
         let flattened = EditorSession()
         flattened.confirmConversions = { items in notices = items; return false }
         notices = []

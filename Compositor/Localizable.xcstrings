@@ -3802,6 +3802,17 @@
         }
       }
     },
+    "Could not delete %lld of %lld recovery copies.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%2$lld 份恢复副本中有 %1$lld 份未能删除。"
+          }
+        }
+      }
+    },
     "Crop": {
       "extractionState": "manual",
       "localizations": {
@@ -4241,6 +4252,17 @@
         }
       }
     },
+    "Delete %lld recovery copies?": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除 %lld 份恢复副本？"
+          }
+        }
+      }
+    },
     "Delete Layer": {
       "extractionState": "manual",
       "localizations": {
@@ -4303,6 +4325,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "删除恢复副本"
+          }
+        }
+      }
+    },
+    "Delete Selected Copies": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除所选副本"
           }
         }
       }
@@ -4391,6 +4424,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "深度"
+          }
+        }
+      }
+    },
+    "Deselect All": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消全选"
           }
         }
       }
@@ -15652,6 +15696,17 @@
         }
       }
     },
+    "This permanently removes the selected recovery copies. Your open documents and saved projects are unchanged.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这会永久删除所选恢复副本。打开的文档和已保存的项目不受影响。"
+          }
+        }
+      }
+    },
     "This permanently removes the selected recovery copy. Your open document and saved projects are unchanged.": {
       "extractionState": "manual",
       "localizations": {
@@ -19688,6 +19743,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "恢复副本已达到 %lld 份文档的数量上限。请管理恢复副本以腾出名额；已有副本已保留。"
+          }
+        }
+      }
+    },
+    "%lld copies selected": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已选择 %lld 份"
           }
         }
       }
